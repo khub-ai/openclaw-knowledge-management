@@ -1,5 +1,16 @@
 {
-  "name": "@you/playground",
+  "name": "@khub-ai/playground",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "@khub-ai/openclaw-plus": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
 }

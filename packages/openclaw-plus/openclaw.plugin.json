@@ -1,0 +1,9 @@
+{
+  "id": "knowledge-management",
+  "kind": "knowledge",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

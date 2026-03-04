@@ -1,9 +1,33 @@
 {
-  "name": "@you/openclaw-plus",
+  "name": "@khub-ai/openclaw-plus",
   "version": "0.0.1",
   "private": true,
+  "description": "Persistable Interactive Learning (PIL) extension for OpenClaw",
   "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./store": "./src/store.ts",
+    "./tools": "./src/tools.ts"
+  },
   "scripts": {
-    "dev": "node ./index.js"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.1.26"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }
