@@ -54,15 +54,64 @@ This pipeline is designed to improve **scalability** (less repeated prompting, s
 - **Practical safety controls**: explicit user consent where appropriate; scoped applicability; easy inspection and deletion.
 - **Portable representations**: knowledge artifacts should be exportable and auditable (e.g., JSON/YAML + human-readable summaries).
 
-## What this repo will implement (incrementally)
+## Repository structure
 
-- **Knowledge artifact schemas** (pattern / preference / rubric / constraint / value-judgment)
-- **Capture + induction** modules to propose candidate knowledge from interaction
-- **Validation flows** (lightweight user confirmation and confidence estimation)
-- **Persistence layer** (local files/DB, indexing, provenance metadata)
-- **Retrieval + ranking** (context-aware recall beyond naive RAG)
-- **Application policies** (suggest vs apply, risk tiers, conflict resolution)
-- **Revision mechanics** (supersede, merge, retire, decay)
+```
+openclaw-knowledge-management/
+├── packages/
+│   ├── openclaw-plus/          # Core PIL extension (OpenClaw plugin)
+│   │   ├── index.ts            # Plugin entry point; registers tools with OpenClaw
+│   │   ├── openclaw.plugin.json
+│   │   └── src/
+│   │       ├── pipeline.ts     # Stages 1–4: elicit, induce, validate, compact
+│   │       ├── store.ts        # Stages 5–8: persist, retrieve, apply, revise
+│   │       └── tools.ts        # knowledge_search tool registered via plugin SDK
+│   └── skills-foo/             # Example skill demonstrating PIL-aware patterns
+│       └── SKILL.md
+└── apps/
+    └── playground/             # Dev harness — runs the full pipeline without OpenClaw
+        └── index.ts
+```
+
+## Getting started (development)
+
+Requires Node.js ≥ 18 and pnpm.
+
+```bash
+git clone https://github.com/khub-ai/openclaw-knowledge-management
+cd openclaw-knowledge-management
+pnpm install
+cd apps/playground
+pnpm start        # runs all 8 PIL stages against sample input
+pnpm dev          # re-runs on file changes
+```
+
+Artifacts are stored at `~/.openclaw/knowledge/artifacts.jsonl`.
+Override with `KNOWLEDGE_STORE_PATH=/your/path pnpm start`.
+
+## Implementation status
+
+### Done
+| Stage | Module | Description |
+|---|---|---|
+| 1 Elicit | `pipeline.ts` | Signal-word heuristics extract candidate sentences from raw input |
+| 2 Induce | `pipeline.ts` | Regex rules classify each candidate into a `KnowledgeKind` with baseline confidence |
+| 3 Validate | `pipeline.ts` | Adjusts confidence up/down based on assertive vs. hedging language and length |
+| 4 Compact | `pipeline.ts` | Normalises whitespace; deduplication runs in Persist |
+| 5 Persist | `store.ts` | JSONL-backed upsert; near-duplicate detection via Jaccard similarity (≥0.75 threshold) |
+| 6 Retrieve | `store.ts` | Keyword search scored by Jaccard + confidence; retired artifacts excluded |
+| 7 Apply | `store.ts` | confidence ≥ 0.8 → auto-apply; below → suggest; both labelled in output |
+| 8 Revise | `store.ts` | Minor edits update in place; significant content change retires old entry, preserving audit trail |
+| Plugin wiring | `index.ts` / `tools.ts` | `knowledge_search` tool registered with OpenClaw via plugin SDK |
+
+### Planned
+- LLM-backed induction (replace regex heuristics with a structured extraction call)
+- Confidence calibration from user feedback signals
+- Vector/semantic retrieval (replacing or augmenting keyword Jaccard)
+- Consent and privacy controls per artifact kind
+- Decay / re-validation scheduling for time-sensitive facts
+- CLI commands for inspecting, editing, and deleting stored artifacts
+- Integration tests against a live OpenClaw workspace
 
 ## Relationship to “Saving Learned Generalized Patterns”
 
@@ -76,7 +125,7 @@ The thread “Saving Learned Generalized Patterns” motivates one key slice of 
 
 ## Status
 
-Early-stage / experimental. Expect schema evolution and rapid iteration.
+Early-stage / experimental. Core PIL pipeline (stages 1–8) is implemented and runnable via the playground. OpenClaw plugin wiring is in place. The current heuristic implementations are intentionally simple — designed to be replaced with LLM-backed logic incrementally. Expect schema evolution and rapid iteration.
 
 ## Contributing
 
