@@ -104,18 +104,102 @@ A user can export their knowledge from OpenClaw and import it into another assis
 
 ## Phase 5 — Governance and Ecosystem *(long-term)*
 
-**Goal:** Knowledge as a shareable, portable unit beyond the individual user.
+**Goal:** Knowledge as a shareable, governed, and potentially tradeable unit — beyond the individual user.
 
-This phase is deliberately under-specified. The artifact format and ownership model built in phases 1–4 are designed to preserve design freedom for future possibilities:
+This phase converts the artifact format and ownership model built in phases 1–4 into a foundation for team and organisational knowledge management. It is also where a new kind of economic value becomes possible.
 
-- Org-level knowledge management and distribution
-- Publishing and sharing of curated knowledge packages
-- Access control and provenance tracking
-- A potential ecosystem where domain experts publish knowledge artifacts that other users can import
+→ *[Enterprise vision: detailed considerations and business models](enterprise-vision.md)*
 
-The technical foundation — user-owned, text-based, model-agnostic artifacts with versioning and provenance — is intended to support these use cases without requiring fundamental changes to the artifact format or storage model.
+### Enterprise: from personal to organisational knowledge
 
-We mention this phase for completeness but intentionally avoid over-specifying it. The right design for knowledge governance and sharing will become clearer as the foundation matures through real-world use.
+The hardest knowledge management problem in organisations is not storage — it is capture, curation, and continuity. Subject-matter expertise is locked in individuals' heads, in email threads, and in chat histories that are impossible to search. When a key person leaves, that knowledge largely leaves with them.
+
+PIL's artifact model addresses this differently.
+
+**Tiered ownership**
+
+Knowledge flows through a natural hierarchy:
+
+| Tier | Scope | Who can see it |
+|---|---|---|
+| **Personal** | Private to the individual | Owner only |
+| **Team** | Shared within a defined group | Team members |
+| **Org** | Curated, reviewed, and approved | All employees |
+| **Public** | Open registry | Anyone who imports the package |
+
+This mirrors how knowledge actually moves in organisations: individuals learn → teams develop shared conventions → organisations codify policy → industries develop standards. Each tier promotion is gated by an explicit human decision, not automatic.
+
+**Access controls and role model**
+
+A governance layer separates four roles:
+
+| Role | What they can do |
+|---|---|
+| **Contributor** | Create and edit personal artifacts; submit to team review |
+| **Reviewer** | Approve or reject team submissions; annotate with rationale |
+| **Publisher** | Promote reviewed artifacts to org-level; set scope and expiry |
+| **Auditor** | Read-only access to all artifacts and their full provenance chain |
+
+Because every artifact already carries a provenance record — who created it, from what source, when it was revised, with what confidence — the governance layer can be enforced without modifying the artifact format. Access control is layered on top of what phases 1–4 already produce.
+
+**Compliance-friendly audit trail**
+
+Each artifact's lifecycle — creation, retrieval, application, revision, retirement — is recorded in its provenance fields. This means:
+
+- You can answer "what knowledge was injected into this conversation?" for any past session.
+- You can trace a specific agent recommendation back to the artifact that informed it, the conversation that generated it, and the person who confirmed it.
+- Artifact retirement records *when* a rule was superseded and by what — nothing is silently overwritten.
+
+For regulated industries — legal, financial services, healthcare — this is not a nice-to-have. It is a prerequisite for deploying AI agents in consequential workflows.
+
+**Organisational continuity**
+
+The knowledge a skilled employee accumulates over years of agent use — preferred formats, client-specific conventions, learned shortcuts, evaluated quality standards — does not have to leave when they do. With an org-level knowledge tier and appropriate consent controls, curated portions of that accumulated knowledge can be retained, reviewed, and inherited by successors or shared with the team.
+
+This is qualitatively different from document retention. The knowledge is *active*: it informs the successor's agent from day one, surfaces relevant conventions at the moment they are needed, and can be revised as the organisation's practices evolve.
+
+---
+
+### Ecosystem: a new economic layer for knowledge artifacts
+
+When knowledge artifacts are user-owned, portable, verifiable, and typed, they become a tradeable unit. This is the economic opportunity Phase 5 opens.
+
+**Knowledge packages as products**
+
+A domain expert — a senior tax attorney, a clinical pharmacist, a structural engineer — accumulates judgment that takes years to develop. Today they can publish a textbook. With PIL, they can publish a *knowledge package*: a curated set of evaluative, procedural, and semantic artifacts representing their expertise, importable directly into an AI agent.
+
+The recipient's agent does not merely read a document. It applies the expert's judgment framework in real time, surfaces the relevant heuristics when the situation calls for them, and treats imported knowledge with appropriately calibrated confidence.
+
+**The coordination layer opportunity**
+
+The PIL artifact format — if it achieves adoption — defines a coordination layer analogous to what OpenAPI did for REST APIs or what npm did for JavaScript packages: a standard format that allows producers and consumers to exchange value without direct coordination.
+
+Whoever establishes this standard captures network effects: more expert producers attract more consumers, more consumers attract more producers, and switching costs increase as org-level knowledge accumulates in the format.
+
+**Potential business models**
+
+| Model | Description |
+|---|---|
+| **Expert packages** | Domain professionals publish curated knowledge packages (e.g., "EU GDPR compliance for SaaS") on a subscription or per-download basis |
+| **Org knowledge custody** | A managed service that hosts, versions, and distributes org-level knowledge packages with audit trails and access controls — like a private registry for knowledge |
+| **Certification** | Third parties verify and certify knowledge packages (e.g., "reviewed by licensed practitioners"), commanding a premium for high-stakes domains |
+| **Knowledge migration** | Services that convert existing documentation, process manuals, and policy documents into structured PIL artifacts |
+| **Continuity-as-a-service** | Managed retention and curation of individual knowledge accumulated during employment, with org licensing and handover options |
+
+None of these require fundamental changes to the artifact format. They are services built on top of a portable, open format — the same pattern that has worked repeatedly in software infrastructure.
+
+---
+
+### Technical foundation for Phase 5
+
+The architecture built in phases 1–4 is designed to support these use cases without rearchitecting:
+
+- **Artifact format** is text-based, versioned, and typed — it can carry governance metadata as optional enrichment fields without breaking existing consumers.
+- **Provenance fields** already record creator, source, confidence, and revision history — a compliance audit trail is primarily a query and presentation layer on top of what already exists.
+- **Model-agnostic** design means org knowledge is not locked to whichever LLM a team uses today; it survives vendor transitions.
+- **Additive-only field evolution** means Phase 5 governance fields are backwards-compatible with Phase 1 artifacts.
+
+We defer the specifics deliberately: the right design will be clearer once phases 1–4 have generated real-world experience with how artifacts are used, shared, and valued. What we avoid is making decisions in phases 1–4 that would foreclose Phase 5 options.
 
 ---
 

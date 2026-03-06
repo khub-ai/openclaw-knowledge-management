@@ -81,9 +81,9 @@ The system treats dialogue as a learning substrate and produces durable knowledg
 | **2 — Generalization Engine** | Episodic → semantic/evaluative generalization, Tier 2 triggering, decay, feedback | Planned |
 | **3 — Procedural Memory & Code Synthesis** | Structured recipes, optional program compilation, tool library | Planned |
 | **4 — Portability** | Standard artifact format, import/export, cross-agent compatibility | Planned |
-| **5 — Governance & Ecosystem** | Sharing, publishing, org-level knowledge management | Long-term |
+| **5 — Governance & Ecosystem** | Team/org knowledge tiers, access controls, compliance audit trails, knowledge ecosystem and new business models | Long-term |
 
-→ *[Detailed roadmap with milestones](docs/roadmap.md)*
+→ *[Detailed roadmap with milestones](docs/roadmap.md)* · *[Enterprise vision and investment thesis](docs/enterprise-vision.md)*
 
 ## Repository structure
 
@@ -107,7 +107,8 @@ openclaw-knowledge-management/
     ├── architecture.md         # Tiered triggering, knowledge graph, artifact schema
     ├── example-learning-in-action.md
     ├── roadmap.md              # Phased roadmap with near-term milestones
-    └── design-decisions.md     # Rationale, differentiators, forward-compatibility
+    ├── design-decisions.md     # Rationale, differentiators, forward-compatibility
+    └── enterprise-vision.md    # Enterprise deployment model and investment thesis
 ```
 
 ## Getting started
