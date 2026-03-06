@@ -117,23 +117,26 @@ Override with `KNOWLEDGE_STORE_PATH=/your/path pnpm start`.
 
 ## Implementation status
 
-### Done
-| Stage | Module | Description |
-|---|---|---|
-| 1 Elicit | `pipeline.ts` | Signal-word heuristics extract candidate sentences from raw input |
-| 2 Induce | `pipeline.ts` | Regex rules classify each candidate into a `KnowledgeKind` with baseline confidence |
-| 3 Validate | `pipeline.ts` | Adjusts confidence based on assertive vs. hedging language |
-| 4 Compact | `pipeline.ts` | Normalises whitespace; deduplication runs in Persist |
-| 5 Persist | `store.ts` | JSONL-backed upsert; near-duplicate detection via Jaccard similarity |
-| 6 Retrieve | `store.ts` | Keyword search scored by Jaccard + confidence; retired artifacts excluded |
-| 7 Apply | `store.ts` | confidence ≥ 0.8 → auto-apply; below → suggest |
-| 8 Revise | `store.ts` | Minor edits update in place; significant change retires old entry |
-| Plugin | `index.ts` / `tools.ts` | `knowledge_search` tool registered with OpenClaw |
+**The code is not yet functional.** The current implementation consists of placeholder heuristics that demonstrate the pipeline architecture but are not suitable for real use. Each stage will need to be replaced with LLM-backed logic to produce meaningful results.
 
-### Planned
+### Placeholder implementations (scaffolding only)
+| Stage | Module | Current state |
+|---|---|---|
+| 1 Elicit | `pipeline.ts` | Placeholder: matches sentences containing hardcoded signal words |
+| 2 Induce | `pipeline.ts` | Placeholder: regex keyword matching to guess artifact kind |
+| 3 Validate | `pipeline.ts` | Placeholder: adjusts confidence by counting hedging/assertive words |
+| 4 Compact | `pipeline.ts` | Placeholder: whitespace normalisation only |
+| 5 Persist | `store.ts` | Placeholder: JSONL file append with basic Jaccard dedup |
+| 6 Retrieve | `store.ts` | Placeholder: keyword overlap scoring, no semantic understanding |
+| 7 Apply | `store.ts` | Placeholder: simple threshold check (≥ 0.8 → auto-apply) |
+| 8 Revise | `store.ts` | Placeholder: in-place update or retire based on content diff |
+| Plugin | `index.ts` / `tools.ts` | Wiring only: `knowledge_search` tool registered with OpenClaw |
+
+### What's needed to reach a functional state
 - LLM-backed induction (replace regex heuristics with structured LLM calls)
+- LLM-backed elicitation (contextual knowledge extraction, not keyword matching)
 - Confidence calibration from user feedback signals
-- Vector/semantic retrieval (augmenting keyword Jaccard)
+- Vector/semantic retrieval (replacing keyword Jaccard)
 - Evaluative knowledge capture and generalization
 - Procedural recipes with optional code synthesis
 - Import/export primitives
@@ -148,7 +151,7 @@ Override with `KNOWLEDGE_STORE_PATH=/your/path pnpm start`.
 
 ## Status
 
-Early-stage / experimental. Core PIL pipeline (stages 1–8) is implemented and runnable. The current heuristic implementations are intentionally simple — designed to be replaced with LLM-backed logic incrementally.
+Early-stage / experimental. The pipeline architecture and storage layer are scaffolded with placeholder heuristics. **The code is not yet functional for real use** — each stage needs to be replaced with LLM-backed logic to produce meaningful knowledge artifacts. The current placeholders exist to validate the pipeline structure and provide a development harness.
 
 ## Contributing
 
