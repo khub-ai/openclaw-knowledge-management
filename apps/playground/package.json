@@ -4,14 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx index.ts",
-    "dev": "tsx watch index.ts"
+    "start": "node --experimental-strip-types --no-warnings index.ts",
+    "dev":   "node --watch --experimental-strip-types --no-warnings index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@khub-ai/openclaw-plus": "workspace:*"
-  },
-  "devDependencies": {
-    "tsx": "^4.19.2"
   }
 }

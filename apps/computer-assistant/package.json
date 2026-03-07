@@ -5,19 +5,18 @@
   "description": "PIL-powered computer assistant demo — learns how to open files, folders, URLs, and run commands from user dialog",
   "type": "module",
   "scripts": {
-    "start": "tsx index.ts",
-    "dev": "tsx watch index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "start":          "node --experimental-strip-types --no-warnings index.ts",
+    "dev":            "node --watch --experimental-strip-types --no-warnings index.ts",
+    "test":           "vitest run",
+    "test:watch":     "vitest",
     "test:integration": "INTEGRATION=1 vitest run --reporter=verbose",
-    "benchmark": "tsx benchmarks/index.ts"
+    "benchmark":      "node --experimental-strip-types --no-warnings benchmarks/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@khub-ai/openclaw-plus": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
     "typescript": "^5.8.2",
     "vitest": "^2.1.0"
   }
