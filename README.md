@@ -136,12 +136,19 @@ openclaw-knowledge-management/
 
 ## Getting started
 
-Requires Node.js ≥ 18 and pnpm.
+**Prerequisites:** Node.js ≥ 18, pnpm, and an Anthropic API key.
+
+The reference implementation uses [Anthropic Claude](https://console.anthropic.com/) as the LLM backend. Any LLM can be substituted by providing a different `LLMFn` adapter — see [`apps/playground/index.ts`](apps/playground/index.ts) for the adapter pattern.
 
 ```bash
 git clone https://github.com/khub-ai/openclaw-knowledge-management
 cd openclaw-knowledge-management
 pnpm install
+
+# Set your Anthropic API key (obtain from https://console.anthropic.com/)
+export ANTHROPIC_API_KEY=sk-ant-...        # macOS / Linux / WSL
+# $env:ANTHROPIC_API_KEY="sk-ant-..."     # Windows PowerShell
+
 cd apps/playground
 pnpm start        # runs all 8 PIL stages against sample input
 pnpm dev          # re-runs on file changes
