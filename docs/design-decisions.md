@@ -19,6 +19,38 @@ Most AI assistants in 2026 offer some form of persistent memory. Here is how thi
 
 The key difference is not just *where* the knowledge is stored, but *what form* it takes. Platform memory features typically store brief statements extracted from conversation ("user prefers dark mode"). Letta provides a richer memory architecture for developers building agents, but memory remains server-side and in a framework-specific format. PIL produces structured, typed, confidence-scored, versioned artifacts that the user can reason about, edit, and share — and that outlive any particular platform or framework.
 
+## PIL as a complement to fine-tuning
+
+When an AI agent needs to work effectively in a specific domain, the standard tool is fine-tuning: training the base model on domain-specific data to adjust its weights. Fine-tuning is well-suited to *capability expansion* — teaching a new technical vocabulary, a new code style, a specialized subject domain. But for a different and increasingly important class of adaptation — adjusting an agent's *behavior to fit a specific user, team, or operational context* — fine-tuning is an ill-matched tool.
+
+**The limitations of fine-tuning for behavioral adaptation:**
+
+- **High cost per iteration.** Each behavioral correction requires data curation, a training run, regression evaluation, and a new deployment. This cycle takes days to weeks and is economically impractical for individual users or small teams.
+- **Catastrophic forgetting.** Reinforcing one behavior can silently degrade others. Correcting a specific pattern risks breaking adjacent behaviors in unpredictable ways.
+- **Opacity.** Fine-tuned weights carry no provenance. There is no record of which training examples caused which behavioral changes; debugging requires behavioral probing rather than direct inspection.
+- **Static knowledge.** Behavior baked into model weights is frozen at training time. When a user's conventions change or a team adopts a new procedure, retraining is the only recourse.
+- **Population-level, not individual-level.** Fine-tuning optimizes for a dataset — a domain archetype, a use-case category, a population of examples. It cannot practically adapt to the preferences, conventions, and judgment criteria of a specific individual.
+- **Irreversibility.** Removing a specific learned behavior ("unlearning") without collateral damage is an unsolved problem. A wrong convention, once trained in, is difficult to excise cleanly.
+- **No runtime feedback loop.** The model cannot update from deployment-time corrections; every real-world signal must wait for a new training cycle.
+
+**What PIL covers instead:**
+
+PIL does not change model weights and cannot expand model capabilities — it is not a replacement for fine-tuning. What it provides is a complementary mechanism for behavioral adaptation at the individual level, which fine-tuning cannot address practically:
+
+- **Incremental.** Every interaction is a potential learning event; no batch training required.
+- **Inspectable.** Knowledge lives as human-readable artifacts. A user can read, edit, or delete exactly what the agent has learned — impossible with weight-based learning.
+- **Correctable in real time.** A wrong artifact can be revised or retired immediately, with no risk to any other learned behavior.
+- **Individual-specific.** Learning accumulates for one person's specific preferences, conventions, and judgment — not a population average.
+- **Immediately effective.** Corrections take effect in the next interaction, not after a training cycle.
+
+**An analogy:**
+
+If pretraining is the equivalent of a broad university education — producing a knowledgeable, capable generalist — then fine-tuning is a formal professional certification: structured, costly, and designed to bring a cohort to domain proficiency.
+
+PIL is something qualitatively different: it is the equivalent of on-the-job learning from a specific person over the course of a working relationship. A new employee arrives with their education and certifications intact. What they don't yet know is how *this team*, *this organization*, *this particular person* does things — the unwritten conventions, the judgment calls that experienced colleagues make intuitively, the preferences that appear in no formal document. This knowledge is not taught in classrooms; it accumulates through daily interaction, observation, and correction. It is personal, contextual, and always current. And unlike a formal credential, it can be directly discussed, revised, and handed off when circumstances change.
+
+**Fine-tuning adapts a model for a domain. PIL adapts an agent for a person.**
+
 ## Artifact format: free-form text, not rigid schemas
 
 Knowledge artifacts are primarily **free-form text with lightweight conventions** — not rigid database schemas. This is a deliberate choice with several motivations:
