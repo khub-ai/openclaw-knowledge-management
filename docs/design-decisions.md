@@ -130,5 +130,6 @@ This project is built as an extension for [OpenClaw](https://github.com/openclaw
 - **Multi-channel**: OpenClaw connects to 24+ messaging platforms, which means knowledge learned in one channel is available across all channels.
 - **Local-first**: OpenClaw runs on the user's own machine, which aligns with the project's principle that knowledge should be user-owned and local.
 - **Additive**: Users can install and upgrade OpenClaw normally. This extension adds capabilities without modifying the core.
+- **Open-source**: OpenClaw's open-source codebase gives this project full freedom to experiment — modifying hook behavior, inspecting internals, testing non-obvious integration patterns — without the constraints that proprietary platforms impose on what third-party extensions can observe or do. The surrounding developer ecosystem also means tooling, libraries, and prior art are openly available and rapidly iterated on by the community.
 
 The knowledge artifact format itself is not OpenClaw-specific. The PIL pipeline is implemented as an OpenClaw plugin for convenience, but the artifacts it produces are portable to any system that can read text files.
