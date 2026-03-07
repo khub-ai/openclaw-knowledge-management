@@ -59,15 +59,34 @@ Even if the storage backend changes (JSONL → SQLite → graph database), even 
 
 This distinction is important: the knowledge is portable even if the pipeline that produced it is not universally deployable.
 
-## Confidence gating: current approach and intended evolution
+## Language-agnostic extraction
 
-The current implementation uses **word-level heuristics** (hedging words lower confidence, assertive words raise it) to set artifact confidence scores. This is a placeholder, not the final design.
+The pipeline contains no English-specific heuristics. This is a deliberate design constraint, not an implementation detail.
 
-The intended evolution:
+Earlier approaches to knowledge extraction relied on signal words (`always`, `never`, `prefer`), hedge words (`maybe`, `might`, `possibly`), and regex patterns to classify input. These work only for English and fail entirely for Chinese, Farsi, Spanish, or any other language. They also fail for code-heavy input where the meaningful signal is in a comment or identifier, not in surrounding prose.
 
-1. **Milestone 1b:** LLM-backed confidence estimation during induction. The LLM assigns confidence based on how clearly and definitively the user expressed the knowledge.
-2. **Phase 2:** Confidence calibrated from user feedback. When the agent applies an artifact and the user accepts, rejects, or edits the result, the confidence score adjusts. Over time, artifacts that lead to good outcomes gain confidence; those that don't, lose it.
-3. **Phase 2+:** Effective confidence incorporates temporal decay (unused artifacts fade), acceptance rate (repeatedly rejected artifacts lose influence), and salience-adjusted thresholds (high-stakes artifacts require higher confidence for auto-application).
+The solution is to delegate all natural language understanding to the LLM, which handles semantics across languages natively. The pipeline's job is to invoke the LLM with a well-structured prompt and act on its structured output — not to do linguistics itself.
+
+This means:
+- A user interacting in any language gets identical behavior
+- The pipeline has no hardcoded vocabulary to maintain
+- Classification quality scales with the LLM's capability, not with the quality of hand-crafted rules
+
+The cost is one LLM call per message (or per conversation batch). This is already unavoidable at Milestone 1b and beyond; the language-agnostic design does not add LLM calls — it just moves the understanding work into the call that was always going to happen.
+
+## Confidence gating: approach and evolution
+
+Confidence is seeded at extraction time from the `certainty` field assigned by the LLM:
+
+| `certainty` | Starting `confidence` | When to expect it |
+|---|---|---|
+| `"definitive"` | 0.65 | Strong, unhedged statement: "always use strict mode" |
+| `"tentative"` | 0.35 | Qualified statement: "I usually prefer bullet points" |
+| `"uncertain"` | 0.15 | Speculative: "I think I prefer shorter summaries?" |
+
+This replaces the former English-specific hedge/assertion word heuristics entirely. The LLM infers the degree of certainty from the phrasing and intent, regardless of language.
+
+Confidence then grows through evidence accumulation (each supporting observation nudges it upward) and is adjusted at application time by feedback signals (acceptance rate, decay, reinforcement). See [architecture.md](architecture.md#effective-confidence-calculation) for the full formula.
 
 The confidence-gating mechanism itself — suggest below threshold, auto-apply above — is designed to be pluggable. The threshold, the scoring method, and the feedback loop can all evolve without changing the artifact format or storage model.
 
@@ -77,7 +96,7 @@ The architecture is informed by a systematic cross-check against human cognitive
 
 | Human mechanism | System analogue | Status |
 |---|---|---|
-| Memory consolidation | Background review of raw artifacts → consolidated generalizations | Designed (via `stage` field); not yet implemented |
+| Memory consolidation | Evidence accumulates in `candidate`/`accumulating` artifacts → LLM consolidation call → `consolidated` generalization | Designed (via `stage`, `evidenceCount`, `evidence[]`); not yet implemented |
 | Forgetting / decay | Effective confidence decreases for unretrieved, unreinforced artifacts | Designed (via `lastRetrievedAt`, `reinforcementCount`); not yet implemented |
 | Emotional salience | `salience` field adjusts auto-apply threshold independent of confidence | Designed; not yet implemented |
 | Spreading activation | Graph traversal during retrieval surfaces connected artifacts | Designed (via `relations`); not yet implemented |

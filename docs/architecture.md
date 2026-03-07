@@ -10,6 +10,8 @@ This document describes the system architecture: how knowledge artifacts are str
 
 3. **The architecture is designed to evolve.** Even if the triggering system, graph structure, or storage backend change fundamentally, the underlying artifacts — which are text — remain usable. Forward-compatibility is a first-class concern.
 
+4. **Extraction is language-agnostic.** The pipeline delegates all natural language understanding to the LLM. No English-specific heuristics (signal words, hedge words, regex patterns) appear anywhere in the pipeline logic. A user interacting in Chinese, Farsi, Spanish, or any other language gets identical behavior.
+
 ## Knowledge artifact schema
 
 Each artifact is a JSON object with required core fields and optional enrichment fields:
@@ -19,9 +21,9 @@ Each artifact is a JSON object with required core fields and optional enrichment
 | Field | Type | Description |
 |---|---|---|
 | `id` | string | Unique identifier (UUID) |
-| `kind` | string | `"semantic"`, `"procedural"`, `"evaluative"`, or `"fact"` |
-| `content` | string | The knowledge itself, in free-form text |
-| `confidence` | number | 0–1; certainty that this artifact is correct and applicable |
+| `kind` | string | `"preference"`, `"convention"`, `"fact"`, `"procedure"`, `"judgment"`, or `"strategy"` — see [Kind taxonomy](#kind-taxonomy) |
+| `content` | string | The knowledge itself, in free-form text. For `candidate` and `accumulating` artifacts: verbatim from the user's input (any language). For `consolidated` artifacts: LLM-distilled generalization. |
+| `confidence` | number | 0–1; certainty that this artifact is correct and applicable. Seeded from `certainty` at extraction; grows with evidence. |
 | `provenance` | string | Where this knowledge came from (session ID, user statement, etc.) |
 | `createdAt` | string | ISO 8601 timestamp |
 
@@ -29,8 +31,10 @@ Each artifact is a JSON object with required core fields and optional enrichment
 
 | Field | Type | Description | Cognitive analogue |
 |---|---|---|---|
+| `scope` | string | `"specific"` (applies only to this situation) or `"general"` (applies broadly across contexts) — LLM-assigned at extraction | Context-dependent retrieval |
+| `certainty` | string | `"definitive"`, `"tentative"`, or `"uncertain"` — how strongly the knowledge was expressed, regardless of language — LLM-assigned at extraction | Confidence seeding |
 | `trigger` | string | Natural language condition for when this artifact applies | Context-dependent retrieval |
-| `tags` | string[] | Keywords for Tier 1 index lookup | Associative priming |
+| `tags` | string[] | Normalized topic tags: lowercase, hyphenated, English noun phrases (e.g., `"code-style"`, `"file-naming"`). LLM-assigned; anchored to the store's existing tag vocabulary for consistency. | Associative priming |
 | `topic` | string | High-level domain cluster (e.g., `"code-style"`, `"financial-ops"`) | Chunking |
 | `summary` | string | One-line distillation for cheap LLM matching in Tier 2 | Gist memory |
 | `relations` | object[] | Graph edges: `{ type, targetId }` where type is `"references"`, `"constrains"`, `"supersedes"`, or `"supports"` | Spreading activation |
@@ -40,7 +44,9 @@ Each artifact is a JSON object with required core fields and optional enrichment
 | Field | Type | Description | Cognitive analogue |
 |---|---|---|---|
 | `salience` | string | `"low"`, `"medium"`, or `"high"` — how much this matters (separate from confidence) | Emotional valence |
-| `stage` | string | `"raw"` (freshly captured) or `"consolidated"` (reviewed during background consolidation) | Memory consolidation |
+| `stage` | string | `"candidate"` (single observation, not yet confirmed), `"accumulating"` (evidence building toward threshold), or `"consolidated"` (LLM-distilled generalization, ready for injection) | Memory consolidation |
+| `evidenceCount` | number | How many observations support this pattern. When this reaches the consolidation threshold (default: **3**), a consolidation LLM call is triggered. | Pattern accumulation |
+| `evidence` | string[] | Raw observation snippets — verbatim from user input, in any language — that will be passed to the consolidation LLM call | Episodic substrate |
 | `lastRetrievedAt` | string | ISO 8601; last time this artifact was retrieved | Decay tracking |
 | `reinforcementCount` | number | How many times this artifact has been confirmed or reused | Rehearsal strengthening |
 | `appliedCount` | number | How many times this artifact was applied or suggested | Habituation tracking |
@@ -50,6 +56,97 @@ Each artifact is a JSON object with required core fields and optional enrichment
 | `retired` | boolean | True when superseded or invalidated | Graceful forgetting |
 
 **All optional fields default to absent.** An artifact with only the core fields is fully functional. Enrichment and lifecycle fields are populated progressively — by LLM-backed enrichment, by the triggering system, and by user feedback.
+
+## Kind taxonomy
+
+The `kind` field uses six values. The LLM assigns these during extraction from any input language.
+
+| Kind | What it captures | Example |
+|---|---|---|
+| `preference` | Subjective style or taste | "Always use bullet points for summaries" |
+| `convention` | Agreed naming, terminology, or standards | "We call it the staging environment" |
+| `fact` | Objective, verifiable information | "The API endpoint is https://api.example.com/v2" |
+| `procedure` | A specific step-by-step process or recipe | "To deploy: run build, then push, then notify team" |
+| `judgment` | An evaluative heuristic or quality criterion | "Favor brevity over completeness in executive summaries" |
+| `strategy` | A general approach to a class of problems | "When debugging, isolate variables before forming hypotheses" |
+
+**Relationship to the four-type cognitive taxonomy** described in [memory-taxonomy.md](memory-taxonomy.md): `preference + convention + fact` map to *semantic* memory; `procedure` maps to *procedural* memory; `judgment + strategy` map to *evaluative* memory. The four-type taxonomy is conceptual framing; the six-value `kind` field is what appears in artifacts.
+
+---
+
+## Extraction pipeline
+
+The pipeline translates raw user input into typed, confidence-scored artifacts. All natural language understanding is delegated to the LLM; no English-specific heuristics appear in the pipeline logic, making the system language-agnostic.
+
+### Stage 1 — Extract (LLM call)
+
+A single LLM call replaces the former English-specific Elicit + Induce + Validate stages.
+
+**Input:** the user's message (any language) + the store's current tag vocabulary (for tag normalization)
+
+**The LLM is asked to:**
+- Decide whether the message contains any persistable, reusable knowledge
+- If yes, extract each piece as a separate candidate with: `content` (verbatim from input), `kind`, `scope`, `certainty`, `tags`, `rationale`
+- If no persistable knowledge is present, return an empty list
+
+**Output per candidate:**
+
+| Field | Description |
+|---|---|
+| `content` | Exact quote or minimal paraphrase from the input, in the user's original language |
+| `kind` | One of the six values above |
+| `scope` | `"specific"` or `"general"` |
+| `certainty` | `"definitive"`, `"tentative"`, or `"uncertain"` |
+| `tags` | 2–5 normalized topic tags (lowercase, hyphenated, English noun phrases; prefer existing store vocabulary) |
+| `rationale` | One sentence explaining why this is worth remembering (stored in `provenance`) |
+
+**Initial confidence from `certainty`** (replaces hedge/assertion word heuristics):
+
+| `certainty` | Starting `confidence` | Rationale |
+|---|---|---|
+| `"definitive"` | 0.65 | One strong observation; grows with further evidence |
+| `"tentative"` | 0.35 | Weak signal; needs reinforcement before use |
+| `"uncertain"` | 0.15 | Barely a signal; consolidation required before injection |
+
+### Stage 2 — Match (store lookup)
+
+For each extracted candidate, compare against existing active artifacts of the same `kind`:
+
+- Match criteria: same `kind` + overlapping `tags` + compatible `scope`
+- Three outcomes: **novel**, **accumulating**, or **confident**
+
+### Stage 3 — Resolve (evidence accumulation)
+
+| Outcome | What happens |
+|---|---|
+| **Novel** | Create a new artifact at `stage: "candidate"`, `evidenceCount: 1`, `evidence: [content]` |
+| **Accumulating** | Increment `evidenceCount` on the matched artifact; append `content` to `evidence[]`. If `evidenceCount` reaches the consolidation threshold (**3**, configurable) → trigger consolidation LLM call → promote to `stage: "consolidated"` |
+| **Confident** | Retrieve the consolidated artifact for injection; update retrieval and reinforcement counts |
+
+### Consolidation LLM call
+
+Triggered when `evidenceCount` reaches the threshold (default: 3). The LLM receives all entries in `evidence[]` and is asked to:
+
+> *"Given these N observations from a user, what is the general, reusable rule or pattern they reflect? Produce a concise artifact that will guide the agent in future sessions."*
+
+The output becomes the new `content` of the artifact (now a generalized rule rather than a verbatim quote). The original observations remain in `evidence[]` as an audit trail.
+
+*Future: the threshold may become dynamic — adjusted by conversation progress, `certainty` mix, or user feedback signals.*
+
+### Injection rules
+
+Not all artifacts are injected immediately:
+
+| `stage` | `certainty` | Injectable? | Label in context |
+|---|---|---|---|
+| `consolidated` | any | ✅ Yes | confidence-gated per normal rules |
+| `candidate` | `"definitive"` | ✅ Yes (provisional) | `[provisional]` — single strong observation |
+| `candidate` | `"tentative"` or `"uncertain"` | ❌ No | awaiting consolidation |
+| `accumulating` | any | ❌ No | awaiting consolidation |
+
+The `[provisional]` label signals to the agent that this knowledge comes from a single unconfirmed observation and should be applied with extra caution. This policy is experimental and may be revised as we learn from real use.
+
+---
 
 ## Knowledge graph
 
@@ -163,10 +260,21 @@ This means PIL can **observe inbound messages** and **inject into prompts**, but
 
 ## Effective confidence calculation
 
-When an artifact is being considered for application, its raw `confidence` score is adjusted by several factors:
+Confidence has two phases:
+
+**At extraction time**, `confidence` is seeded from the `certainty` field assigned by the LLM:
+
+```
+certainty "definitive" → confidence = 0.65
+certainty "tentative"  → confidence = 0.35
+certainty "uncertain"  → confidence = 0.15
+```
+
+**At application time**, the raw `confidence` score is adjusted by evidence accumulation and feedback:
 
 ```
 effectiveConfidence = confidence
+  × evidenceFactor(evidenceCount)          // grows toward 1.0 as evidence accumulates
   × decayFactor(age, lastRetrievedAt, reinforcementCount)
   × acceptanceRate(acceptedCount, rejectedCount)
 ```

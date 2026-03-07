@@ -155,7 +155,7 @@ The four memory types above are informed by cognitive science, but a knowledge m
 
 | Mechanism | Artifact field(s) | Status |
 |---|---|---|
-| Consolidation | `stage` (`"raw"` / `"consolidated"`) | Designed, not yet implemented |
+| Consolidation | `stage` (`"candidate"` / `"accumulating"` / `"consolidated"`), `evidenceCount`, `evidence[]` | Designed, not yet implemented |
 | Decay | `lastRetrievedAt`, `reinforcementCount` | Designed, not yet implemented |
 | Salience | `salience` (`"low"` / `"medium"` / `"high"`) | Designed, not yet implemented |
 | Spreading activation | `relations` (graph edges) | Designed, not yet implemented |
