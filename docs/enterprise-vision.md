@@ -1,6 +1,6 @@
 # Enterprise Vision
 
-This document expands on the Phase 5 Governance & Ecosystem themes from the [roadmap](roadmap.md). It is written for two audiences: **enterprise adopters** evaluating whether this project addresses a real organizational need, and **investors** interested in the economic potential of portable knowledge artifacts.
+This document is written for two audiences: **enterprise adopters** evaluating whether this project addresses a real organizational need, and **investors** interested in the economic potential of portable knowledge artifacts.
 
 ---
 
@@ -14,6 +14,61 @@ The knowledge that actually drives expert performance is *tacit*: the judgment a
 
 AI agents change this equation. An agent that operates alongside a knowledge worker for months or years naturally encounters the contexts where tacit knowledge is exercised. With PIL, the agent can elicit that knowledge incrementally, structure it, and make it available — both to the same user in future sessions and, with appropriate governance, to others in the organization.
 
+---
+
+## Client-side knowledge: scalability, cost, and reflexive action
+
+This is perhaps the least obvious value proposition, and the one with the most direct operational impact for enterprise deployers.
+
+### The scaling problem with naive agent memory
+
+Every large language model call has a cost that grows with the number of tokens in the context window. Without a structured knowledge layer, an agent managing persistent context faces an unavoidable trade-off:
+
+- **Start fresh each session**: No memory, full reasoning cost on every interaction, no learning over time.
+- **Inject conversation history**: Memory is preserved, but context window cost grows linearly with history. At enterprise scale — thousands of users, thousands of sessions — this becomes a material budget problem, not a technical inconvenience.
+- **RAG over document stores**: Reduces raw context size but requires an embedding model call and vector search on every query. Knowledge is stored as raw documents, not as structured, distilled rules. The same reasoning is re-done each session.
+
+### How structured local artifacts break this relationship
+
+PIL's approach decouples knowledge accumulation from inference cost. Knowledge learned once — a user's output format preferences, an organization's standard terminology, a department's quality criteria — is distilled into a compact structured artifact and stored locally. On every subsequent interaction:
+
+- **Tier 1 (no LLM cost)**: High-confidence artifacts matching the current context are retrieved by a hash-table lookup on an in-memory tag index and injected directly. No model call. No network round-trip. No token cost.
+- **Tier 2 (minimal LLM cost)**: Only partial or ambiguous matches trigger a lightweight LLM reasoning call, sending artifact *summaries* (not full content) to a fast model for disambiguation.
+- **Tier 3 (already included)**: The primary model reasons over injected structured knowledge rather than over raw history. The context window carries precise, relevant, distilled knowledge — not a transcript.
+
+The consequence: as the knowledge base matures, an increasing proportion of interactions can be handled reflexively. The agent applies established knowledge at zero marginal cost per application. Only genuinely novel situations require full LLM reasoning.
+
+### What can be structured this way
+
+The scope of what qualifies as structured client-side knowledge is broader than it might initially appear:
+
+| Category | Examples |
+|---|---|
+| **Output preferences** | Format (bullet points vs prose), length, depth of explanation, citation style |
+| **Workflow conventions** | Standard approval sequences, reporting structures, escalation paths |
+| **Domain vocabulary** | Organization-specific abbreviations, project codenames, entity aliases |
+| **Quality heuristics** | What "good" looks like in this domain — evaluative criteria the agent would otherwise re-derive |
+| **Procedural knowledge** | Standard operating procedures for common tasks, stored as step-by-step artifact recipes |
+| **Anti-patterns** | Known failure modes, deprecated approaches, things that have been tried and rejected |
+| **Stakeholder context** | Communication style by counterparty, expertise areas of key contacts, known sensitivities |
+| **Tool and resource preferences** | Preferred data sources, trusted vendors, known system quirks |
+
+Each of these, once extracted and consolidated, becomes a zero-cost injection in future sessions. The agent stops deriving these things repeatedly from context and starts applying them as established knowledge.
+
+### The enterprise cost multiplier
+
+In a large organization, the leverage compounds in two directions:
+
+**Across sessions**: Knowledge learned in session 1 is applied in sessions 2 through N at zero incremental cost. The amortization period is immediate — unlike a trained model, an artifact begins providing value the moment it is consolidated.
+
+**Across users**: Org-level artifacts are injected into every agent within the organization. A quality judgment approved once by a senior reviewer is applied by every junior team member's agent, without requiring an LLM to re-derive it from first principles. This is knowledge transfer at marginal zero cost per recipient.
+
+The practical implication for procurement: the cost model for PIL-augmented agents does not scale with accumulated knowledge. It scales with the rate of genuinely novel interactions — which decreases as the knowledge base matures. This is a fundamentally different cost curve from approaches that re-inject history or re-run RAG retrieval on every turn.
+
+---
+
+## Institutional knowledge as a durable organizational asset
+
 ### The continuity problem
 
 Consider what happens when a senior analyst leaves a law firm, a senior engineer leaves a product team, or an experienced underwriter leaves an insurance company:
@@ -26,13 +81,78 @@ With PIL, a portion of that accumulated knowledge — the portions the employee 
 
 This is not a theoretical capability. It is the natural consequence of building knowledge management into the AI agent workflow itself, rather than relying on humans to document knowledge as a separate, unrewarded task.
 
+### Knowledge that survives the organization's evolution
+
+Beyond employee turnover, there are structural events that routinely destroy organizational knowledge:
+
+- **Mergers and acquisitions**: Two organizations with different conventions, processes, and judgment frameworks must somehow reconcile them.
+- **Platform migrations**: Moving from one AI vendor or platform to another typically means losing accumulated knowledge stored in proprietary formats.
+- **Workforce scaling**: When a team grows rapidly, new members must somehow absorb conventions that were previously informal.
+
+PIL's model addresses all three:
+
+- **M&A**: Both knowledge bases can be exported, compared, and merged at the artifact level — conflicts are visible as contradicting artifacts and can be resolved by designated reviewers. The process is tractable in a way that reconciling two teams' undocumented intuitions is not.
+- **Platform migration**: Artifacts are model-agnostic text files. The same artifacts work on a new platform the day after migration, with no conversion step. Vendor lock-in does not extend to accumulated organizational knowledge.
+- **Scaling**: Org-level artifacts are injected into every new team member's agent from day one. The conventions are applied automatically without requiring explicit onboarding documentation.
+
+### Active knowledge vs. archived knowledge
+
+The distinction that makes PIL different from document archives is not the format — it is the *active* nature of the artifacts. A procedure stored in a PIL artifact is not a document that must be found, opened, and read. It surfaces automatically when the agent encounters a relevant task. A quality criterion does not require a team member to remember to check the style guide. An organizational convention does not depend on a new hire having been told about it.
+
+This changes the problem from "how do we ensure people find and read the knowledge we have documented?" to "how do we ensure the agent surfaces the right knowledge at the right moment?" The latter is a solvable engineering problem; the former has resisted solution for decades.
+
+---
+
+## Knowledge artifacts as a tradeable asset class
+
+The portability of PIL artifacts has a consequence that is relevant to both enterprise adopters and investors: knowledge artifacts can become a distinct, transferable, and potentially valuable asset.
+
+### What makes an artifact tradeable
+
+A knowledge artifact in a proprietary format — stored in a vendor's database, readable only through their API, expressed in tokens tied to a specific model — has no market. It cannot be extracted, independently valued, or transferred. It is a liability masquerading as an asset: it disappears when the vendor relationship ends.
+
+A PIL artifact is a text file with lightweight conventions. It is:
+
+- **Readable** by any system that can read text
+- **Portable** across model vendors and agent platforms
+- **Verifiable** — its provenance chain (who created it, from what source, with what evidence) is part of the artifact
+- **Typed** — the kind, certainty, and confidence fields provide structured metadata for valuation and certification
+
+These properties are the minimum requirements for a tradeable unit. They parallel what made open music formats create the digital music market, or what made the npm package format create the JavaScript package market: a standard that anyone can produce to and anyone can consume from, without tight coordination between producer and consumer.
+
+### The value gradient
+
+Not all artifacts have equal value. A general preference ("use bullet points") is widely held and easily re-elicited. A curated judgment artifact representing years of domain-expert reasoning — "under these regulatory conditions, this argument structure tends to succeed, for these specific reasons" — is not.
+
+The value gradient tracks several dimensions:
+
+| Dimension | Lower value | Higher value |
+|---|---|---|
+| **Specificity** | Generic preference any agent would apply | Domain-specific judgment requiring expert experience |
+| **Evidence base** | Single observation | Consolidated from many real-world cases |
+| **Provenance** | Anonymous or unverified | Attributed to a named expert, with verifiable rationale |
+| **Certification** | Uncertified | Reviewed and endorsed by a recognized authority |
+| **Scarcity** | Widely reproducible | Reflects proprietary operational experience |
+
+For enterprise adopters, this value gradient has a concrete implication: the organization's own accumulated knowledge artifacts — particularly its evaluative and strategic artifacts representing hard-won judgment — are genuinely valuable internal assets. They should be governed and protected accordingly, not treated as disposable configuration.
+
+### Expert knowledge packages
+
+Domain experts with years of accumulated judgment can publish curated PIL packages: a senior tax attorney's framework for analyzing a particular class of transaction, a clinical pharmacist's decision heuristics for drug interaction review, a structural engineer's checklist for evaluating retrofit proposals. Consumers import these packages into their agents. The knowledge is *active* — it surfaces at the right moment and adapts to context — rather than inert (a textbook that must be found and read).
+
+This is not a distant economic possibility. It is the application of a well-understood package distribution model to a new asset class. The infrastructure precedent (npm, pip, Maven) is clear; the asset class is new.
+
+### Professional certification of knowledge packages
+
+For high-stakes domains, the value of a knowledge package is not just its content but its provenance. A package certified by a licensing body — reviewed by licensed practitioners, tested against documented case examples — commands a significant premium over an uncertified equivalent. Medical, legal, financial, and engineering contexts all have existing certification infrastructure that maps onto this model.
+
 ---
 
 ## The enterprise deployment model
 
 ### Tiered knowledge stores
 
-An enterprise PIL deployment would operate across four knowledge tiers:
+An enterprise PIL deployment operates across four knowledge tiers:
 
 ```
 Individual ──► Team ──► Org ──► Public
@@ -43,7 +163,7 @@ Movement between tiers requires explicit human action:
 
 - **Individual → Team**: The contributor flags an artifact as a team submission. A reviewer approves, rejects, or returns with comments.
 - **Team → Org**: A publisher promotes reviewed artifacts to the org knowledge base. Policy controls can restrict which categories reach org level.
-- **Org → Public**: An optional step for organizations that want to publish knowledge packages externally (e.g., a consultancy publishing domain-specific packages, or a professional body publishing regulatory guidance).
+- **Org → Public**: An optional step for organizations that want to publish knowledge packages externally.
 
 Within each tier, every organization's agents treat artifacts from higher tiers as authoritative context — injected alongside conversation history with appropriate confidence levels.
 
@@ -80,65 +200,29 @@ For regulated industries, this matters concretely:
 - **Healthcare**: You can show that clinical guidance injected by an AI agent was derived from approved, reviewed knowledge, with a clear chain of human sign-off.
 - **Any regulated context**: Artifact retirement creates a clean break — there is a record of when a rule changed and what replaced it, rather than a silent overwrite.
 
-### Knowledge that survives the organization's evolution
-
-Beyond employee turnover, there are structural events that routinely destroy organizational knowledge:
-
-- **Mergers and acquisitions**: Two organizations with different conventions, processes, and judgment frameworks must somehow reconcile them.
-- **System migrations**: Moving from one AI vendor or platform to another typically means losing the accumulated knowledge, since it is stored in proprietary formats.
-- **Workforce scaling**: When a team grows rapidly, new members must somehow absorb conventions that were previously informal.
-
-PIL's model addresses all three:
-
-- **M&A**: Both knowledge bases can be exported, compared, and merged at the artifact level — conflicts are visible as contradicting artifacts and can be resolved by designated reviewers.
-- **Platform migration**: Artifacts are model-agnostic text files. The same artifacts work on a new platform the day after migration, with no conversion step.
-- **Scaling**: Org-level artifacts are injected into every new team member's agent from day one. The conventions are applied automatically without requiring explicit onboarding documentation.
-
 ---
 
 ## The investment thesis
 
-### A new asset class: curated knowledge artifacts
+### A coordination layer, not a product
 
 Software infrastructure has repeatedly created value by defining standard formats that allow producers and consumers to exchange something of value without tight coordination:
 
-- **npm** defined the standard package format for JavaScript. The value is not in npm's servers — it is in the coordination layer that allows any developer to publish a package and any other developer to consume it.
-- **OpenAPI** defined the standard format for REST API descriptions. The value is in the interoperability it enables, not in any particular tool.
-- **Docker images** defined the standard format for application containers. This made application distribution a solved problem.
+- **npm** defined the standard package format for JavaScript — the value is in the coordination layer, not the servers.
+- **OpenAPI** defined the standard format for REST API descriptions — the value is in the interoperability, not the tooling.
+- **Docker images** defined the standard format for application containers — making application distribution a solved problem.
 
-PIL is positioned to define a standard format for **curated knowledge artifacts** — a new category of exchangeable, verifiable unit of expertise.
+PIL is positioned to define a standard format for curated knowledge artifacts — a new category of exchangeable, verifiable unit of expertise. Once this standard achieves adoption, the economic surface is significant.
 
-Once this standard achieves adoption, the economic surface is significant:
+### Business models on top of this layer
 
-### Why portability creates a market
-
-A knowledge artifact that is locked into a vendor's platform has no market — it cannot be extracted, traded, or valued independently. A knowledge artifact that is portable, verifiable, and model-agnostic is a product.
-
-The same way open music formats (MP3) created the market for digital music distribution, and open video formats created the market for streaming, open knowledge artifact formats create the conditions for knowledge distribution markets.
-
-### Potential business models on top of this layer
-
-**Expert knowledge packages**
-
-Domain experts with years of accumulated judgment — lawyers, accountants, engineers, physicians, consultants — can publish curated PIL packages representing their expertise. Consumers import these packages into their agents. The expert earns per-download, subscription, or licensing revenue.
-
-This is analogous to selling a textbook, but the knowledge is *active* rather than inert: it surfaces at the right moment, adapts to context, and can be updated as the expert's knowledge evolves.
-
-**Professional certification of knowledge packages**
-
-For high-stakes domains, the value of a knowledge package is not just its content but its provenance. A package certified by a licensing body — reviewed by licensed practitioners, tested against case examples — commands a significant premium over an uncertified equivalent. This creates a certification business.
-
-**Organizational knowledge custody**
-
-Enterprises need the same things for knowledge packages that they need for software packages: private hosting, access controls, version management, audit trails. A managed private registry for org knowledge — with governance tooling layered on top — is a well-understood SaaS model (cf. Artifactory, GitHub Packages, AWS CodeArtifact) applied to a new asset class.
-
-**Knowledge migration services**
-
-Most organizations have large bodies of relevant knowledge trapped in document repositories, process manuals, email archives, and chat histories. Converting this into structured PIL artifacts is a one-time effort that pays recurring dividends as artifacts are injected into agent workflows. This is a services business initially, automatable over time.
-
-**Knowledge continuity and M&A services**
-
-Employee offboarding, team restructuring, and M&A create well-defined events where structured knowledge transfer has clear monetary value. A service that manages this transition — extracting, curating, and handing over knowledge artifacts — prices into the cost of each such event.
+| Business model | Description |
+|---|---|
+| **Expert knowledge packages** | Domain professionals publish curated PIL packages on a subscription or per-download basis |
+| **Professional certification** | Licensing bodies certify knowledge packages for high-stakes domains, commanding a premium |
+| **Organizational knowledge custody** | Private registry hosting for org knowledge, with governance tooling — the Artifactory model for a new asset class |
+| **Knowledge migration services** | Converting existing document repositories, process manuals, and email archives into structured PIL artifacts |
+| **Knowledge continuity and M&A** | Managing knowledge transfer at well-defined business events (offboarding, restructuring, acquisition) |
 
 ### Network effects and defensibility
 
@@ -147,8 +231,6 @@ The format standard is the defensible asset. As more organizations accumulate kn
 - Switching to a different format requires converting accumulated knowledge — an increasingly costly migration.
 - The ecosystem of tools, converters, certification bodies, and marketplaces built around the standard makes the standard more valuable.
 - Expert publishers who have built audiences for their knowledge packages have no reason to switch to an incompatible format.
-
-This is the pattern of infrastructure standards: hard to establish initially, self-reinforcing once established, and very difficult to displace.
 
 ### What the technical foundation already provides
 
@@ -161,7 +243,7 @@ The artifact design choices made in phases 1–4 are not accidental — they are
 | Versioned with provenance | Audit trails and certification are a presentation layer, not a redesign |
 | Additive-only field evolution | Phase 5 governance fields are backwards-compatible with Phase 1 artifacts |
 | Local-first storage | No central dependency; orgs can host their own registry without a third-party service |
-| Typed artifacts (semantic, procedural, evaluative) | Different governance rules can apply to different artifact kinds — evaluative judgments may require stricter review than factual conventions |
+| Typed artifacts | Different governance rules can apply to different artifact kinds |
 
 ---
 
@@ -169,6 +251,8 @@ The artifact design choices made in phases 1–4 are not accidental — they are
 
 Enterprise AI adoption is accelerating faster than enterprise AI governance. Most organizations deploying AI agents have no answer to the question "what does our agent know, and who approved it?" The compliance and audit requirements will follow — as they always do — once the technology is established enough to attract regulatory attention.
 
-PIL is positioned to be the answer to that question: not a compliance bolt-on, but a knowledge management architecture where governance is a natural consequence of how knowledge is captured and stored, rather than an external constraint applied after the fact.
+The cost pressure is equally real. As AI agent usage scales from pilot deployments to organization-wide infrastructure, the per-interaction cost of context-window-heavy approaches becomes a material budget line. Organizations will look for architectures that decouple knowledge accumulation from inference cost — and discover that structured local knowledge, applied reflexively, is a fundamentally better cost model at scale.
+
+PIL is positioned to address both pressures simultaneously: not a compliance bolt-on, but a knowledge management architecture where governance, continuity, and cost efficiency are natural consequences of how knowledge is captured and stored, rather than external constraints applied after the fact.
 
 The window for establishing a standard format is open now, before proprietary formats lock in network effects. The technical groundwork is tractable. The enterprise need is real and growing. The economic surface — once the standard is established — is substantial.
