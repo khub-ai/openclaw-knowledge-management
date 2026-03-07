@@ -10,7 +10,7 @@ These documents serve three distinct purposes, and every benchmark should be des
 
 ### 1. Inspection by interested parties
 
-A reader — whether a potential adopter, a researcher, or an investor evaluating the project — should be able to open any benchmark document and understand:
+A reader — whether a potential adopter, a researcher, or a technical evaluator — should be able to open any benchmark document and understand:
 
 - What specific question about the system this benchmark answers
 - What the system must do correctly for the benchmark to pass

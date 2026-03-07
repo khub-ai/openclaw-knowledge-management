@@ -1,6 +1,6 @@
 # Enterprise Vision
 
-This document is written for two audiences: **enterprise adopters** evaluating whether this project addresses a real organizational need, and **investors** interested in the economic potential of portable knowledge artifacts.
+This document is written for two audiences: **enterprise adopters** evaluating whether this project addresses a real organizational need, and **ecosystem builders and strategists** interested in the economic potential of portable knowledge artifacts.
 
 ---
 
@@ -105,7 +105,7 @@ This changes the problem from "how do we ensure people find and read the knowled
 
 ## Knowledge artifacts as a tradeable asset class
 
-The portability of PIL artifacts has a consequence that is relevant to both enterprise adopters and investors: knowledge artifacts can become a distinct, transferable, and potentially valuable asset.
+The portability of PIL artifacts has a consequence that is relevant to both enterprise adopters and ecosystem builders: knowledge artifacts can become a distinct, transferable, and potentially valuable asset.
 
 ### What makes an artifact tradeable
 
