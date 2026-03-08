@@ -122,6 +122,9 @@ openclaw-knowledge-management/
 ├── apps/
 │   └── playground/             # Dev harness — runs the pipeline without OpenClaw
 │       └── index.ts
+├── tools/
+│   └── pil-chat/               # Interactive CLI chatbot for testing PIL
+│       └── index.ts
 └── docs/                       # Design documents
     ├── memory-taxonomy.md      # Four memory types, generalization, cognitive mechanisms
     ├── architecture.md         # Tiered triggering, knowledge graph, artifact schema
@@ -153,6 +156,7 @@ export ANTHROPIC_API_KEY=sk-ant-...        # macOS / Linux / WSL
 pnpm start        # runs all 8 PIL stages against sample input
 pnpm dev          # re-runs on file changes (watch mode)
 pnpm test         # runs the full test suite (no API key required)
+pnpm chat         # interactive PIL chatbot (see tools/pil-chat/)
 ```
 
 Artifacts are stored at `~/.openclaw/knowledge/artifacts.jsonl`.

@@ -50,6 +50,15 @@ importers:
 
   packages/skills-foo: {}
 
+  tools/pil-chat:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@khub-ai/openclaw-plus':
+        specifier: workspace:*
+        version: link:../../packages/openclaw-plus
+
 packages:
 
   /@anthropic-ai/sdk@0.39.0:
