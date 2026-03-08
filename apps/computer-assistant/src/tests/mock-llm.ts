@@ -28,6 +28,32 @@ export function createPatternMockLLM(
   };
 }
 
+/**
+ * Create a mock LLM that supports multi-string matching.
+ *
+ * When `match` is an array, ALL strings must appear in the prompt.
+ * When `match` is a string, behaves like createPatternMockLLM.
+ *
+ * Falls back to returning `{ "candidates": [] }` for unmatched prompts.
+ *
+ * Use this when you need to distinguish prompts that share a common
+ * substring (e.g., a semantic match prompt that also mentions "atp" vs
+ * an extraction prompt that also mentions "atp").
+ */
+export function createMultiPatternMockLLM(
+  patterns: Array<{ match: string | string[]; response: string }>,
+): LLMFn {
+  return async (prompt: string): Promise<string> => {
+    for (const { match, response } of patterns) {
+      const matched = Array.isArray(match)
+        ? match.every((m) => prompt.includes(m))
+        : prompt.includes(match);
+      if (matched) return response;
+    }
+    return JSON.stringify({ candidates: [] });
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Scenario-specific mock responses (extraction)
 // ---------------------------------------------------------------------------
@@ -168,5 +194,107 @@ export function createFullPipelineMockLLM(): LLMFn {
     { match: "我总是希望摘要",                  response: CHINESE_PREF_RESPONSE },
     { match: "To deploy:",                    response: PROCEDURE_RESPONSE },
     { match: "usually prefer concise",        response: TENTATIVE_PREF_RESPONSE },
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// lmp acronym benchmark mocks
+// ---------------------------------------------------------------------------
+//
+// These mocks simulate the LLM's behavior in the "lmp" acronym scenario.
+// Key design choice: the ATP and DS extraction responses use DIFFERENT tags
+// from the LMP response, so Jaccard tag matching fails — forcing the test to
+// exercise the semantic matching path.
+//
+// Semantic match prompts are identified by the phrase
+// "SAME underlying behavioral habit" (from buildSemanticMatchPrompt in store.ts).
+
+/** Exchange-pass extraction for "lmp = list my preferences" */
+export const LMP_EXCHANGE_RESPONSE = JSON.stringify({
+  candidates: [
+    {
+      content: "'lmp' is the user's shorthand for 'list my preferences'",
+      kind: "convention",
+      scope: "general",
+      certainty: "definitive",
+      tags: ["lmp", "shorthand-command", "acronym"],
+      rationale: "User defined a personal acronym for a frequently-used command",
+    },
+  ],
+});
+
+/**
+ * Exchange-pass extraction for "atp = add to preferences".
+ *
+ * Intentionally uses DIFFERENT tags from LMP_EXCHANGE_RESPONSE so that
+ * Jaccard tag similarity = 0, forcing the semantic matching path.
+ */
+export const ATP_EXCHANGE_RESPONSE = JSON.stringify({
+  candidates: [
+    {
+      content: "'atp' is the user's shorthand for 'add to preferences'",
+      kind: "convention",
+      scope: "general",
+      certainty: "definitive",
+      tags: ["atp", "command-alias"],  // no overlap with lmp tags → Jaccard = 0
+      rationale: "User defined a personal acronym for a frequently-used command",
+    },
+  ],
+});
+
+/**
+ * Exchange-pass extraction for "ds = debug session".
+ *
+ * Also uses different tags to force the semantic matching path.
+ */
+export const DS_EXCHANGE_RESPONSE = JSON.stringify({
+  candidates: [
+    {
+      content: "'ds' is the user's shorthand for 'debug session'",
+      kind: "convention",
+      scope: "general",
+      certainty: "definitive",
+      tags: ["ds", "abbreviation"],  // no overlap with prior tags → Jaccard = 0
+      rationale: "User defined a personal acronym for a debugging workflow command",
+    },
+  ],
+});
+
+/** Consolidated rule produced after 3 acronym observations */
+export const ACRONYM_CONSOLIDATION_RULE =
+  "User regularly defines personal shorthand acronyms for frequently-used commands (e.g., lmp = list preferences, atp = add to preferences, ds = debug session).";
+
+/**
+ * Mock LLM for the lmp acronym benchmark.
+ *
+ * Handles, in order:
+ *   1. Consolidation prompts (identified by "consolidation assistant")
+ *   2. Semantic match prompts (identified by "SAME underlying behavioral habit")
+ *      — returns "1" when the candidate is an acronym-definition convention
+ *   3. Exchange-pass extraction prompts
+ */
+export function createLmpBenchmarkLLM(): LLMFn {
+  return createMultiPatternMockLLM([
+    // ── Consolidation (must come first: the prompt contains evidence text
+    //    that would also match the extraction patterns below) ─────────────────
+    { match: "consolidation assistant",
+      response: ACRONYM_CONSOLIDATION_RULE },
+
+    // ── Semantic matching (identified by unique phrase from store.ts prompt)
+    //    Returns "1" when the new candidate matches the stored acronym pattern.
+    //    All three acronyms (atp, ds) should group with the first (lmp). ─────
+    { match: ["SAME underlying behavioral habit", "add to preferences"],
+      response: "1" },
+    { match: ["SAME underlying behavioral habit", "debug session"],
+      response: "1" },
+    // Fallback: no semantic match for anything else
+    { match: "SAME underlying behavioral habit",
+      response: "NONE" },
+
+    // ── Exchange-pass extraction ─────────────────────────────────────────────
+    //    Matched by unique content phrases from the simulated exchange texts.
+    { match: "list my preferences",  response: LMP_EXCHANGE_RESPONSE },
+    { match: "add to preferences",   response: ATP_EXCHANGE_RESPONSE },
+    { match: "debug session",        response: DS_EXCHANGE_RESPONSE },
   ]);
 }

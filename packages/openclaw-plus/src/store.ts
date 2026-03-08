@@ -150,37 +150,119 @@ export async function getActiveTags(): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Semantic match prompt (Phase 2 fallback in matchCandidate)
+// ---------------------------------------------------------------------------
+
+function buildSemanticMatchPrompt(
+  kind: KnowledgeKind,
+  candidateContent: string,
+  existingArtifacts: { content: string }[],
+): string {
+  const numbered = existingArtifacts
+    .map((a, i) => `${i + 1}. "${a.content}"`)
+    .join("\n");
+
+  return `You are a pattern-matching assistant for a long-term memory system.
+
+NEW OBSERVATION (kind: ${kind}):
+"${candidateContent}"
+
+EXISTING STORED PATTERNS (same kind):
+${numbered}
+
+Which existing pattern (if any) represents the SAME underlying behavioral habit as the new observation? Two observations share the same pattern when they are different specific instances of the same general behavior — combining their evidence would allow the system to generalize them into a single rule.
+
+Examples of SAME pattern:
+  - "lmp means list my preferences" and "atp means add to preferences" → same (both: user defines acronyms for commands)
+  - "I use 'gh' for GitHub" and "I use 'yt' for YouTube" → same (both: user maps shorthands to destinations)
+
+Examples of DIFFERENT patterns:
+  - "prefers dark mode" and "uses TypeScript strict mode" → different behaviors
+  - "deploy by running build first" and "prefer bullet points" → unrelated
+
+Reply with the number of the matching pattern, or "NONE" if no stored pattern represents the same behavioral habit.
+Reply with only a number or "NONE".`.trim();
+}
+
+// ---------------------------------------------------------------------------
 // Match candidate against existing store (Stage 2)
 // ---------------------------------------------------------------------------
 
 /**
- * Find an existing active artifact that matches a candidate's kind and tags.
+ * Find an existing active artifact that matches a candidate's kind and content.
  *
- * Match criteria: same `kind` + Jaccard(tags) ≥ TAG_MATCH_THRESHOLD.
- * Returns the best-matching artifact, or null if no match.
+ * Two-phase matching:
+ *   Phase 1 — Jaccard tag overlap ≥ TAG_MATCH_THRESHOLD (fast, no LLM).
+ *             Returns immediately on a confident tag match.
+ *   Phase 2 — Semantic LLM match (only when `llm` is provided and Phase 1
+ *             finds no match). Asks the LLM whether the candidate is an
+ *             instance of the same behavioral pattern as any existing artifact.
+ *             Useful when LLM tag variance prevents reliable Jaccard matching
+ *             (e.g., "lmp means X" and "atp means Y" tagged differently but
+ *             both expressing "user defines acronyms for commands").
+ *
+ * @param candidate  - Candidate to match: kind, tags, and content
+ * @param llm        - Optional LLM for Phase 2 semantic matching. When null,
+ *                     only Phase 1 Jaccard is used. Defaults to no LLM.
  */
-export async function matchCandidate(candidate: {
-  kind: KnowledgeKind;
-  tags: string[];
-}): Promise<KnowledgeArtifact | null> {
+export async function matchCandidate(
+  candidate: {
+    kind: KnowledgeKind;
+    tags: string[];
+    content: string;
+  },
+  llm?: LLMFn,
+): Promise<KnowledgeArtifact | null> {
   const all = await loadAll();
   const active = all.filter((a) => !a.retired && a.kind === candidate.kind);
 
-  if (!candidate.tags || candidate.tags.length === 0) return null;
+  if (active.length === 0) return null;
 
-  let best: { artifact: KnowledgeArtifact; score: number } | null = null;
+  // ── Phase 1: Jaccard tag overlap (fast, no LLM) ──────────────────────────
 
-  for (const artifact of active) {
-    if (!artifact.tags || artifact.tags.length === 0) continue;
-    const score = tagOverlap(artifact.tags, candidate.tags);
-    if (score >= TAG_MATCH_THRESHOLD) {
-      if (!best || score > best.score) {
-        best = { artifact, score };
+  if (candidate.tags && candidate.tags.length > 0) {
+    let best: { artifact: KnowledgeArtifact; score: number } | null = null;
+    for (const artifact of active) {
+      if (!artifact.tags || artifact.tags.length === 0) continue;
+      const score = tagOverlap(artifact.tags, candidate.tags);
+      if (score >= TAG_MATCH_THRESHOLD) {
+        if (!best || score > best.score) best = { artifact, score };
       }
     }
+    if (best) return best.artifact; // confident Jaccard match — no LLM needed
   }
 
-  return best?.artifact ?? null;
+  // ── Phase 2: Semantic match (LLM fallback when Jaccard is insufficient) ──
+
+  if (!llm) return null;
+
+  // Rank candidates by partial Jaccard + content similarity; take top 5
+  // to limit the size of the LLM prompt and number of options to evaluate.
+  const ranked = active
+    .map((artifact) => {
+      const tagScore = artifact.tags?.length
+        ? tagOverlap(artifact.tags, candidate.tags ?? [])
+        : 0;
+      const contentScore = jaccard(artifact.content, candidate.content);
+      return { artifact, score: tagScore * 0.6 + contentScore * 0.4 };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ artifact }) => artifact);
+
+  const prompt = buildSemanticMatchPrompt(
+    candidate.kind,
+    candidate.content,
+    ranked,
+  );
+
+  const response = (await llm(prompt)).trim();
+  const num = parseInt(response, 10);
+  if (!isNaN(num) && num >= 1 && num <= ranked.length) {
+    return ranked[num - 1]!;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

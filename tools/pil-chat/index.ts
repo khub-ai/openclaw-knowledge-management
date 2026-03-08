@@ -12,6 +12,7 @@
  *   pnpm chat -- --verbose                 # show PIL pipeline details
  *   pnpm chat -- --log /tmp/session.log    # mirror all I/O to a log file
  *   pnpm chat -- --model claude-3-5-haiku-20241022
+ *   pnpm chat -- --match-model claude-3-5-haiku-20241022  # cheap model for semantic matching
  *   pnpm chat -- --help
  *
  * Requires: ANTHROPIC_API_KEY environment variable
@@ -43,6 +44,8 @@ import type { LLMFn } from "@khub-ai/openclaw-plus/types";
 
 interface Options {
   model: string;
+  /** Separate model for Stage 2 semantic matching. null = use same as model. */
+  matchModel: string | null;
   verbose: boolean;
   noPersist: boolean;
   customStore: string | null;
@@ -53,6 +56,7 @@ function parseArgs(): Options {
   const args = process.argv.slice(2);
   const opts: Options = {
     model: "claude-sonnet-4-6",
+    matchModel: null,
     verbose: false,
     noPersist: false,
     customStore: null,
@@ -69,6 +73,8 @@ function parseArgs(): Options {
       opts.verbose = true;
     } else if ((a === "--model" || a === "-m") && args[i + 1]) {
       opts.model = args[++i]!;
+    } else if ((a === "--match-model" || a === "-M") && args[i + 1]) {
+      opts.matchModel = args[++i]!;
     } else if ((a === "--log" || a === "-l") && args[i + 1]) {
       opts.logPath = args[++i]!;
     } else if (a === "--help" || a === "-h") {
@@ -100,6 +106,9 @@ Store options (mutually exclusive):
 Other options:
   --log <path>           Mirror all I/O to a log file (appended each run)
   --model <model>        Anthropic model (default: claude-sonnet-4-6)
+  --match-model <model>  Separate model for semantic pattern matching
+                         (default: same as --model; use haiku for cheaper
+                         matching — the task is a simple YES/NO classification)
   --verbose, -v          Show PIL pipeline activity for every message
   --help, -h             Show this help
 
@@ -193,6 +202,8 @@ function setupStore(opts: Options): { displayPath: string; cleanup: () => void }
 
 interface LLMHandle {
   pilLlm: LLMFn;
+  /** LLM used for semantic pattern matching in Stage 2. May be cheaper than pilLlm. */
+  matchLlm: LLMFn;
   chat: (userMessage: string, systemPrompt: string) => Promise<string>;
   clearHistory: () => void;
 }
@@ -220,6 +231,21 @@ function setupLLM(opts: Options): LLMHandle {
     return block?.type === "text" ? block.text : "";
   };
 
+  // Separate adapter for semantic matching: may use a cheaper/faster model.
+  // The task is only a simple pattern-equivalence classification — the response
+  // is always a single number ("1", "2", …) or "NONE", so max_tokens can be low.
+  const matchLlm: LLMFn = opts.matchModel
+    ? async (prompt: string): Promise<string> => {
+        const msg = await client.messages.create({
+          model: opts.matchModel!,
+          max_tokens: 32,
+          messages: [{ role: "user", content: prompt }],
+        });
+        const block = msg.content[0];
+        return block?.type === "text" ? block.text : "";
+      }
+    : pilLlm; // default: reuse same model
+
   // Multi-turn conversation history for the actual chat
   const history: Array<{ role: "user" | "assistant"; content: string }> = [];
 
@@ -238,7 +264,7 @@ function setupLLM(opts: Options): LLMHandle {
 
   const clearHistory = (): void => { history.length = 0; };
 
-  return { pilLlm, chat, clearHistory };
+  return { pilLlm, matchLlm, chat, clearHistory };
 }
 
 // ─── PIL activity display ────────────────────────────────────────────────────
@@ -290,7 +316,7 @@ async function main(): Promise<void> {
   const opts = parseArgs();
   const sessionLog = setupLog(opts.logPath);
   const { displayPath, cleanup } = setupStore(opts);
-  const { pilLlm, chat, clearHistory } = setupLLM(opts);
+  const { pilLlm, matchLlm, chat, clearHistory } = setupLLM(opts);
 
   const exit = (): never => {
     sessionLog.close();
@@ -307,6 +333,7 @@ async function main(): Promise<void> {
   console.log("\npil-chat — PIL test harness");
   console.log(`  Store : ${displayPath}`);
   console.log(`  Model : ${opts.model}`);
+  if (opts.matchModel) console.log(`  Match : ${opts.matchModel} (semantic matching)`);
   console.log(`  Mode  : ${opts.verbose ? "verbose" : "normal"}`);
   if (opts.logPath) console.log(`  Log   : ${opts.logPath}`);
   console.log("\nType /help for commands, exit to quit.\n");
@@ -378,7 +405,7 @@ async function main(): Promise<void> {
 
     let pilResult: Awaited<ReturnType<typeof processMessage>>;
     try {
-      pilResult = await processMessage(userInput, pilLlm, "pil-chat");
+      pilResult = await processMessage(userInput, pilLlm, "pil-chat", matchLlm);
     } catch (err) {
       console.error(`  [PIL error] ${err instanceof Error ? err.message : String(err)}`);
       continue;
@@ -438,6 +465,7 @@ async function main(): Promise<void> {
         exchangeText,
         pilLlm,
         "pil-chat:exchange",
+        matchLlm,
       );
       if (opts.verbose) {
         if (exchangeResult.candidates.length > 0 || exchangeResult.created.length > 0 || exchangeResult.updated.length > 0) {

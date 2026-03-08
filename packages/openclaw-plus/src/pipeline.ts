@@ -75,11 +75,17 @@ export type ProcessResult = {
  * @param message    - User's message in any language
  * @param llm        - LLM adapter function (used for extraction + consolidation)
  * @param provenance - Session or message reference stored with each artifact
+ * @param matchLlm   - Optional separate LLM for Stage 2 semantic matching.
+ *                     Defaults to `llm` (same model). Pass `null` to disable
+ *                     semantic matching and use Jaccard-only tag matching.
+ *                     A cheap/fast model (e.g. haiku) works well here since
+ *                     the task is a simple pattern-equivalence classification.
  */
 export async function processMessage(
   message: string,
   llm: LLMFn,
   provenance = "unknown",
+  matchLlm: LLMFn | null = llm,
 ): Promise<ProcessResult> {
   // ── Stage 1: Extract ──────────────────────────────────────────────────────
   const existingTags = await getActiveTags();
@@ -90,7 +96,7 @@ export async function processMessage(
 
   // ── Stages 2 & 3: Match → Resolve ────────────────────────────────────────
   for (const candidate of candidates) {
-    const match = await matchCandidate(candidate);
+    const match = await matchCandidate(candidate, matchLlm ?? undefined);
 
     if (match === null) {
       // Novel: create new candidate artifact
