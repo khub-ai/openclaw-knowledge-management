@@ -1,5 +1,5 @@
 {
-  "id": "knowledge-management",
+  "id": "openclaw-plus",
   "kind": "knowledge",
   "configSchema": {
     "type": "object",

@@ -29,41 +29,52 @@ In practical terms: the agent can **retrieve and apply** what it already knows. 
 
 > **WSL note:** All commands below should be run from WSL, where OpenClaw runs. The repo is at `~/src/openclaw-knowledge-management` (symlinked from `C:\_backup\openclaw\openclaw-knowledge-management`).
 
+> **NTFS/WSL permissions note:** The plugin path must not be world-writable (`mode=777`). If your repo lives under `/mnt/c/`, add `options = "metadata,umask=22,fmask=11"` to `/etc/wsl.conf` under `[automount]` and restart WSL (`wsl --shutdown` from PowerShell). This makes NTFS paths appear as `755` to Linux.
+
 ---
 
-## Step 1 — Link the plugin
+## Step 1 — Add the plugin to `allow` and `load.paths`
 
-The `--link` flag tells OpenClaw to load the plugin directly from the source directory without copying it. Changes you make to the plugin source are reflected immediately after a gateway restart.
+> **If your config has no `allow` field**, skip the `allow` change — it is optional and only needed if you want a strict plugin allowlist.
 
-```bash
-openclaw plugins install --link ~/src/openclaw-knowledge-management/packages/openclaw-plus
+Edit `~/.openclaw/openclaw.json` to add `openclaw-plus` to the `allow` list and add the plugin directory to `load.paths`:
+
+```json5
+{
+  plugins: {
+    allow: ["discord", "line", "openclaw-plus"],   // add openclaw-plus
+    load: {
+      paths: ["/home/kaihu/src/openclaw-knowledge-management/packages/openclaw-plus"]
+    }
+  }
+}
 ```
 
-Expected output: something like `✓ Linked plugin knowledge-management from ~/src/openclaw-knowledge-management/packages/openclaw-plus`
+> Use the **absolute path** (not `~/...`) — JSON does not expand `~`.
 
-To verify it was discovered:
+Restart the gateway:
 
 ```bash
-openclaw plugins list
+openclaw gateway restart
 ```
 
-Look for `knowledge-management` in the output. If it appears but shows as disabled, continue to Step 2.
+At this point the plugin will be discovered and listed, but still disabled. Continue to Step 2.
 
 ---
 
 ## Step 2 — Enable the plugin
 
 ```bash
-openclaw plugins enable knowledge-management
+openclaw plugins enable openclaw-plus
 ```
 
-Alternatively, add it to your config file manually (`~/.openclaw/openclaw.json`):
+Or add it to `entries` in the config and restart:
 
 ```json5
 {
   plugins: {
     entries: {
-      "knowledge-management": {
+      "openclaw-plus": {
         enabled: true
       }
     }
@@ -73,28 +84,15 @@ Alternatively, add it to your config file manually (`~/.openclaw/openclaw.json`)
 
 ---
 
-## Step 3 — Restart the gateway
-
-Plugin changes take effect only after a full gateway restart:
+## Step 3 — Verify it loaded
 
 ```bash
-openclaw gateway restart
+openclaw plugins list
+# look for: openclaw-plus | enabled
+
+openclaw plugins info openclaw-plus
+# should show: status: loaded, tool: knowledge_search
 ```
-
-Or stop and start:
-
-```bash
-openclaw stop
-openclaw start
-```
-
-After restart, confirm the plugin loaded without errors:
-
-```bash
-openclaw plugins info knowledge-management
-```
-
-The output should show `status: loaded` and list the `knowledge_search` tool.
 
 ---
 
@@ -181,11 +179,15 @@ If missing, the plugin directory was not recognised as a valid plugin.
 
 ### `knowledge_search` not available to agent
 
-Run `openclaw plugins info knowledge-management` — if status shows `error`, check OpenClaw logs:
+Run `openclaw plugins info openclaw-plus` — if status shows `error`, check OpenClaw logs:
 ```bash
 openclaw logs --follow
 ```
 Common cause: TypeScript transpilation failure. OpenClaw loads plugin TypeScript via jiti; if jiti cannot resolve a type import, the plugin will fail to load. File an issue with the log output.
+
+### Plugin shows as `disabled` despite being in `entries`
+
+If your config has an `allow` list, `openclaw-plus` must be in it. OpenClaw blocks any plugin not explicitly allowed when an allowlist is present.
 
 ### Store path mismatch
 
@@ -205,7 +207,7 @@ Both the playground and the plugin read from the same path by default (`~/.openc
 
 ## Upgrading the plugin
 
-Because the plugin is linked (not copied), pulling changes to the repo and restarting the gateway is all that is needed:
+Because the plugin is loaded from the source directory via `load.paths`, pulling changes and restarting the gateway is all that is needed:
 
 ```bash
 cd ~/src/openclaw-knowledge-management

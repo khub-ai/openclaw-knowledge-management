@@ -3,7 +3,7 @@ import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { registerKnowledgeTools } from "./src/tools.js";
 
 const plugin = {
-  id: "knowledge-management",
+  id: "openclaw-plus",
   name: "Knowledge Management",
   description:
     "Persistable Interactive Learning (PIL) — captures, stores, and applies knowledge across sessions",
