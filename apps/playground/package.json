@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --experimental-strip-types --no-warnings index.ts",
-    "dev":   "node --watch --experimental-strip-types --no-warnings index.ts"
+    "start": "node --loader ts-node/esm/transpile-only --no-warnings index.ts",
+    "dev":   "node --watch --loader ts-node/esm/transpile-only --no-warnings index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

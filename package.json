@@ -10,6 +10,8 @@
     "benchmark":  "pnpm --filter @khub-ai/computer-assistant benchmark"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
     "vitest": "^2.1.0"
   },
