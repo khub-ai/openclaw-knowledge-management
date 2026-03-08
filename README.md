@@ -131,6 +131,7 @@ openclaw-knowledge-management/
     ├── security.md             # Threat model, risks, and mitigations by phase
     ├── enterprise-vision.md    # Scalability, institutional knowledge, tradeable artifacts, governance, investment thesis
     ├── faq.md                  # Frequently asked questions
+    ├── openclaw-plugin-setup.md # Installing and running PIL inside OpenClaw
     └── benchmarks/             # Annotated walkthroughs of runnable test programs
 ```
 
@@ -156,6 +157,8 @@ pnpm test         # runs the full test suite (no API key required)
 
 Artifacts are stored at `~/.openclaw/knowledge/artifacts.jsonl`.
 Override with `KNOWLEDGE_STORE_PATH=/your/path pnpm start`.
+
+To run the plugin inside a live OpenClaw instance, see **[docs/openclaw-plugin-setup.md](docs/openclaw-plugin-setup.md)**.
 
 ## Implementation status
 
