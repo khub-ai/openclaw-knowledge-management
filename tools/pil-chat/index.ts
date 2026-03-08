@@ -10,6 +10,7 @@
  *   pnpm chat -- --store /tmp/test.jsonl   # isolated test store
  *   pnpm chat -- --no-persist              # ephemeral (discarded on exit)
  *   pnpm chat -- --verbose                 # show PIL pipeline details
+ *   pnpm chat -- --log /tmp/session.log    # mirror all I/O to a log file
  *   pnpm chat -- --model claude-3-5-haiku-20241022
  *   pnpm chat -- --help
  *
@@ -21,7 +22,8 @@ import { stdin as input, stdout as output } from "node:process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { rmSync } from "node:fs";
+import { createWriteStream, rmSync } from "node:fs";
+import type { WriteStream } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import {
@@ -44,6 +46,7 @@ interface Options {
   verbose: boolean;
   noPersist: boolean;
   customStore: string | null;
+  logPath: string | null;
 }
 
 function parseArgs(): Options {
@@ -53,6 +56,7 @@ function parseArgs(): Options {
     verbose: false,
     noPersist: false,
     customStore: null,
+    logPath: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -65,6 +69,8 @@ function parseArgs(): Options {
       opts.verbose = true;
     } else if ((a === "--model" || a === "-m") && args[i + 1]) {
       opts.model = args[++i]!;
+    } else if ((a === "--log" || a === "-l") && args[i + 1]) {
+      opts.logPath = args[++i]!;
     } else if (a === "--help" || a === "-h") {
       printHelp();
       process.exit(0);
@@ -92,6 +98,7 @@ Store options (mutually exclusive):
                          you exit — PIL runs normally but nothing is saved
 
 Other options:
+  --log <path>           Mirror all I/O to a log file (appended each run)
   --model <model>        Anthropic model (default: claude-sonnet-4-6)
   --verbose, -v          Show PIL pipeline activity for every message
   --help, -h             Show this help
@@ -104,6 +111,56 @@ REPL commands:
   /help                  Show this command list
   exit / quit / Ctrl-D   Exit
 `.trim());
+}
+
+// ─── Session log ─────────────────────────────────────────────────────────────
+
+interface SessionLog {
+  logInput: (line: string) => void;
+  close: () => void;
+}
+
+function setupLog(logPath: string | null): SessionLog {
+  if (!logPath) {
+    return { logInput: () => {}, close: () => {} };
+  }
+
+  const stream: WriteStream = createWriteStream(logPath, { flags: "a" });
+  const sep = "─".repeat(72);
+  stream.write(`\n${sep}\nSession started: ${new Date().toISOString()}\n${sep}\n`);
+
+  // Tee console.log and console.error to the log file.
+  // All program output already goes through console.log, so patching it once
+  // here is sufficient — no changes needed elsewhere in the code.
+  const origLog   = console.log.bind(console);
+  const origError = console.error.bind(console);
+
+  console.log = (...args: unknown[]): void => {
+    const line = args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
+    origLog(line);
+    stream.write(line + "\n");
+  };
+
+  console.error = (...args: unknown[]): void => {
+    const line = args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
+    origError(line);
+    stream.write("[err] " + line + "\n");
+  };
+
+  // readline.question() echoes input to the terminal but bypasses console.log,
+  // so we log each user input line explicitly via logInput().
+  const logInput = (line: string): void => {
+    stream.write(`You: ${line}\n`);
+  };
+
+  const close = (): void => {
+    stream.write(`\nSession ended: ${new Date().toISOString()}\n`);
+    stream.end();
+    console.log   = origLog;
+    console.error = origError;
+  };
+
+  return { logInput, close };
 }
 
 // ─── Store setup ─────────────────────────────────────────────────────────────
@@ -186,7 +243,10 @@ function setupLLM(opts: Options): LLMHandle {
 
 // ─── PIL activity display ────────────────────────────────────────────────────
 
-function showPilActivity(result: Awaited<ReturnType<typeof processMessage>>, verbose: boolean): void {
+function showPilActivity(
+  result: Awaited<ReturnType<typeof processMessage>>,
+  verbose: boolean,
+): void {
   if (verbose) {
     if (result.candidates.length > 0) {
       console.log(`  [PIL] Extracted ${result.candidates.length} candidate(s):`);
@@ -228,12 +288,19 @@ function showPilActivity(result: Awaited<ReturnType<typeof processMessage>>, ver
 
 async function main(): Promise<void> {
   const opts = parseArgs();
+  const sessionLog = setupLog(opts.logPath);
   const { displayPath, cleanup } = setupStore(opts);
   const { pilLlm, chat, clearHistory } = setupLLM(opts);
 
+  const exit = (): never => {
+    sessionLog.close();
+    cleanup();
+    process.exit(0);
+  };
+
   process.on("exit", cleanup);
-  process.on("SIGINT", () => process.exit(0));
-  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGINT", () => exit());
+  process.on("SIGTERM", () => exit());
 
   const iface = readline.createInterface({ input, output });
 
@@ -241,6 +308,7 @@ async function main(): Promise<void> {
   console.log(`  Store : ${displayPath}`);
   console.log(`  Model : ${opts.model}`);
   console.log(`  Mode  : ${opts.verbose ? "verbose" : "normal"}`);
+  if (opts.logPath) console.log(`  Log   : ${opts.logPath}`);
   console.log("\nType /help for commands, exit to quit.\n");
 
   while (true) {
@@ -251,6 +319,7 @@ async function main(): Promise<void> {
       break; // Ctrl-D
     }
 
+    sessionLog.logInput(userInput);
     if (!userInput) continue;
 
     // ── REPL commands ───────────────────────────────────────────────────────
@@ -292,7 +361,10 @@ async function main(): Promise<void> {
     }
 
     if (userInput === "/reset") {
-      const answer = (await iface.question("  Delete all artifacts in the current store? (yes/no): ")).trim();
+      const answer = (
+        await iface.question("  Delete all artifacts in the current store? (yes/no): ")
+      ).trim();
+      sessionLog.logInput(answer);
       if (answer === "yes" || answer === "y") {
         await writeFile(storePath(), "");
         console.log("  Store cleared.");
@@ -353,6 +425,7 @@ async function main(): Promise<void> {
 
   iface.close();
   console.log("\nGoodbye.");
+  sessionLog.close();
 }
 
 main().catch((err) => {
