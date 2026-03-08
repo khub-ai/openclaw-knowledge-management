@@ -1,15 +1,19 @@
 # KHUB-PIL Demo Video Script
+
 ### "Your AI Assistant Should Remember What You Taught It"
 
-**Target length:** 4–5 minutes
-**Target audience:** Anyone who uses an AI assistant daily — no technical background needed
-**Tone:** Conversational, curious, quietly impressive (not hype)
+| | |
+|---|---|
+| **Target length** | 4–5 minutes |
+| **Target audience** | Anyone who uses an AI assistant daily — no technical background needed |
+| **Tone** | Conversational, curious, quietly impressive (not hype) |
+
 **Format notes for the creator:**
-- Each `[SCREEN]` block describes what to show — terminal, diagram, or slide
-- Each `NARRATOR:` block is the spoken voiceover
-- `[CAPTION]` suggests on-screen text overlaid on the footage
-- `[BEAT]` means a deliberate one-second pause — let the idea land before continuing
-- Actual terminal commands are shown exactly as typed; the creator runs them live or records in advance
+Each `[SCREEN]` block describes what to show — terminal, diagram, or slide.
+Each `NARRATOR:` block is the spoken voiceover.
+`[CAPTION]` suggests on-screen text overlaid on the footage.
+`[BEAT]` means a deliberate one-second pause — let the idea land before continuing.
+Actual terminal commands are shown exactly as typed; the creator runs them live or records in advance.
 
 ---
 
