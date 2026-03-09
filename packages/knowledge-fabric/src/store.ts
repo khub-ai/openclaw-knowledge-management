@@ -105,8 +105,15 @@ export type InjectLabel = "[provisional]" | "[established]" | "[suggestion]";
  * Injection rules:
  *   consolidated + confidence ≥ threshold  → [established]  (auto-apply)
  *   consolidated + confidence < threshold  → [suggestion]
+ *   accumulating                           → [suggestion]   (2+ obs; more reliable
+ *                                                            than a single candidate)
  *   candidate    + certainty "definitive"  → [provisional]  (single strong obs)
- *   accumulating / candidate non-definitive→ null            (not injectable)
+ *   candidate    + non-definitive          → null            (not injectable)
+ *
+ * Note: accumulating was previously non-injectable, but that was backwards —
+ * an artifact with 2+ observations is MORE substantiated than a single
+ * definitive candidate. The [suggestion] label appropriately hedges the
+ * injection while still making the knowledge available to the LLM.
  */
 export function getInjectLabel(artifact: KnowledgeArtifact): InjectLabel | null {
   if (artifact.retired) return null;
@@ -119,11 +126,18 @@ export function getInjectLabel(artifact: KnowledgeArtifact): InjectLabel | null 
     return artifact.confidence >= threshold ? "[established]" : "[suggestion]";
   }
 
+  // 2+ observations: inject as a suggestion. Content is still verbatim (not yet
+  // LLM-distilled), but multiple observations make it more reliable than a
+  // single provisional candidate.
+  if (artifact.stage === "accumulating") {
+    return "[suggestion]";
+  }
+
   if (artifact.stage === "candidate" && artifact.certainty === "definitive") {
     return "[provisional]";
   }
 
-  return null; // accumulating, or tentative/uncertain candidate
+  return null; // tentative/uncertain candidate — needs more evidence
 }
 
 export function isInjectable(artifact: KnowledgeArtifact): boolean {
@@ -379,6 +393,8 @@ export async function retrieve(
     .split(/\W+/)
     .filter((w) => w.length > 2);
 
+  const now = Date.now();
+
   const scored = active
     .map((artifact) => {
       let score = 0;
@@ -401,6 +417,22 @@ export async function retrieve(
 
       // Consolidated artifacts get a slight priority boost
       if (artifact.stage === "consolidated") score += 0.05;
+
+      // Recency boost — a convention or preference just defined in this session
+      // (or revised very recently) should be tried before older alternatives.
+      //   < 1 h  → +0.20  (very fresh; same session / last few minutes)
+      //   < 6 h  → +0.10  (same working session)
+      //   < 24 h → +0.04  (today)
+      //   older  →  0
+      const latestTs = artifact.revisedAt ?? artifact.createdAt;
+      if (latestTs) {
+        const ageHours = (now - Date.parse(latestTs)) / 3_600_000;
+        const recencyBoost =
+          ageHours < 1  ? 0.20 :
+          ageHours < 6  ? 0.10 :
+          ageHours < 24 ? 0.04 : 0;
+        score += recencyBoost;
+      }
 
       return { artifact, score };
     })
