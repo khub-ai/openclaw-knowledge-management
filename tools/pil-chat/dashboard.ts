@@ -256,6 +256,7 @@ body {
       <button class="cmd-btn" onclick="sendCmd('/list')">/list</button>
       <button class="cmd-btn" onclick="sendCmd('/store')">/store</button>
       <button class="cmd-btn" onclick="sendCmd('/clear')">/clear history</button>
+      <button class="cmd-btn" onclick="sendCmd('/clearlog')">/clear log</button>
       <button class="cmd-btn danger" onclick="confirmReset()">/reset store</button>
     </div>
   </div>

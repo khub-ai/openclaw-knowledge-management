@@ -25,7 +25,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWriteStream, rmSync } from "node:fs";
+import { createWriteStream, rmSync, truncateSync } from "node:fs";
 import type { WriteStream } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
@@ -142,6 +142,7 @@ REPL commands (CLI mode and dashboard /cmd buttons):
   /store                 Show current store path and artifact counts
   /list                  List all active artifacts in the store
   /clear                 Clear conversation history (store is unchanged)
+  /clearlog              Truncate the session log file (no-op if --log not set)
   /reset                 Delete all artifacts in the current store
   /help                  Show this command list
   exit / quit / Ctrl-D   Exit
@@ -153,11 +154,17 @@ REPL commands (CLI mode and dashboard /cmd buttons):
 interface SessionLog {
   logInput: (line: string) => void;
   close: () => void;
+  /** Truncate the log file and write a fresh header. Returns a status string. */
+  clearLog: () => string;
 }
 
 function setupLog(logPath: string | null): SessionLog {
   if (!logPath) {
-    return { logInput: () => {}, close: () => {} };
+    return {
+      logInput: () => {},
+      close: () => {},
+      clearLog: () => "No log configured — use --log <path> to enable logging.",
+    };
   }
 
   const stream: WriteStream = createWriteStream(logPath, { flags: "a" });
@@ -195,7 +202,16 @@ function setupLog(logPath: string | null): SessionLog {
     console.error = origError;
   };
 
-  return { logInput, close };
+  const clearLog = (): string => {
+    // Truncate the underlying file. Because the stream is opened with O_APPEND,
+    // all subsequent writes go to the current end-of-file — which after truncation
+    // is position 0, so the log restarts cleanly without reopening the stream.
+    truncateSync(logPath, 0);
+    stream.write(`${sep}\nLog cleared: ${new Date().toISOString()}\n${sep}\n`);
+    return `Log cleared: ${logPath}`;
+  };
+
+  return { logInput, close, clearLog };
 }
 
 // ─── Store setup ─────────────────────────────────────────────────────────────
@@ -409,6 +425,7 @@ function buildProcessTurn(
   chat: (userMessage: string, systemPrompt: string) => Promise<string>,
   clearHistory: () => void,
   displayPath: string,
+  sessionLog: SessionLog,
 ): ProcessTurnFn {
   return async function processTurn(userInput: string): Promise<TurnResult> {
 
@@ -462,6 +479,14 @@ function buildProcessTurn(
       return {
         isCommand: true,
         commandOutput: "Conversation history cleared.",
+        storeSnapshot: await buildStoreSnapshot(),
+      };
+    }
+
+    if (userInput === "/clearlog") {
+      return {
+        isCommand: true,
+        commandOutput: sessionLog.clearLog(),
         storeSnapshot: await buildStoreSnapshot(),
       };
     }
@@ -567,7 +592,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => exit());
 
   const sessionStart = new Date().toISOString();
-  const processTurn  = buildProcessTurn(pilLlm, matchLlm, chat, clearHistory, displayPath);
+  const processTurn  = buildProcessTurn(pilLlm, matchLlm, chat, clearHistory, displayPath, sessionLog);
 
   // ── Dashboard mode ──────────────────────────────────────────────────────────
 
