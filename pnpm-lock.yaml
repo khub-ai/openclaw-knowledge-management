@@ -22,9 +22,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      '@khub-ai/openclaw-plus':
+      '@khub-ai/knowledge-fabric':
         specifier: workspace:*
-        version: link:../../packages/openclaw-plus
+        version: link:../../packages/knowledge-fabric
     devDependencies:
       typescript:
         specifier: ^5.8.2
@@ -38,11 +38,11 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      '@khub-ai/openclaw-plus':
+      '@khub-ai/knowledge-fabric':
         specifier: workspace:*
-        version: link:../../packages/openclaw-plus
+        version: link:../../packages/knowledge-fabric
 
-  packages/openclaw-plus:
+  packages/knowledge-fabric:
     devDependencies:
       typescript:
         specifier: ^5.8.2
@@ -55,9 +55,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      '@khub-ai/openclaw-plus':
+      '@khub-ai/knowledge-fabric':
         specifier: workspace:*
-        version: link:../../packages/openclaw-plus
+        version: link:../../packages/knowledge-fabric
 
 packages:
 

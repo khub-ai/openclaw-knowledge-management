@@ -28,7 +28,7 @@ import { writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createPilLLM, createAgentLLM } from "./src/llm.js";
 import { runAgentTurn, formatTurnResult, listArtifacts } from "./src/agent.js";
-import { storePath } from "@khub-ai/openclaw-plus/store";
+import { storePath } from "@khub-ai/knowledge-fabric/store";
 
 // ---------------------------------------------------------------------------
 // Startup

@@ -6,12 +6,12 @@
  *   createAgentLLM() — for agent decision-making (with system prompt)
  *
  * Both return a `LLMFn` compatible with the PIL pipeline's dependency-injection
- * pattern. The core @khub-ai/openclaw-plus package has no direct dependency on
+ * pattern. The core @khub-ai/knowledge-fabric package has no direct dependency on
  * @anthropic-ai/sdk; the adapter lives here in the app layer.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
 
 // Default model used for all calls — fast and cost-efficient
 const DEFAULT_MODEL = "claude-3-5-haiku-20241022";

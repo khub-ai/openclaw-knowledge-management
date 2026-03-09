@@ -31,14 +31,14 @@ import {
   processMessage,
   formatForInjection,
   type InjectableArtifact,
-} from "@khub-ai/openclaw-plus/pipeline";
+} from "@khub-ai/knowledge-fabric/pipeline";
 import {
   retrieve,
   loadAll,
   storePath,
   getInjectLabel,
-} from "@khub-ai/openclaw-plus/store";
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
+} from "@khub-ai/knowledge-fabric/store";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
 
 // ─── CLI options ─────────────────────────────────────────────────────────────
 

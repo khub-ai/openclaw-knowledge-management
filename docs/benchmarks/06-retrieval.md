@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stage** | Stage 6 — Retrieve |
-| **Module** | `packages/openclaw-plus/src/store.ts` → `retrieve()` |
+| **Module** | `packages/knowledge-fabric/src/store.ts` → `retrieve()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock) + live LLM benchmark scenarios |
 

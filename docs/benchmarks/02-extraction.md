@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stage** | Stage 1 — Extract |
-| **Module** | `packages/openclaw-plus/src/extract.ts` → `extractFromMessage()` |
+| **Module** | `packages/knowledge-fabric/src/extract.ts` → `extractFromMessage()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock LLM) + live LLM benchmark |
 

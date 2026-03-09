@@ -21,10 +21,10 @@ import {
   getInjectLabel,
   isInjectable,
   loadAll,
-} from "@khub-ai/openclaw-plus/store";
-import { candidateToArtifact } from "@khub-ai/openclaw-plus/extract";
-import { CONFIDENCE_SEED, CONSOLIDATION_THRESHOLD } from "@khub-ai/openclaw-plus/types";
-import type { KnowledgeArtifact } from "@khub-ai/openclaw-plus/types";
+} from "@khub-ai/knowledge-fabric/store";
+import { candidateToArtifact } from "@khub-ai/knowledge-fabric/extract";
+import { CONFIDENCE_SEED, CONSOLIDATION_THRESHOLD } from "@khub-ai/knowledge-fabric/types";
+import type { KnowledgeArtifact } from "@khub-ai/knowledge-fabric/types";
 import {
   createPatternMockLLM,
   CONSOLIDATED_BULLET_RULE,

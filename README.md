@@ -1,6 +1,8 @@
-# OpenClaw Knowledge Management
+# KHUB Knowledge Fabric
 
-**OpenClaw Knowledge Management** is an extension for [OpenClaw](https://github.com/openclaw/openclaw) that gives AI agents the ability to **learn from interaction, persist what they learn, and reuse it reliably** — all as **user-owned, local, portable knowledge artifacts** rather than opaque server-side state.
+**A knowledge store that learns from your conversations, persists across sessions and agents, and stays on your machine — inspectable and portable by design.**
+
+The core framework is called **PIL (Persistable Interactive Learning)**. It extracts knowledge from user interaction, distils it into typed, confidence-scored artifacts, and makes those artifacts available to any AI agent — now and in future sessions.
 
 ## Who this is for
 
@@ -18,7 +20,7 @@
 
 **AI ecosystem builders and strategists** — if you are tracking where durable value accumulates in the AI stack, PIL proposes a new asset class: portable, typed, user-owned knowledge artifacts. The artifact format, if it achieves adoption, defines a coordination layer — analogous to what npm did for packages or OpenAPI did for APIs — around which expert knowledge marketplaces, org custody services, and certification businesses can form.
 
-**AI platforms and potential partners** — PIL is built as an OpenClaw extension, but the artifact format is platform-agnostic. A platform that supports PIL artifact import/export gains interoperability with an emerging knowledge ecosystem and a credible story for user data portability and governance.
+**AI platforms and potential partners** — PIL's default integration is with OpenClaw, but the artifact format and core library are platform-agnostic. A platform that supports PIL artifact import/export gains interoperability with an emerging knowledge ecosystem and a credible story for user data portability and governance.
 
 → *[Detailed enterprise and investment case](docs/enterprise-vision.md)* · *[Security threat model](docs/security.md)*
 
@@ -74,9 +76,9 @@ The system treats dialogue as a learning substrate and produces durable knowledg
 
 ## Design goals
 
-- **Extension for OpenClaw** — additive layer; users install/upgrade OpenClaw normally
 - **User-owned and local** — knowledge lives on your machine, not a vendor's server
 - **Model-agnostic portability** — artifacts are text; any capable LLM can consume them
+- **Platform-agnostic** — works standalone or as an extension; default integration with OpenClaw
 - **Confidence-gated reuse** — learned knowledge is *suggested*, *auto-applied*, or *held back* based on certainty
 - **Free-form artifacts** — lightweight conventions, not rigid schemas; human-readable and editable
 - **Versioned and auditable** — changes are tracked; revisions are first-class
@@ -108,18 +110,20 @@ The system treats dialogue as a learning substrate and produces durable knowledg
 ## Repository structure
 
 ```
-openclaw-knowledge-management/
+khub-knowledge-fabric/
 ├── packages/
-│   ├── openclaw-plus/          # Core PIL extension (OpenClaw plugin)
-│   │   ├── index.ts            # Plugin entry point
+│   ├── knowledge-fabric/       # Core PIL library (optional OpenClaw plugin)
+│   │   ├── index.ts            # Plugin entry point (when used with OpenClaw)
 │   │   ├── openclaw.plugin.json
 │   │   └── src/
 │   │       ├── pipeline.ts     # Stages 1–4: elicit, induce, validate, compact
 │   │       ├── store.ts        # Stages 5–8: persist, retrieve, apply, revise
-│   │       └── tools.ts        # knowledge_search tool via plugin SDK
+│   │       └── tools.ts        # knowledge_search tool via OpenClaw plugin SDK
 │   └── skills-foo/             # Example PIL-aware skill
 │       └── SKILL.md
 ├── apps/
+│   ├── computer-assistant/     # PIL-powered REPL demo (learns from real interaction)
+│   │   └── src/
 │   └── playground/             # Dev harness — runs the pipeline without OpenClaw
 │       └── index.ts
 ├── tools/
@@ -145,8 +149,8 @@ openclaw-knowledge-management/
 The reference implementation uses [Anthropic Claude](https://console.anthropic.com/) as the LLM backend. Any LLM can be substituted by providing a different `LLMFn` adapter — see [`apps/playground/index.ts`](apps/playground/index.ts) for the adapter pattern.
 
 ```bash
-git clone https://github.com/khub-ai/openclaw-knowledge-management
-cd openclaw-knowledge-management
+git clone https://github.com/khub-ai/khub-knowledge-fabric
+cd khub-knowledge-fabric
 pnpm install
 
 # Set your Anthropic API key (obtain from https://console.anthropic.com/)
@@ -162,7 +166,7 @@ pnpm chat         # interactive PIL chatbot (see tools/pil-chat/)
 Artifacts are stored at `~/.openclaw/knowledge/artifacts.jsonl`.
 Override with `KNOWLEDGE_STORE_PATH=/your/path pnpm start`.
 
-To run the plugin inside a live OpenClaw instance, see **[docs/openclaw-plugin-setup.md](docs/openclaw-plugin-setup.md)**.
+To run the library as a plugin inside a live OpenClaw instance, see **[docs/openclaw-plugin-setup.md](docs/openclaw-plugin-setup.md)**.
 
 ## Implementation status
 
@@ -182,7 +186,7 @@ Milestones 1a–1d are implemented. The LLM-backed pipeline is functional and te
 | **Feedback tracking** | `src/store.ts` | `recordAccepted()` / `recordRejected()` — nudge confidence from user signals |
 | **Plugin wiring** | `index.ts` / `tools.ts` | `knowledge_search` tool registered with OpenClaw; hook stubs ready |
 | **Computer-assistant demo** | `apps/computer-assistant/` | REPL, Anthropic LLM adapter, OS actions, PIL-aware agent |
-| **Test suite** | `apps/computer-assistant/src/tests/` | 74 tests covering extraction, store, pipeline, and scenarios |
+| **Test suite** | `apps/computer-assistant/src/tests/` | 111 tests covering extraction, store, pipeline, scenarios, and benchmarks |
 | **Benchmark suite** | `apps/computer-assistant/benchmarks/` | Extraction precision/recall/F1; retrieval hit rate; 18+ scenarios |
 
 ### What's next (Phase 2 onward)
@@ -199,13 +203,13 @@ Milestones 1a–1d are implemented. The LLM-backed pipeline is functional and te
 ## Non-goals
 
 - Not fine-tuning base LLM weights
-- Not replacing OpenClaw's core — this is an extension
+- Not a replacement for any specific AI platform — this is a portable knowledge layer
 - Not treating "memory" as a single bucket — knowledge types differ and require different controls
 - Not prescribing a rigid schema — artifacts are free-form text with conventions
 
 ## Status
 
-Milestones 1a–1d implemented. The LLM-backed pipeline is functional: knowledge is extracted from user messages, accumulated across interactions, consolidated into generalized rules, and injected into future prompts. A working computer-assistant demo shows PIL learning user-specific patterns (aliases, file-handling preferences, procedures) across sessions. 74 tests pass with no API key required; a benchmark suite measures extraction precision/recall and retrieval hit rate against a curated scenario set.
+Milestones 1a–1d implemented. The LLM-backed pipeline is functional: knowledge is extracted from user messages, accumulated across interactions, consolidated into generalized rules, and injected into future prompts. A working computer-assistant demo shows PIL learning user-specific patterns (aliases, file-handling preferences, procedures) across sessions. 111 tests pass with no API key required; a benchmark suite measures extraction precision/recall and retrieval hit rate against a curated scenario set.
 
 ## Contributing
 

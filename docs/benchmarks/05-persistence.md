@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stage** | Stage 5 — Persist |
-| **Module** | `packages/openclaw-plus/src/store.ts` → `persist()`, `loadAll()` |
+| **Module** | `packages/knowledge-fabric/src/store.ts` → `persist()`, `loadAll()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock) |
 

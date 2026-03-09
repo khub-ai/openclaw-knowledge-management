@@ -6,7 +6,7 @@
 
 Not yet. The current implementation is TypeScript-only. However, non-TypeScript callers are not entirely locked out today:
 
-- **The artifact store is plain JSON.** Artifacts are stored as JSONL (one JSON object per line) at `~/.openclaw/knowledge/artifacts.jsonl`. Any language that can read and write JSON — including Python — can read, filter, and modify artifacts directly, without going through the TypeScript pipeline. The full schema is documented in [`packages/openclaw-plus/src/types.ts`](../packages/openclaw-plus/src/types.ts).
+- **The artifact store is plain JSON.** Artifacts are stored as JSONL (one JSON object per line) at `~/.openclaw/knowledge/artifacts.jsonl`. Any language that can read and write JSON — including Python — can read, filter, and modify artifacts directly, without going through the TypeScript pipeline. The full schema is documented in [`packages/knowledge-fabric/src/types.ts`](../packages/knowledge-fabric/src/types.ts).
 - **Subprocess invocation is possible.** The pipeline can be called from Python via subprocess wrapping of the Node.js CLI. This is functional but not ergonomic.
 
 A lightweight REST API wrapper — a single `POST /process` endpoint exposing `processMessage` over HTTP — is planned as a near-term addition. Once in place, any HTTP client (Python's `requests`, Go's `net/http`, Ruby's `Faraday`) can call the pipeline without requiring a TypeScript runtime in the caller's stack.

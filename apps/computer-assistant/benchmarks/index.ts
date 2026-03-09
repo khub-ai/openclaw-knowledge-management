@@ -18,9 +18,9 @@ import { join } from "node:path";
 import { unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { extractFromMessage } from "@khub-ai/openclaw-plus/extract";
-import { persist, retrieve } from "@khub-ai/openclaw-plus/store";
-import type { KnowledgeArtifact } from "@khub-ai/openclaw-plus/types";
+import { extractFromMessage } from "@khub-ai/knowledge-fabric/extract";
+import { persist, retrieve } from "@khub-ai/knowledge-fabric/store";
+import type { KnowledgeArtifact } from "@khub-ai/knowledge-fabric/types";
 import { EXTRACTION_SCENARIOS, RETRIEVAL_SCENARIOS } from "./scenarios.js";
 import { createPilLLM } from "../src/llm.js";
 

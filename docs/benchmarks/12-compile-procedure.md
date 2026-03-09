@@ -92,7 +92,7 @@ a second artifact. The store must remain at the same artifact count after both c
 
 ### `compileToProgram(procedure, relatedArtifacts, language, llm, saveDir)`
 
-Located in `packages/openclaw-plus/src/pipeline.ts`.
+Located in `packages/knowledge-fabric/src/pipeline.ts`.
 
 1. **Build prompt** — `buildCodeGenPrompt()` formats the procedure recipe and all supporting
    artifacts (conventions, facts) into a code-generation prompt. The phrase
@@ -180,7 +180,7 @@ echo $ANTHROPIC_API_KEY  # must be set (sk-ant-...)
 ### Step 1 — Start the agent
 
 ```bash
-cd C:/_backup/openclaw/openclaw-knowledge-management   # Windows path; adjust for your OS
+cd C:/_backup/openclaw/khub-knowledge-fabric   # Windows path; adjust for your OS
 pnpm --filter @khub-ai/computer-assistant start
 ```
 
@@ -315,11 +315,11 @@ the tool result (keeping `program.path` for reference) to avoid verbosity.
 
 | Component | Changed? | Breaking? |
 |---|---|---|
-| `packages/openclaw-plus/src/types.ts` | ✅ Yes — `program?` field added | ❌ No — optional field; old artifacts remain valid |
-| `packages/openclaw-plus/src/pipeline.ts` | ✅ Yes — `compileToProgram()` added | ❌ No — additive export; existing functions unchanged |
-| `packages/openclaw-plus/src/store.ts` | ❌ No changes | — |
-| `packages/openclaw-plus/src/tools.ts` | ❌ No changes | — |
-| `packages/openclaw-plus/index.ts` | ❌ No changes | — |
+| `packages/knowledge-fabric/src/types.ts` | ✅ Yes — `program?` field added | ❌ No — optional field; old artifacts remain valid |
+| `packages/knowledge-fabric/src/pipeline.ts` | ✅ Yes — `compileToProgram()` added | ❌ No — additive export; existing functions unchanged |
+| `packages/knowledge-fabric/src/store.ts` | ❌ No changes | — |
+| `packages/knowledge-fabric/src/tools.ts` | ❌ No changes | — |
+| `packages/knowledge-fabric/index.ts` | ❌ No changes | — |
 | `apps/computer-assistant/src/agent.ts` | ✅ Yes — `compile-procedure` handler, EXECUTABLE hint | ❌ No — app-local changes only; not part of plugin |
 | `apps/computer-assistant/src/actions.ts` | ✅ Yes — new ActionKind | ❌ No — app-local |
 | `apps/computer-assistant/src/llm.ts` | ✅ Yes — updated system prompt | ❌ No — app-local |

@@ -9,8 +9,8 @@ import {
   extractFromMessage,
   consolidateEvidence,
   candidateToArtifact,
-} from "@khub-ai/openclaw-plus/extract";
-import { CONFIDENCE_SEED } from "@khub-ai/openclaw-plus/types";
+} from "@khub-ai/knowledge-fabric/extract";
+import { CONFIDENCE_SEED } from "@khub-ai/knowledge-fabric/types";
 import {
   createPatternMockLLM,
   BULLET_PREF_RESPONSE,

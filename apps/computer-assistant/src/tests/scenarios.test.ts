@@ -14,14 +14,14 @@ import { join } from "node:path";
 import { unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { parseAgentResponse, classifyTarget } from "../actions.js";
-import { processMessage } from "@khub-ai/openclaw-plus/pipeline";
-import { retrieve } from "@khub-ai/openclaw-plus/store";
+import { processMessage } from "@khub-ai/knowledge-fabric/pipeline";
+import { retrieve } from "@khub-ai/knowledge-fabric/store";
 import {
   createPatternMockLLM,
   ALIAS_FACT_RESPONSE,
   EMPTY_RESPONSE,
 } from "./mock-llm.js";
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
 
 // ---------------------------------------------------------------------------
 // Test isolation
@@ -263,7 +263,7 @@ describe("PIL pipeline: no spurious learning", () => {
     await processMessage("open the file README.md", llm);
     await processMessage("ls", llm);
 
-    const { loadAll } = await import("@khub-ai/openclaw-plus/store");
+    const { loadAll } = await import("@khub-ai/knowledge-fabric/store");
     const all = await loadAll();
     expect(all).toHaveLength(0);
   });

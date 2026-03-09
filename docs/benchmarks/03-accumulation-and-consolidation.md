@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stages** | Stage 2 — Match; Stage 3 — Resolve (accumulate or create) |
-| **Modules** | `packages/openclaw-plus/src/store.ts` → `matchCandidate()`, `accumulateEvidence()`; `packages/openclaw-plus/src/extract.ts` → `consolidateEvidence()` |
+| **Modules** | `packages/knowledge-fabric/src/store.ts` → `matchCandidate()`, `accumulateEvidence()`; `packages/knowledge-fabric/src/extract.ts` → `consolidateEvidence()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock LLM) |
 

@@ -390,8 +390,8 @@ A harmless Node.js 22 warning from a transitive dependency of `@anthropic-ai/sdk
 | File | Role in this program |
 |---|---|
 | `apps/playground/index.ts` | The script itself — orchestrates the run |
-| `packages/openclaw-plus/src/pipeline.ts` | `processMessage()` — Stages 1–4 orchestration |
-| `packages/openclaw-plus/src/extract.ts` | `extractFromMessage()`, `consolidateEvidence()` — LLM extraction |
-| `packages/openclaw-plus/src/store.ts` | `retrieve()`, `apply()`, `revise()`, `loadAll()` — Stages 5–8 |
-| `packages/openclaw-plus/src/types.ts` | `KnowledgeArtifact`, `LLMFn`, `CONFIDENCE_SEED`, `CONSOLIDATION_THRESHOLD` |
+| `packages/knowledge-fabric/src/pipeline.ts` | `processMessage()` — Stages 1–4 orchestration |
+| `packages/knowledge-fabric/src/extract.ts` | `extractFromMessage()`, `consolidateEvidence()` — LLM extraction |
+| `packages/knowledge-fabric/src/store.ts` | `retrieve()`, `apply()`, `revise()`, `loadAll()` — Stages 5–8 |
+| `packages/knowledge-fabric/src/types.ts` | `KnowledgeArtifact`, `LLMFn`, `CONFIDENCE_SEED`, `CONSOLIDATION_THRESHOLD` |
 | `~/.openclaw/knowledge/artifacts.jsonl` | The JSONL store written and read during this run |

@@ -18,9 +18,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   processMessage,
   formatForInjection,
-} from "@khub-ai/openclaw-plus/pipeline";
-import { retrieve, apply, revise, loadAll } from "@khub-ai/openclaw-plus/store";
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
+} from "@khub-ai/knowledge-fabric/pipeline";
+import { retrieve, apply, revise, loadAll } from "@khub-ai/knowledge-fabric/store";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
 
 // ---------------------------------------------------------------------------
 // LLM adapter (Anthropic)

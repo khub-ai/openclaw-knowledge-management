@@ -25,8 +25,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { processMessage } from "@khub-ai/openclaw-plus/pipeline";
-import { retrieve, loadAll, revise } from "@khub-ai/openclaw-plus/store";
+import { processMessage } from "@khub-ai/knowledge-fabric/pipeline";
+import { retrieve, loadAll, revise } from "@khub-ai/knowledge-fabric/store";
 import {
   createFinanceBenchmarkLLM,
   FINANCE_NAMING_CONVENTION_RESPONSE,

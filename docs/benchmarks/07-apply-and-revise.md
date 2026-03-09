@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stages** | Stage 7 — Apply; Stage 8 — Revise |
-| **Module** | `packages/openclaw-plus/src/store.ts` → `apply()`, `revise()`, `recordAccepted()`, `recordRejected()` |
+| **Module** | `packages/knowledge-fabric/src/store.ts` → `apply()`, `revise()`, `recordAccepted()`, `recordRejected()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock) |
 

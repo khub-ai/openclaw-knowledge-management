@@ -5,7 +5,7 @@
  * for specific test scenarios.
  */
 
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
 
 // ---------------------------------------------------------------------------
 // Generic mock: map prompt substrings to responses

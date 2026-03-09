@@ -27,9 +27,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { processMessage } from "@khub-ai/openclaw-plus/pipeline";
-import { retrieve, loadAll } from "@khub-ai/openclaw-plus/store";
-import { CONSOLIDATION_THRESHOLD } from "@khub-ai/openclaw-plus/types";
+import { processMessage } from "@khub-ai/knowledge-fabric/pipeline";
+import { retrieve, loadAll } from "@khub-ai/knowledge-fabric/store";
+import { CONSOLIDATION_THRESHOLD } from "@khub-ai/knowledge-fabric/types";
 import {
   createLmpBenchmarkLLM,
   LMP_EXCHANGE_RESPONSE,
@@ -132,7 +132,7 @@ describe("Benchmark lmp/Phase 2 — cross-session recall", () => {
     await processMessage(LMP_EXCHANGE, llm, "pil-chat:exchange");
 
     const results = await retrieve("lmp");
-    const { getInjectLabel } = await import("@khub-ai/openclaw-plus/store");
+    const { getInjectLabel } = await import("@khub-ai/knowledge-fabric/store");
     const injectableResults = results.filter((a) => getInjectLabel(a) !== null);
 
     // The stored artifact is definitive-certainty → [provisional] injectable
@@ -240,8 +240,8 @@ describe("Benchmark lmp/Phase 3b — WITH semantic matching", () => {
     const consolidated = all.find((a) => a.stage === "consolidated")!;
     expect(consolidated).toBeTruthy();
 
-    const { getInjectLabel } = await import("@khub-ai/openclaw-plus/store");
-    const { DEFAULT_AUTO_APPLY_THRESHOLD } = await import("@khub-ai/openclaw-plus/types");
+    const { getInjectLabel } = await import("@khub-ai/knowledge-fabric/store");
+    const { DEFAULT_AUTO_APPLY_THRESHOLD } = await import("@khub-ai/knowledge-fabric/types");
 
     const label = getInjectLabel(consolidated);
     if (consolidated.confidence >= DEFAULT_AUTO_APPLY_THRESHOLD) {

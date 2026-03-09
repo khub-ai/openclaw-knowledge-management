@@ -326,8 +326,8 @@ Thanks for watching.
 
 ```bash
 # Clone and install
-git clone https://github.com/khub-ai/openclaw-knowledge-management
-cd openclaw-knowledge-management
+git clone https://github.com/khub-ai/khub-knowledge-fabric
+cd khub-knowledge-fabric
 pnpm install
 
 # Verify the tests all pass (no API key needed)

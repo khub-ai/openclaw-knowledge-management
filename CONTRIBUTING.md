@@ -1,8 +1,8 @@
 # Contributing
 
-Thanks for your interest in contributing to **OpenClaw Knowledge Management**.
+Thanks for your interest in contributing to **KHUB Knowledge Fabric**.
 
-This repo implements a knowledge-management layer for OpenClaw focused on **persistable interactive learning**: capturing user knowledge (patterns, preferences, rubrics, constraints, value-judgments, etc.), validating/compacting it into artifacts, and safely recalling/applying it across sessions.
+This repo implements a portable knowledge layer focused on **persistable interactive learning (PIL)**: capturing user knowledge (patterns, preferences, rubrics, constraints, value-judgments, etc.), validating/compacting it into artifacts, and safely recalling/applying it across sessions and agents.
 
 ## Scope and contribution types
 
@@ -19,7 +19,7 @@ We welcome contributions in these areas:
 - **Safety controls**
   - inspection, export, deletion, privacy controls
 - **Integration**
-  - wrapper CLI (`openclaw-plus`), plugin loading, compatibility with upstream OpenClaw upgrades
+  - plugin loading, compatibility with OpenClaw and other agent platforms
 - **Docs & examples**
   - runnable demos, benchmark tasks, evaluation harnesses
 
@@ -42,7 +42,7 @@ From repo root:
 
 Examples:
 
-    pnpm --filter @you/openclaw-plus dev
+    pnpm --filter @khub-ai/knowledge-fabric dev
     pnpm --filter @you/skills-foo test
 
 List all workspace projects:

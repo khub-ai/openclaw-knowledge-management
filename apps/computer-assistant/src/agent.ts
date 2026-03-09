@@ -15,15 +15,15 @@ import {
   retrieve,
   isInjectable,
   getInjectLabel,
-} from "@khub-ai/openclaw-plus/store";
+} from "@khub-ai/knowledge-fabric/store";
 import {
   processMessage,
   compileToProgram,
   formatForInjection,
   type InjectableArtifact,
-} from "@khub-ai/openclaw-plus/pipeline";
-import type { LLMFn } from "@khub-ai/openclaw-plus/types";
-import type { KnowledgeArtifact } from "@khub-ai/openclaw-plus/types";
+} from "@khub-ai/knowledge-fabric/pipeline";
+import type { LLMFn } from "@khub-ai/knowledge-fabric/types";
+import type { KnowledgeArtifact } from "@khub-ai/knowledge-fabric/types";
 import { parseAgentResponse, executeAction, type Action, type ActionResult } from "./actions.js";
 
 // ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ export function formatTurnResult(turn: AgentTurnResult): string {
 // Format all stored artifacts (for /list command)
 // ---------------------------------------------------------------------------
 
-import { loadAll } from "@khub-ai/openclaw-plus/store";
+import { loadAll } from "@khub-ai/knowledge-fabric/store";
 
 export async function listArtifacts(): Promise<string> {
   const all = await loadAll();

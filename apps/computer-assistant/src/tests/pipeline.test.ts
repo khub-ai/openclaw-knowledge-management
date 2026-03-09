@@ -10,9 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { processMessage, formatForInjection } from "@khub-ai/openclaw-plus/pipeline";
-import { loadAll } from "@khub-ai/openclaw-plus/store";
-import { CONSOLIDATION_THRESHOLD } from "@khub-ai/openclaw-plus/types";
+import { processMessage, formatForInjection } from "@khub-ai/knowledge-fabric/pipeline";
+import { loadAll } from "@khub-ai/knowledge-fabric/store";
+import { CONSOLIDATION_THRESHOLD } from "@khub-ai/knowledge-fabric/types";
 import {
   createPatternMockLLM,
   createFullPipelineMockLLM,
@@ -202,7 +202,7 @@ describe("formatForInjection", () => {
   });
 
   it("formats injectables with correct labels", async () => {
-    const { candidateToArtifact } = await import("@khub-ai/openclaw-plus/extract");
+    const { candidateToArtifact } = await import("@khub-ai/knowledge-fabric/extract");
     const artifact = candidateToArtifact(
       {
         content: "Always use bullet points for summaries",

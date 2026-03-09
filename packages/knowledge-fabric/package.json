@@ -1,8 +1,8 @@
 {
-  "name": "@khub-ai/openclaw-plus",
+  "name": "@khub-ai/knowledge-fabric",
   "version": "0.0.1",
   "private": true,
-  "description": "Persistable Interactive Learning (PIL) extension for OpenClaw",
+  "description": "KHUB Knowledge Fabric — a knowledge store that learns from your conversations, persists across sessions and agents, and stays on your machine — inspectable and portable by design.",
   "type": "module",
   "exports": {
     ".": "./index.ts",

@@ -162,7 +162,7 @@ export type KnowledgeArtifact = {
 /**
  * Dependency-injected LLM function.
  *
- * The core `openclaw-plus` package has no hard dependency on any specific LLM
+ * The core `knowledge-fabric` package has no hard dependency on any specific LLM
  * SDK. Callers provide a concrete implementation (e.g. wrapping @anthropic-ai/sdk).
  *
  * @param prompt - The full prompt to send to the LLM.

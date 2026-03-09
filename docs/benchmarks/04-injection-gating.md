@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pipeline stage** | Stage 4 — Decide (injection gating) |
-| **Module** | `packages/openclaw-plus/src/store.ts` → `getInjectLabel()`, `isInjectable()` |
+| **Module** | `packages/knowledge-fabric/src/store.ts` → `getInjectLabel()`, `isInjectable()` |
 | **Implementation status** | ✅ Implemented |
 | **Automated coverage** | ✅ Unit tests (mock) |
 

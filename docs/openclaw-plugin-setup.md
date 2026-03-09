@@ -1,6 +1,6 @@
 # Running PIL inside OpenClaw
 
-This guide documents how to install `packages/openclaw-plus` as a live
+This guide documents how to install `packages/knowledge-fabric` as a live
 plugin inside OpenClaw, giving the agent access to persisted knowledge
 artifacts through the `knowledge_search` tool.
 
@@ -51,7 +51,7 @@ the agent draws on that accumulated knowledge inside OpenClaw.
 | OpenClaw ≥ 2026.1.26 (globally installed) | `openclaw --version` |
 | Node.js ≥ 18 | `node --version` |
 | OpenClaw gateway running | `openclaw status` |
-| Repo cloned and dependencies installed | `cd ~/src/openclaw-knowledge-management && pnpm install` |
+| Repo cloned and dependencies installed | `cd ~/src/khub-knowledge-fabric && pnpm install` |
 
 ---
 
@@ -100,7 +100,7 @@ format). Edit it to add the plugin directory under `plugins.load.paths`.
   // ... rest of your existing config ...
   plugins: {
     load: {
-      paths: ["/home/kaihu/src/openclaw-knowledge-management/packages/openclaw-plus"]
+      paths: ["/home/kaihu/src/khub-knowledge-fabric/packages/knowledge-fabric"]
     }
     // leave your existing allow / entries / etc. untouched for now
   }
@@ -125,16 +125,16 @@ The plugin is now **discovered** but will appear as **disabled** in
 > plugins are permitted to be enabled.
 
 If your config already contains an `allow` array (e.g.
-`"allow": ["discord", "line"]`), you must add `openclaw-plus` to it
+`"allow": ["discord", "line"]`), you must add `knowledge-fabric` to it
 **after** the gateway has discovered the plugin (i.e. after Step 2).
 
 Adding it before discovery causes a validation error —
-`plugins.allow: plugin not found: openclaw-plus` — because OpenClaw
+`plugins.allow: plugin not found: knowledge-fabric` — because OpenClaw
 verifies every ID in the `allow` list against the set of currently
 known plugins.
 
 ```json5
-allow: ["discord", "line", "openclaw-plus"]
+allow: ["discord", "line", "knowledge-fabric"]
 ```
 
 ---
@@ -142,14 +142,14 @@ allow: ["discord", "line", "openclaw-plus"]
 ## Step 4 — Enable the plugin
 
 ```bash
-openclaw plugins enable openclaw-plus
+openclaw plugins enable knowledge-fabric
 ```
 
 Alternatively, add it to `entries` in the config:
 
 ```json5
 entries: {
-  "openclaw-plus": {
+  "knowledge-fabric": {
     enabled: true
   }
 }
@@ -167,9 +167,9 @@ openclaw gateway restart
 
 ```bash
 openclaw plugins list
-# look for: openclaw-plus | enabled
+# look for: knowledge-fabric | enabled
 
-openclaw plugins info openclaw-plus
+openclaw plugins info knowledge-fabric
 # should list the knowledge_search tool
 ```
 
@@ -192,7 +192,7 @@ The playground processes a hardcoded sample dialogue end-to-end and
 writes whatever the LLM extracts to the artifact store:
 
 ```bash
-cd ~/src/openclaw-knowledge-management
+cd ~/src/khub-knowledge-fabric
 export ANTHROPIC_API_KEY=sk-ant-...     # if not already in environment
 pnpm start
 ```
@@ -210,7 +210,7 @@ instructions, giving you a more realistic view of what the agent will
 accumulate over time:
 
 ```bash
-cd ~/src/openclaw-knowledge-management
+cd ~/src/khub-knowledge-fabric
 pnpm --filter @khub-ai/computer-assistant start
 ```
 
@@ -255,17 +255,17 @@ wired, you can prompt the agent to search at the start of sessions:
 The plugin path is on an NTFS mount. Follow Step 1 (wsl.conf fix and
 WSL restart).
 
-### `plugins.allow: plugin not found: openclaw-plus`
+### `plugins.allow: plugin not found: knowledge-fabric`
 
-The ID `openclaw-plus` was added to `allow` before the gateway had a
+The ID `knowledge-fabric` was added to `allow` before the gateway had a
 chance to discover it via `load.paths`. Remove it from `allow`, restart
 the gateway once (so the plugin is discovered), then add it back and
 restart again. See Step 3.
 
-### `plugin id mismatch (manifest uses "...", entry hints "openclaw-plus")`
+### `plugin id mismatch (manifest uses "...", entry hints "knowledge-fabric")`
 
 Older versions of the plugin used `id: "knowledge-management"` in the
-manifest, while OpenClaw infers `openclaw-plus` from the npm package
+manifest, while OpenClaw infers `knowledge-fabric` from the npm package
 name. This mismatch produced a warning on every restart. It is fixed in
 the current source — pull the latest and restart the gateway.
 
@@ -278,9 +278,9 @@ receiving the tool-call ID string instead of the params object, causing
 `query` to be `undefined` and `.trim()` to throw. Fixed in current
 source — pull the latest and restart.
 
-### Plugin shows `disabled` despite `entries.openclaw-plus.enabled = true`
+### Plugin shows `disabled` despite `entries.knowledge-fabric.enabled = true`
 
-If an `allow` list is present and `openclaw-plus` is not in it, the
+If an `allow` list is present and `knowledge-fabric` is not in it, the
 plugin is blocked regardless of `entries`. Add it to `allow` (Step 3).
 
 ### Store path mismatch between playground and OpenClaw
@@ -301,7 +301,7 @@ Because the plugin is loaded from source via `load.paths` (not copied),
 upgrading is just a pull and a gateway restart:
 
 ```bash
-cd ~/src/openclaw-knowledge-management
+cd ~/src/khub-knowledge-fabric
 git pull
 pnpm install          # only needed if package.json dependencies changed
 openclaw gateway restart

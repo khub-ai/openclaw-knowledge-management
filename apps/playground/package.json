@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@khub-ai/openclaw-plus": "workspace:*"
+    "@khub-ai/knowledge-fabric": "workspace:*"
   }
 }

@@ -27,8 +27,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unlink, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { processMessage, compileToProgram } from "@khub-ai/openclaw-plus/pipeline";
-import { loadAll } from "@khub-ai/openclaw-plus/store";
+import { processMessage, compileToProgram } from "@khub-ai/knowledge-fabric/pipeline";
+import { loadAll } from "@khub-ai/knowledge-fabric/store";
 import {
   createCompileBenchmarkLLM,
   COMPILE_CODE_RESPONSE,
