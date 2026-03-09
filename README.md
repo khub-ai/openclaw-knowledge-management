@@ -6,7 +6,7 @@ This is a client-side code framework, called **PIL (Persistable Interactive Lear
 
 ## Who this is for
 
-**Agent developers** — if you are building an agent or AI assistant and want it to remember what it learns from each user, PIL is a drop-in knowledge layer. Wire `processMessage()` into your conversation loop and the agent begins accumulating typed, confidence-scored artifacts from natural interaction — no "save this" button required. Call `retrieve()` at session start to inject what the agent already knows into the prompt context. The LLM adapter is a single injected function (`LLMFn`), so PIL works with any model and any platform. The artifact store is a plain JSONL file that is easy to inspect and debug. See `apps/computer-assistant/` for a complete worked example of PIL wired into a real agent REPL.
+**Agent developers** — if you are building an agent or AI assistant, PIL gives it a long-term memory that grows with each user interaction. The agent learns patterns, preferences, and workflows naturally from conversation — without requiring the user to say "remember this." Knowledge is stored as lightweight, inspectable artifacts on the user's machine, and applied in future sessions only when confidence warrants it. PIL integrates into any conversation loop, works with any LLM, and is completely platform-agnostic. A complete worked example is available in `apps/computer-assistant/`.
 
 **OpenClaw users** — PIL is packaged as an OpenClaw extension, so your OpenClaw instance can learn the patterns of how you work and become progressively more efficient without you having to repeat yourself. It can also turn a procedure you perform repeatedly into an executable script — future runs become faster, cheaper, and fully reliable.
 
