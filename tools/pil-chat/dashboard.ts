@@ -32,6 +32,7 @@ export interface PilActivity {
     label: string;
     kind: string;
     content: string;
+    confidence: number;
   }>;
   candidates: Array<{
     kind: string;
@@ -139,6 +140,7 @@ body {
 .msg.error    .msg-text  { color: #f44747; }
 .msg.command  .msg-text  { color: #858585; font-style: italic; }
 .msg.status   .msg-text  { color: #555; font-style: italic; }
+.msg-sublabel { display: inline; font-size: 11px; margin-right: 6px; opacity: 0.9; }
 #input-area {
   border-top: 1px solid #3e3e42; padding: 8px;
   display: flex; gap: 6px; flex-shrink: 0;
@@ -291,14 +293,24 @@ const sendBtnEl  = document.getElementById('send-btn');
 const feedEl     = document.getElementById('events-feed');
 const storeEl    = document.getElementById('store-body');
 let busy = false;
+let pendingPilPre = null;  // pre-pass PIL state; annotates the next AI message bubble
 
 // ── SSE ──────────────────────────────────────────────────────────────────────
 const es = new EventSource('/events');
 es.addEventListener('connected',          () => addFeed('system', null, 'Connected to pil-chat.'));
 es.addEventListener('thinking',           () => { setBusy(true); addMsg('status', '⋯  thinking…'); });
-es.addEventListener('assistant-response', e  => { setBusy(false); removeStatus(); addMsg('assistant', JSON.parse(e.data).text); });
+es.addEventListener('assistant-response', e  => {
+  setBusy(false); removeStatus();
+  const sublabel = makePilSublabel(pendingPilPre);
+  pendingPilPre = null;
+  addMsg('assistant', JSON.parse(e.data).text, sublabel);
+});
 es.addEventListener('command-output',     e  => { setBusy(false); removeStatus(); const o = JSON.parse(e.data).output; if (o) addMsg('command', o); });
-es.addEventListener('pil-activity',       e  => renderPilActivity(JSON.parse(e.data)));
+es.addEventListener('pil-activity', e => {
+  const data = JSON.parse(e.data);
+  if (data.phase === 'pre') pendingPilPre = data;
+  renderPilActivity(data);
+});
 es.addEventListener('store-snapshot',     e  => renderStore(JSON.parse(e.data)));
 es.addEventListener('error-msg',          e  => { setBusy(false); removeStatus(); addMsg('error', JSON.parse(e.data).message); });
 
@@ -344,17 +356,46 @@ function setBusy(b) {
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
-function addMsg(role, text) {
+function addMsg(role, text, sublabel) {
   if (role === 'status') removeStatus();
   const el = document.createElement('div');
   el.className = 'msg ' + role;
   const labels = { user: 'You', assistant: 'AI', command: 'CMD', error: 'ERR', status: '···' };
+  const subHtml = sublabel ? '<span class="msg-sublabel">' + sublabel + '</span>' : '';
   el.innerHTML =
     '<span class="msg-label">' + (labels[role] || '') + '</span>' +
+    subHtml +
     '<span class="msg-text">' + esc(text) + '</span>';
   if (role === 'status') el.dataset.status = '1';
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ── PIL sublabel (shown next to "AI" in the chat panel) ───────────────────────
+// Derived from the pre-pass PIL state captured just before the LLM responded.
+// Shows the top injected confidence (conf=N.NN) and/or new-artifact count (+N).
+function makePilSublabel(pil) {
+  if (!pil) return '';
+  const injectable = pil.injectable || [];
+  const created    = pil.created    || [];
+  const updated    = pil.updated    || [];
+  const parts = [];
+
+  if (injectable.length > 0) {
+    const top = injectable.reduce((a, b) => ((a.confidence||0) > (b.confidence||0) ? a : b));
+    const conf = (top.confidence || 0).toFixed(2);
+    const lbl  = top.label || '';
+    const cls  = lbl.includes('established') ? 'lbl-established'
+               : lbl.includes('suggestion')  ? 'lbl-suggestion'
+               : lbl.includes('provisional') ? 'lbl-provisional' : 'lbl-none';
+    parts.push(\`<span class="\${cls}">conf=\${conf}</span>\`);
+    if (injectable.length > 1)
+      parts.push(\`<span class="lbl-none">×\${injectable.length}</span>\`);
+  }
+  if (created.length) parts.push(\`<span class="lbl-established">+\${created.length}</span>\`);
+  if (updated.length) parts.push(\`<span class="lbl-suggestion">~\${updated.length}</span>\`);
+
+  return parts.length ? '(' + parts.join('<span class="lbl-none"> · </span>') + ')' : '';
 }
 
 function removeStatus() {
@@ -375,12 +416,24 @@ function addFeed(type, phase, text) {
 
 function renderPilActivity(data) {
   const p = data.phase;
+  const anyActivity =
+    (data.created||[]).length || (data.updated||[]).length ||
+    (data.injectable||[]).length || (data.candidates||[]).length;
+
+  if (!anyActivity) {
+    // Dim indicator so the user knows PIL ran but found nothing extractable.
+    // Especially useful when typing an unexplained acronym like "lmp" — it
+    // immediately shows "pre · no extraction" rather than silent nothing.
+    addFeed('system', p, '· no extraction');
+    return;
+  }
+
   for (const a of (data.created    || []))
     addFeed('created',    p, \`✚ [\${a.kind}/\${a.stage}] conf=\${a.confidence.toFixed(2)}  "\${snip(a.content, 55)}"\`);
   for (const a of (data.updated    || []))
     addFeed('updated',    p, \`↺ evidence=\${a.evidenceCount} conf=\${a.confidence.toFixed(2)}  "\${snip(a.content, 50)}"\`);
   for (const i of (data.injectable || []))
-    addFeed('injectable', p, \`→ \${i.label} [\${i.kind}]  "\${snip(i.content, 50)}"\`);
+    addFeed('injectable', p, \`→ \${i.label} [\${i.kind}] conf=\${(i.confidence||0).toFixed(2)}  "\${snip(i.content, 45)}"\`);
   for (const c of (data.candidates || []))
     addFeed('candidate',  p, \`? [\${c.kind}/\${c.certainty}]  "\${snip(c.content, 45)}"\`);
 }

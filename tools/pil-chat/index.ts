@@ -316,6 +316,7 @@ function toPilActivity(
       label,
       kind: artifact.kind,
       content: artifact.content,
+      confidence: artifact.confidence,
     })),
     candidates: result.candidates.map((c) => ({
       kind: c.kind,
