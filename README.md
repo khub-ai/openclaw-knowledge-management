@@ -2,9 +2,13 @@
 
 **A knowledge store that learns from your conversations, persists across sessions and agents, and stays on your machine — inspectable and portable by design.**
 
-The core framework is called **PIL (Persistable Interactive Learning)**. It extracts knowledge from user interaction, distils it into typed, confidence-scored artifacts, and makes those artifacts available to any AI agent — now and in future sessions.
+This is a client-side code framework, called **PIL (Persistable Interactive Learning)**, that can be used with any local or cloud-based LLMs, to enable your agent to extracts knowledge from user interaction, distils it persistable memory artifacts or generalized knowledge, makes these artifacts available now and in future sessions, or transported and shared with others.
 
 ## Who this is for
+
+**OpenClaw users**  — this framework has been wrapped ass an OpenClaw extension, your OpenClaw instance can remember of pattern of how you work, so that your interaction with OpenClaw become much more efficient. PIL can also turn repetive steps into code, if you prefer, so that future excution of the steps are super-reliable and much less expensive. 
+
+**Developers** - (fill this in)
 
 **Individual users and knowledge workers** — if you use an AI agent daily and find yourself re-explaining your preferences, correcting the same mistakes, or re-teaching your workflow every session, this is for you. PIL makes the agent accumulate what it learns about you across sessions — your communication style, your conventions, your judgment criteria — stored as files on your own machine that you can inspect, edit, and take with you if you switch platforms.
 
