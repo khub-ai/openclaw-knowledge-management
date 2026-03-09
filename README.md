@@ -8,7 +8,7 @@ This is a client-side code framework, called **PIL (Persistable Interactive Lear
 
 **OpenClaw users**  — this framework has been wrapped ass an OpenClaw extension, your OpenClaw instance can remember of pattern of how you work, so that your interaction with OpenClaw become much more efficient. PIL can also turn repetive steps into code, if you prefer, so that future excution of the steps are super-reliable and much less expensive. 
 
-**Developers** - (fill this in)
+**Agent developers** - (fill this in)
 
 **Individual users and knowledge workers** — if you use an AI agent daily and find yourself re-explaining your preferences, correcting the same mistakes, or re-teaching your workflow every session, this is for you. PIL makes the agent accumulate what it learns about you across sessions — your communication style, your conventions, your judgment criteria — stored as files on your own machine that you can inspect, edit, and take with you if you switch platforms.
 
