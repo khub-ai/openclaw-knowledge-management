@@ -15,6 +15,7 @@
  *   pnpm chat -- --match-model claude-3-5-haiku-20241022  # cheap model for semantic matching
  *   pnpm chat -- --dashboard               # browser-based chat + PIL monitor
  *   pnpm chat -- --dashboard --port 8080   # custom port (default: 7331)
+ *   pnpm chat -- --fresh                   # clear store + log at startup
  *   pnpm chat -- --help
  *
  * Requires: ANTHROPIC_API_KEY environment variable
@@ -70,6 +71,11 @@ interface Options {
   dashboard: boolean;
   /** Port for the dashboard HTTP server (default: 7331). */
   port: number;
+  /**
+   * Fresh start: truncate the store and log file at startup.
+   * The store remains persistent for this session (unlike --no-persist).
+   */
+  fresh: boolean;
 }
 
 function parseArgs(): Options {
@@ -83,6 +89,7 @@ function parseArgs(): Options {
     logPath: null,
     dashboard: false,
     port: 7331,
+    fresh: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -104,6 +111,8 @@ function parseArgs(): Options {
     } else if (a === "--port" && args[i + 1]) {
       const p = parseInt(args[++i]!, 10);
       if (!isNaN(p)) opts.port = p;
+    } else if (a === "--fresh" || a === "-F") {
+      opts.fresh = true;
     } else if (a === "--help" || a === "-h") {
       printHelp();
       process.exit(0);
@@ -131,6 +140,11 @@ Store options (mutually exclusive):
                          real knowledge base
   --no-persist           Run with a temporary store that is deleted when
                          you exit — PIL runs normally but nothing is saved
+  --fresh, -F            Truncate the store and log at startup, then run
+                         normally with full persistence. Combine with
+                         --store to wipe a specific test store. Combine
+                         with --log to start the log from a clean slate.
+                         (Ignored when --no-persist is set)
 
 Other options:
   --dashboard, -d        Launch browser-based dashboard (chat + PIL monitor)
@@ -165,7 +179,7 @@ interface SessionLog {
   clearLog: () => string;
 }
 
-function setupLog(logPath: string | null): SessionLog {
+function setupLog(logPath: string | null, fresh = false): SessionLog {
   if (!logPath) {
     return {
       logInput: () => {},
@@ -174,7 +188,8 @@ function setupLog(logPath: string | null): SessionLog {
     };
   }
 
-  const stream: WriteStream = createWriteStream(logPath, { flags: "a" });
+  // fresh=true → "w" truncates the file on open; false → "a" appends to it.
+  const stream: WriteStream = createWriteStream(logPath, { flags: fresh ? "w" : "a" });
   const sep = "─".repeat(72);
   stream.write(`\n${sep}\nSession started: ${new Date().toISOString()}\n${sep}\n`);
 
@@ -610,9 +625,19 @@ const setArtifactsConfidenceFn: SetArtifactsConfidenceFn = async (
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const opts       = parseArgs();
-  const sessionLog = setupLog(opts.logPath);
+  const opts = parseArgs();
+
+  // ── Fresh start: wipe store + log before opening anything ─────────────────
+  // setupStore() sets KNOWLEDGE_STORE_PATH, so we run it first to resolve the
+  // effective path, then immediately overwrite with an empty file.
   const { displayPath, cleanup } = setupStore(opts);
+  if (opts.fresh && !opts.noPersist) {
+    await writeFile(storePath(), "");
+  }
+
+  // Pass fresh flag to setupLog so it opens the file in "w" (truncate) mode
+  // rather than "a" (append) — the session header becomes the first line.
+  const sessionLog = setupLog(opts.logPath, opts.fresh);
   const { pilLlm, matchLlm, chat, clearHistory } = setupLLM(opts);
 
   const exit = (): never => {
