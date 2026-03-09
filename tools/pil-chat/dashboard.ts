@@ -558,10 +558,14 @@ export function startDashboard(
     console.log(`\npil-chat dashboard  →  ${url}`);
     console.log("Browser interface active. Use Ctrl+C to exit.\n");
 
-    // Best-effort: auto-open the browser (ignore errors — the URL is printed above)
+    // Best-effort: auto-open the browser (ignore errors — the URL is printed above).
+    // WSL reports platform "linux" but needs cmd.exe to reach the Windows browser;
+    // detect it via the WSL_DISTRO_NAME env var which WSL always sets.
+    const isWsl = process.platform === "linux" && !!process.env["WSL_DISTRO_NAME"];
     const cmd =
-      process.platform === "win32"  ? `start "" "${url}"` :
+      process.platform === "win32" ? `start "" "${url}"` :
       process.platform === "darwin" ? `open "${url}"` :
+      isWsl                         ? `cmd.exe /c start "" "${url}"` :
                                       `xdg-open "${url}"`;
     exec(cmd, () => { /* ignore */ });
   });
