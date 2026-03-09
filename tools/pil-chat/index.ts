@@ -40,12 +40,19 @@ import {
   storePath,
   getInjectLabel,
 } from "@khub-ai/knowledge-fabric/store";
+import {
+  CONSOLIDATION_THRESHOLD,
+  DEFAULT_AUTO_APPLY_THRESHOLD,
+} from "@khub-ai/knowledge-fabric/types";
 import type { KnowledgeArtifact, LLMFn } from "@khub-ai/knowledge-fabric/types";
 import type {
   TurnResult,
   PilActivity,
   StoreEntry,
   ProcessTurnFn,
+  SystemParams,
+  DeleteArtifactsFn,
+  SetArtifactsConfidenceFn,
 } from "./dashboard.js";
 import { startDashboard } from "./dashboard.js";
 
@@ -573,6 +580,33 @@ function buildProcessTurn(
   };
 }
 
+// ─── Artifact mutation helpers ────────────────────────────────────────────────
+//
+// Both functions load the full JSONL, apply the mutation, rewrite the file, then
+// return a fresh store snapshot. The JSONL format is one JSON object per line.
+
+async function rewriteStore(artifacts: KnowledgeArtifact[]): Promise<void> {
+  const content = artifacts.map((a) => JSON.stringify(a)).join("\n");
+  await writeFile(storePath(), content ? content + "\n" : "");
+}
+
+const deleteArtifactsFn: DeleteArtifactsFn = async (ids: string[]): Promise<StoreEntry[]> => {
+  const all       = await loadAll();
+  const remaining = all.filter((a) => !ids.includes(a.id));
+  await rewriteStore(remaining);
+  return remaining.filter((a) => !a.retired).map(toStoreEntry);
+};
+
+const setArtifactsConfidenceFn: SetArtifactsConfidenceFn = async (
+  ids: string[],
+  confidence: number,
+): Promise<StoreEntry[]> => {
+  const all     = await loadAll();
+  const updated = all.map((a) => ids.includes(a.id) ? { ...a, confidence } : a);
+  await rewriteStore(updated);
+  return updated.filter((a) => !a.retired).map(toStoreEntry);
+};
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -604,12 +638,23 @@ async function main(): Promise<void> {
     console.log(`  Mode  : dashboard`);
     if (opts.logPath) console.log(`  Log   : ${opts.logPath}`);
 
+    const systemParams: SystemParams = {
+      model:                  opts.model,
+      matchModel:             opts.matchModel,
+      storePath:              displayPath,
+      consolidationThreshold: CONSOLIDATION_THRESHOLD,
+      defaultInjectThreshold: DEFAULT_AUTO_APPLY_THRESHOLD,
+    };
+
     startDashboard(
       opts.port,
       processTurn,
       displayPath,
       sessionStart,
       () => buildStoreSnapshot(),
+      deleteArtifactsFn,
+      setArtifactsConfidenceFn,
+      systemParams,
     );
 
     // Keep process alive — the HTTP server handles all interaction from here.

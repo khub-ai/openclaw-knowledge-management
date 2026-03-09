@@ -75,6 +75,17 @@ export interface TurnResult {
 export type ProcessTurnFn = (userInput: string) => Promise<TurnResult>;
 export type GetSnapshotFn = () => Promise<StoreEntry[]>;
 
+export interface SystemParams {
+  model: string;
+  matchModel: string | null;
+  storePath: string;
+  consolidationThreshold: number;
+  defaultInjectThreshold: number;
+}
+
+export type DeleteArtifactsFn        = (ids: string[]) => Promise<StoreEntry[]>;
+export type SetArtifactsConfidenceFn = (ids: string[], confidence: number) => Promise<StoreEntry[]>;
+
 // ─── SSE broadcaster ─────────────────────────────────────────────────────────
 
 const sseClients = new Set<http.ServerResponse>();
@@ -97,7 +108,7 @@ function escHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function buildHtml(displayPath: string, sessionStart: string): string {
+function buildHtml(displayPath: string, sessionStart: string, systemParams: SystemParams): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -236,6 +247,41 @@ body {
   color: #d4d4d4; max-width: 240px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* ── Checkbox column ────────────────────────────────────────────────── */
+.cb-col { width: 24px; text-align: center; padding: 3px 4px !important; }
+#store-table input[type=checkbox] { cursor: pointer; accent-color: #569cd6; }
+/* ── Store action bar ───────────────────────────────────────────────── */
+#store-actionbar {
+  border-bottom: 1px solid #3e3e42; padding: 4px 8px;
+  display: flex; gap: 6px; align-items: center; flex-shrink: 0;
+  background: #1e1e1e;
+}
+#store-actionbar.hidden { display: none; }
+.sel-count { color: #858585; font-size: 11px; margin-right: 2px; }
+.act-btn {
+  background: #37373d; color: #d4d4d4; border: 1px solid #3e3e42;
+  padding: 2px 9px; cursor: pointer; border-radius: 2px;
+  font-family: inherit; font-size: 12px;
+}
+.act-btn:hover { background: #4e4e55; }
+.act-btn.danger { color: #f44747; border-color: #5a2020; }
+.act-btn.danger:hover { background: #5a2020; }
+.act-sep { color: #444; font-size: 12px; }
+#conf-input {
+  background: #2d2d2d; border: 1px solid #3e3e42; color: #d4d4d4;
+  font-family: inherit; font-size: 12px; padding: 2px 5px;
+  width: 54px; border-radius: 2px; text-align: center;
+}
+#conf-input:focus { border-color: #569cd6; outline: none; }
+/* ── Params section ─────────────────────────────────────────────────── */
+#params-section { border-top: 1px solid #3e3e42; flex-shrink: 0; }
+#params-grid {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 2px 10px; padding: 6px 10px; font-size: 12px;
+}
+.param-key { color: #858585; white-space: nowrap; padding: 1px 0; }
+.param-val { color: #9cdcfe; word-break: break-all; padding: 1px 0; }
+.param-val.ro { color: #608b9f; font-style: italic; }
 </style>
 </head>
 <body>
@@ -269,10 +315,19 @@ body {
     </div>
     <div id="store-section" class="panel-section">
       <div class="section-hdr">Artifact Store</div>
+      <div id="store-actionbar" class="hidden">
+        <span class="sel-count" id="sel-count"></span>
+        <button class="act-btn danger" onclick="deleteSelected()">Delete</button>
+        <span class="act-sep">│</span>
+        <span style="color:#858585;font-size:12px">conf:</span>
+        <input id="conf-input" type="number" min="0" max="1" step="0.05" placeholder="0.00">
+        <button class="act-btn" onclick="applyConf()">Apply</button>
+      </div>
       <div id="store-scroll">
         <table id="store-table">
           <thead>
             <tr>
+              <th class="cb-col"><input type="checkbox" id="sel-all" title="Select all" onclick="toggleSelectAll(this.checked)"></th>
               <th>Kind</th>
               <th>Stage</th>
               <th>Conf</th>
@@ -284,17 +339,37 @@ body {
         </table>
       </div>
     </div>
+    <div id="params-section" class="panel-section">
+      <div class="section-hdr">System Parameters</div>
+      <div id="params-grid">
+        <span class="param-key">model</span>
+        <span class="param-val">${escHtml(systemParams.model)}</span>
+        <span class="param-key">match-model</span>
+        <span class="param-val">${escHtml(systemParams.matchModel ?? "(same as model)")}</span>
+        <span class="param-key">store</span>
+        <span class="param-val">${escHtml(systemParams.storePath)}</span>
+        <span class="param-key">consolidation-threshold</span>
+        <span class="param-val ro" title="Set at startup via CONSOLIDATION_THRESHOLD env var (read-only)">${escHtml(String(systemParams.consolidationThreshold))}</span>
+        <span class="param-key">default-inject-threshold</span>
+        <span class="param-val ro" title="Default auto-apply threshold (read-only)">${escHtml(systemParams.defaultInjectThreshold.toFixed(2))}</span>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
-const messagesEl = document.getElementById('messages');
-const inputEl    = document.getElementById('msg-input');
-const sendBtnEl  = document.getElementById('send-btn');
-const feedEl     = document.getElementById('events-feed');
-const storeEl    = document.getElementById('store-body');
+const messagesEl   = document.getElementById('messages');
+const inputEl      = document.getElementById('msg-input');
+const sendBtnEl    = document.getElementById('send-btn');
+const feedEl       = document.getElementById('events-feed');
+const storeEl      = document.getElementById('store-body');
+const actionBarEl  = document.getElementById('store-actionbar');
+const selCountEl   = document.getElementById('sel-count');
+const selAllEl     = document.getElementById('sel-all');
+const confInputEl  = document.getElementById('conf-input');
 let busy = false;
 let pendingPilPre = null;  // pre-pass PIL state; annotates the next AI message bubble
+const selectedIds  = new Set();
 
 // ── SSE ──────────────────────────────────────────────────────────────────────
 const es = new EventSource('/events');
@@ -354,6 +429,63 @@ function post(message) {
 function setBusy(b) {
   busy = b;
   sendBtnEl.disabled = b;
+}
+
+// ── Artifact selection ────────────────────────────────────────────────────────
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  updateActionBar();
+}
+
+function toggleSelectAll(checked) {
+  storeEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.checked = checked;
+    if (checked) selectedIds.add(cb.dataset.id);
+    else selectedIds.delete(cb.dataset.id);
+  });
+  updateActionBar();
+}
+
+function updateActionBar() {
+  const n     = selectedIds.size;
+  const total = storeEl.querySelectorAll('input[type=checkbox]').length;
+  if (n === 0) {
+    actionBarEl.classList.add('hidden');
+    selAllEl.checked       = false;
+    selAllEl.indeterminate = false;
+  } else {
+    actionBarEl.classList.remove('hidden');
+    selCountEl.textContent = n + ' selected';
+    selAllEl.checked       = (n === total);
+    selAllEl.indeterminate = (n > 0 && n < total);
+  }
+}
+
+function deleteSelected() {
+  if (!selectedIds.size) return;
+  if (!confirm('Permanently delete ' + selectedIds.size + ' artifact(s)? This cannot be undone.')) return;
+  fetch('/artifacts/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: [...selectedIds] }),
+  }).then(() => { selectedIds.clear(); updateActionBar(); })
+    .catch(err => addMsg('error', 'Delete failed: ' + err.message));
+}
+
+function applyConf() {
+  if (!selectedIds.size) return;
+  const val = parseFloat(confInputEl.value);
+  if (isNaN(val) || val < 0 || val > 1) {
+    alert('Enter a confidence value between 0.00 and 1.00.');
+    return;
+  }
+  fetch('/artifacts/setconf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: [...selectedIds], confidence: val }),
+  }).then(() => { selectedIds.clear(); updateActionBar(); confInputEl.value = ''; })
+    .catch(err => addMsg('error', 'Set confidence failed: ' + err.message));
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -442,24 +574,28 @@ function renderPilActivity(data) {
 // ── Store table ───────────────────────────────────────────────────────────────
 function renderStore(entries) {
   if (!entries || !entries.length) {
-    storeEl.innerHTML = '<tr><td colspan="5" style="color:#555;padding:8px;">(no artifacts)</td></tr>';
+    storeEl.innerHTML = '<tr><td colspan="6" style="color:#555;padding:8px;">(no artifacts)</td></tr>';
+    selectedIds.clear();
+    updateActionBar();
     return;
   }
   const sorted = [...entries].sort((a, b) => b.confidence - a.confidence);
   storeEl.innerHTML = sorted.map(a => {
-    const pct   = Math.round(a.confidence * 100);
-    const color = a.confidence >= 0.95 ? '#4ec9b0'
-                : a.confidence >= 0.85 ? '#dcdcaa'
-                : a.confidence >= 0.75 ? '#569cd6'
-                : '#858585';
-    const kdCls = ['preference','convention','fact','procedure','judgment','strategy'].includes(a.kind)
-                  ? 'kd-' + a.kind : 'kd-fact';
-    const stCls = ['candidate','accumulating','consolidated'].includes(a.stage)
-                  ? 'st-' + a.stage : 'st-candidate';
-    const lbl   = a.label
-                  ? \`<span class="\${labelCls(a.label)}">\${esc(a.label)}</span>\`
-                  : '<span class="lbl-none">—</span>';
+    const pct     = Math.round(a.confidence * 100);
+    const color   = a.confidence >= 0.95 ? '#4ec9b0'
+                  : a.confidence >= 0.85 ? '#dcdcaa'
+                  : a.confidence >= 0.75 ? '#569cd6'
+                  : '#858585';
+    const kdCls   = ['preference','convention','fact','procedure','judgment','strategy'].includes(a.kind)
+                    ? 'kd-' + a.kind : 'kd-fact';
+    const stCls   = ['candidate','accumulating','consolidated'].includes(a.stage)
+                    ? 'st-' + a.stage : 'st-candidate';
+    const lbl     = a.label
+                    ? \`<span class="\${labelCls(a.label)}">\${esc(a.label)}</span>\`
+                    : '<span class="lbl-none">—</span>';
+    const checked = selectedIds.has(a.id) ? 'checked' : '';
     return \`<tr>
+      <td class="cb-col"><input type="checkbox" data-id="\${esc(a.id)}" \${checked} onchange="toggleSelect('\${a.id}', this.checked)"></td>
       <td><span class="badge \${kdCls}">\${esc(a.kind)}</span></td>
       <td><span class="badge \${stCls}">\${esc(a.stage)}</span></td>
       <td style="white-space:nowrap">
@@ -469,6 +605,10 @@ function renderStore(entries) {
       <td class="content-cell" title="\${esc(a.content)}">\${esc(snip(a.content, 65))}</td>
     </tr>\`;
   }).join('');
+  // Remove stale selected IDs (artifacts that no longer exist after a store update).
+  const currentIds = new Set(sorted.map(a => a.id));
+  for (const id of [...selectedIds]) if (!currentIds.has(id)) selectedIds.delete(id);
+  updateActionBar();
 }
 
 function labelCls(label) {
@@ -509,8 +649,11 @@ export function startDashboard(
   displayPath: string,
   sessionStart: string,
   getInitialSnapshot: GetSnapshotFn,
+  deleteArtifacts: DeleteArtifactsFn,
+  setArtifactsConfidence: SetArtifactsConfidenceFn,
+  systemParams: SystemParams,
 ): void {
-  const html = buildHtml(displayPath, sessionStart);
+  const html = buildHtml(displayPath, sessionStart, systemParams);
 
   const server = http.createServer((req, res) => {
     const url    = req.url    ?? "/";
@@ -599,6 +742,55 @@ export function startDashboard(
               message: err instanceof Error ? err.message : String(err),
             });
           });
+      });
+      return;
+    }
+
+    // ── Artifact delete ──────────────────────────────────────────────────────
+    if (method === "POST" && url === "/artifacts/delete") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end('{"ok":true}');
+        let ids: string[];
+        try {
+          const parsed = JSON.parse(body) as { ids?: unknown };
+          if (!Array.isArray(parsed.ids)) return;
+          ids = (parsed.ids as unknown[]).filter((x): x is string => typeof x === "string");
+        } catch { return; }
+        if (!ids.length) return;
+        deleteArtifacts(ids)
+          .then((entries) => emitSse("store-snapshot", entries))
+          .catch((err: unknown) =>
+            emitSse("error-msg", { message: err instanceof Error ? err.message : String(err) }),
+          );
+      });
+      return;
+    }
+
+    // ── Artifact set-confidence ──────────────────────────────────────────────
+    if (method === "POST" && url === "/artifacts/setconf") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end('{"ok":true}');
+        let ids: string[];
+        let confidence: number;
+        try {
+          const parsed = JSON.parse(body) as { ids?: unknown; confidence?: unknown };
+          if (!Array.isArray(parsed.ids)) return;
+          ids = (parsed.ids as unknown[]).filter((x): x is string => typeof x === "string");
+          confidence = typeof parsed.confidence === "number" ? parsed.confidence : NaN;
+          if (isNaN(confidence) || confidence < 0 || confidence > 1) return;
+        } catch { return; }
+        if (!ids.length) return;
+        setArtifactsConfidence(ids, confidence)
+          .then((entries) => emitSse("store-snapshot", entries))
+          .catch((err: unknown) =>
+            emitSse("error-msg", { message: err instanceof Error ? err.message : String(err) }),
+          );
       });
       return;
     }
