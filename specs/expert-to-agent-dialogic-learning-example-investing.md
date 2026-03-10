@@ -1,5 +1,7 @@
  
 # Worked Example: Expert-to-Agent Dialogic Learning With An Investment Expert 
+Return to the main spec: [Expert-to-Agent Dialogic Learning](./expert-to-agent-dialogic-learning.md)
+
  
 ## Purpose 
  

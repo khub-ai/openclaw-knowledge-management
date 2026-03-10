@@ -223,6 +223,10 @@ The exact implementation may evolve, but the learning pattern described here sho
 
 A natural companion to this spec would be a worked example such as: learning long-term investing judgment from an expert investor. That example should include the dialogue, commentary on why the agent's questions were effective, and the final artifacts that KF would store.
 
+## See Also
+
+- Worked example: [Expert-to-Agent Dialogic Learning With An Investment Expert](./expert-to-agent-dialogic-learning-example-investing.md)
+
 ## Summary
 
 Expert-to-agent dialogic learning is the process by which an agent learns deep knowledge from an expert through structured dialogue. The central idea is simple: the agent learns effectively not by asking for more information in general, but by asking the right question at the right moment in order to surface procedures, judgments, boundaries, and revision rules that can later be reused. 
