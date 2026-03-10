@@ -15,6 +15,52 @@ This document positions KHUB's [PIL](./glossary.md#pil-persistable-interactive-l
  
 The key question is not whether other systems have memory. Many do. The more important question is what kind of learning they support, how reusable the resulting knowledge is, and whether they are close to practical deployment. 
  
+## Why Another Learning Dimension Matters 
+ 
+Today there are already several major ways to get an AI system to acquire and retain capability or knowledge: 
+ 
+- full model training, where capabilities are baked into the base model at very large scale 
+- fine-tuning, where a pre-trained model is adapted to a narrower domain or behavior pattern 
+- retrieval and RAG, where the system looks things up from external material when needed 
+- agent memory mechanisms, where the system stores prior interactions, preferences, facts, or context for later reuse 
+ 
+These approaches are all useful, but they do different jobs. 
+ 
+Full training and fine-tuning are powerful when the goal is broad capability change or domain adaptation, but they are expensive, slow to revise, and usually not centered on one user's or one expert's evolving know-how. 
+ 
+Retrieval and RAG are strong when the right answer already exists in documents, but they do not by themselves turn interaction into generalized reusable know-how. They retrieve source material more than they learn from an expert's judgment. 
+ 
+Agent memory mechanisms are closer to the target, because they persist information across interactions. But many of them still focus mainly on recall: storing facts, preferences, summaries, or conversation context so the agent can remember later. 
+ 
+Dialogic learning is a different dimension. Its purpose is not just to help the agent retain what was said. Its purpose is to help the agent learn through structured exchange with a human, especially an expert, so that the result becomes a reusable artifact such as a procedure, a judgment rule, a boundary condition, or a revision trigger. 
+ 
+That difference matters because some of the most valuable human knowledge is not just factual. It is tacit, strategic, and judgment-heavy. It often lives in how a person asks questions, notices failure modes, prioritizes weak signals, and decides when a rule does not apply. 
+ 
+## Where Dialogic Learning Is Especially Valuable 
+ 
+Dialogic learning is especially useful when: 
+ 
+- the important knowledge is partly tacit and hard to write down cleanly in advance 
+- the user or expert wants the system to learn a method, not just remember facts 
+- the domain requires boundaries, caveats, and revision triggers rather than only answers 
+- the knowledge should remain inspectable and revisable after it is learned 
+- the cost or friction of full fine-tuning would be too high for the problem 
+ 
+## Who Needs This Most 
+ 
+The users who benefit most are likely to be: 
+ 
+- expert practitioners who want to teach an agent how they think 
+- power users who work across multiple agents and want portable learned knowledge 
+- teams that need shared, reviewable know-how rather than opaque personalization 
+- high-accountability domains where provenance and revision matter, such as law, finance, operations, medicine, and public-sector workflows 
+ 
+## Why This Matters Strategically 
+ 
+If this framing is right, dialogic learning is not a replacement for training, fine-tuning, retrieval, or memory. It is a complementary layer. It addresses a gap those mechanisms do not fully close: the accumulation of generalized know-how through guided interaction. 
+ 
+That is the strategic context for KHUB. It is trying to occupy the space where interaction itself becomes a method of knowledge acquisition, consolidation, and reuse. That is why the comparison to ordinary memory systems is helpful but incomplete. Dialogic learning is not just better memory. It is a different kind of learning surface. 
+ 
 ## Executive Summary 
  
 KHUB is not best understood as just another memory feature. It is closer to a local-first, artifact-based learning layer that tries to turn dialogue into reusable knowledge such as procedures, judgments, boundaries, and revision triggers. 
