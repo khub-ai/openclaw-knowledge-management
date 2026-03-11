@@ -371,6 +371,47 @@ The agent should default to deepening existing knowledge — testing known rules
 
 Each session records `priorSessionIds` and `inheritedArtifactIds` so the provenance chain across sessions is fully traceable.
 
+## Communication Profile
+
+### Why This Matters For Dialogic Learning
+
+In ordinary Phase 1 use, communication friction is a minor inconvenience. In a dialogic session it is a session-killer. Each friction point — a question that is too verbose, a compound question when the expert prefers single questions, a framing that conflicts with how the expert thinks — does not just slow one turn. It degrades the expert's engagement for the remainder of the session and produces shallower answers. A session that stalls at turn three because the agent's style is mismatched to the expert produces zero artifacts. The entire elicitation cost is lost.
+
+The Communication Profile is a persistent record of how to conduct dialogue with this expert. It is meta-knowledge — not about the domain being taught, but about the channel through which teaching happens. It applies to all sessions regardless of domain.
+
+### The Six Dimensions
+
+- **Question granularity** — whether the expert prefers one question per turn or can handle grouped related questions. Default: one question per turn.
+- **Framing preference** — whether the expert thinks better starting from a concrete example (example-first) or from the principle (principle-first). Default: example-first.
+- **Verbosity** — whether the agent's questions should be brief and direct, or include contextual setup before the question itself.
+- **Acknowledgment style** — whether the expert wants the agent to reflect back what it heard before asking the next question, or move forward immediately.
+- **Synthesis frequency** — whether the agent should synthesize often (checking understanding every few turns), at natural milestones (when a candidate rule meets the consolidation criteria), or only at session end.
+- **Terminology tolerance** — whether the agent can use domain-specific terms freely or should let the expert introduce terms organically.
+
+### How The Profile Is Populated
+
+**Pre-session calibration** is the primary source. At the start of the first session with a new expert, the agent asks three to four brief questions before domain learning begins. These are conversational, not interrogative:
+
+> Before we start — I find I work better with some people if I ask one thing at a time, while others prefer I group related questions. Which works better for you?
+
+> Do you usually find it easier to start from a specific example and work toward the general rule, or the other way around?
+
+Three to four exchanges are sufficient to establish an initial profile. The calibration should feel like a natural conversation opener, not a form to fill in.
+
+**Adaptive signals** during sessions refine the profile. Observable indicators of friction include: very short or deflecting answers (may signal the question was unclear or too compound), explicit meta-comments from the expert ("that question is confusing"), or answers that address only one part of a compound question. These update the profile during the session.
+
+**Passive Phase 1 capture** catches what calibration misses. If the expert says "I prefer you ask one thing at a time" during ordinary conversation, Phase 1 already captures this as a `preference` artifact. Before running calibration, the session should check Phase 1's store for existing communication preferences and pre-populate the profile from them.
+
+### Storage And Application
+
+The Communication Profile is stored at `~/.openclaw/knowledge/communication-profile.json`. It is separate from the session files and from `artifacts.jsonl` because it is user-level, not domain-specific.
+
+At session start, the profile is loaded and injected into the question-formulation prompt as a constraint. For example, if the profile specifies single questions and example-first framing, the LLM call that generates the next question receives:
+
+> Formulate one question only. Use a concrete example as a frame before asking the expert to generalize. Keep the question under forty words.
+
+Pre-session calibration runs once per expert and is skipped in subsequent sessions. Each session may update the profile based on adaptive signals observed during the session.
+
 ## Example Domain Framing
 
 In a long-term fundamental investing dialogue, the agent may learn things such as:
