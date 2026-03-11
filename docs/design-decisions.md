@@ -53,26 +53,25 @@ PIL is something qualitatively different: it is the equivalent of on-the-job lea
 
 ## Language support and interoperability
 
-The current pipeline implementation is TypeScript-only. This is a known limitation and this section describes what is currently accessible to non-TypeScript callers, and the planned path to broader language support.
+The current pipeline implementation is TypeScript-only. This section describes what non-TypeScript callers can do today and the intended path to Python support.
+
+**PIL is a library, not a service.** The local-first architecture means the agent IS the process — it calls PIL functions the way it calls any library. There is no separate PIL daemon. A Python agent should use PIL the same way the TypeScript agent does: as a native library running inside the same process. This shapes which Python interop paths make sense.
 
 **What non-TypeScript callers can do today:**
 
-- **Read and write the artifact store directly.** Artifacts are stored as JSONL at `~/.openclaw/knowledge/artifacts.jsonl` — one JSON object per line, with a fully documented schema. Python, Ruby, Go, or any language that handles JSON can read, filter, and write artifacts without going through the TypeScript pipeline. This enables use cases like artifact inspection tooling, migration scripts, custom reporting, and artifact injection from external systems.
-- **Invoke the pipeline via subprocess.** A Python script (or any language with subprocess support) can shell out to the Node.js CLI, pass messages as arguments or stdin, and parse the JSON output. This is functional but not ergonomic; it requires a Node.js installation on the caller's machine.
+- **Read and write the artifact store directly.** Artifacts are stored as JSONL at `~/.openclaw/knowledge/artifacts.jsonl` — one JSON object per line, with a fully documented schema in [`docs/architecture.md`](architecture.md#knowledge-artifact-schema). Python, Ruby, Go, or any language that handles JSON can read, filter, and write artifacts without going through the TypeScript pipeline. This enables use cases like artifact inspection tooling, migration scripts, custom reporting, and artifact injection from external systems.
 
 **What requires TypeScript today:**
 
-Calling `processMessage`, `retrieve`, `apply`, and `revise` as library functions requires a TypeScript or JavaScript runtime. There is no Python package, no gRPC service, and no REST API.
+Calling `processMessage`, `retrieve`, `apply`, and `revise` as library functions requires a TypeScript or JavaScript runtime. There is no Python package.
 
-**Planned: REST API wrapper**
+**Planned: Python library**
 
-The lowest-effort path to broad language interoperability is a thin HTTP server exposing the core pipeline functions — a single `POST /process` endpoint wrapping `processMessage`, with JSON request and response bodies. This addition to the `apps/` layer would enable any HTTP client (Python's `requests`, Go's `net/http`, etc.) to call the pipeline without a TypeScript dependency in the caller's stack.
+The correct path to Python support is a native Python port of the PIL pipeline — not a REST API. A REST API would impose a service model (a daemon that must be running before any agent can operate) that contradicts the local-first, zero-infrastructure-overhead design. The TypeScript reference implementation is the specification; the Python port would implement the same pipeline against the same JSON store.
 
-This is planned as a near-term addition once the core pipeline API stabilizes.
+A Python port is architecturally straightforward: the LLM adapter is a plain callable `(prompt: str) -> str`, the store is plain JSON, and the pipeline has no framework dependencies. It is planned for after the artifact format stabilizes through Phase 5 (Portability), when the schema is stable enough that a Python implementation can reasonably commit to full compatibility.
 
-**Longer term: Python library**
-
-A native Python reimplementation of the PIL pipeline is architecturally straightforward: the `LLMFn` adapter is a plain function signature, the store is plain JSON, and the pipeline has no framework dependencies. A faithful Python port would not require rearchitecting anything. This is a longer-term aspiration, contingent on the artifact format stabilizing through Phase 4 (Portability).
+**Note on subprocess invocation:** Calling the TypeScript CLI from Python via subprocess is technically possible but is an integration workaround, not an architecture. It requires a Node.js installation, adds process-management complexity, and disappears when the Python library exists.
 
 → *[FAQ: Is a Python API available?](faq.md#is-a-python-api-available-for-khub-pil)*
 

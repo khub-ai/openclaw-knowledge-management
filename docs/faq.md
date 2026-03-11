@@ -4,14 +4,17 @@
 
 ### Is a Python API available for KHUB-PIL?
 
-Not yet. The current implementation is TypeScript-only. However, non-TypeScript callers are not entirely locked out today:
+Not yet. The current implementation is TypeScript-only. Here is what is available today and what is planned.
 
-- **The artifact store is plain JSON.** Artifacts are stored as JSONL (one JSON object per line) at `~/.openclaw/knowledge/artifacts.jsonl`. Any language that can read and write JSON — including Python — can read, filter, and modify artifacts directly, without going through the TypeScript pipeline. The full schema is documented in plain tables in [`docs/architecture.md`](architecture.md#knowledge-artifact-schema) (the TypeScript type definitions are at `packages/knowledge-fabric/src/types.ts` for reference).
-- **Subprocess invocation is possible.** The pipeline can be called from Python via subprocess wrapping of the Node.js CLI. This is functional but not ergonomic.
+**What Python callers can do today:**
 
-A lightweight REST API wrapper — a single `POST /process` endpoint exposing `processMessage` over HTTP — is planned as a near-term addition. Once in place, any HTTP client (Python's `requests`, Go's `net/http`, Ruby's `Faraday`) can call the pipeline without requiring a TypeScript runtime in the caller's stack.
+The artifact store is plain JSONL at `~/.openclaw/knowledge/artifacts.jsonl` — one JSON object per line. Python can read, filter, and write artifacts directly without going through the TypeScript pipeline. The schema is documented in plain tables at [`docs/architecture.md`](architecture.md#knowledge-artifact-schema) (the TypeScript type definitions are at `packages/knowledge-fabric/src/types.ts` for reference). This covers tooling use cases: artifact inspection, migration scripts, reporting, and external injection.
 
-A native Python library is a longer-term aspiration, contingent on the PIL format stabilizing. The architecture (a plain function signature for the LLM adapter, a JSON store, no framework dependencies) was designed to make a faithful port straightforward.
+**What is planned:**
+
+A native Python library — a port of the PIL pipeline to Python. PIL is a library, not a service: a Python agent should call the Python PIL library from within the same process, the same way the TypeScript agent calls the TypeScript library. A REST API would require running a TypeScript daemon alongside the Python agent, which contradicts the local-first, zero-extra-infrastructure design.
+
+The Python port is architecturally straightforward: the LLM adapter is a plain callable `(prompt: str) -> str`, the store is plain JSON, and the pipeline has no framework dependencies. It is planned for after Phase 5 (Portability), when the artifact schema is stable enough that a Python implementation can commit to full compatibility.
 
 ---
 
