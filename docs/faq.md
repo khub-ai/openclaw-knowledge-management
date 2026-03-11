@@ -6,7 +6,7 @@
 
 Not yet. The current implementation is TypeScript-only. However, non-TypeScript callers are not entirely locked out today:
 
-- **The artifact store is plain JSON.** Artifacts are stored as JSONL (one JSON object per line) at `~/.openclaw/knowledge/artifacts.jsonl`. Any language that can read and write JSON — including Python — can read, filter, and modify artifacts directly, without going through the TypeScript pipeline. The full schema is documented in [`packages/knowledge-fabric/src/types.ts`](../packages/knowledge-fabric/src/types.ts).
+- **The artifact store is plain JSON.** Artifacts are stored as JSONL (one JSON object per line) at `~/.openclaw/knowledge/artifacts.jsonl`. Any language that can read and write JSON — including Python — can read, filter, and modify artifacts directly, without going through the TypeScript pipeline. The full schema is documented in plain tables in [`docs/architecture.md`](architecture.md#knowledge-artifact-schema) (the TypeScript type definitions are at `packages/knowledge-fabric/src/types.ts` for reference).
 - **Subprocess invocation is possible.** The pipeline can be called from Python via subprocess wrapping of the Node.js CLI. This is functional but not ergonomic.
 
 A lightweight REST API wrapper — a single `POST /process` endpoint exposing `processMessage` over HTTP — is planned as a near-term addition. Once in place, any HTTP client (Python's `requests`, Go's `net/http`, Ruby's `Faraday`) can call the pipeline without requiring a TypeScript runtime in the caller's stack.
@@ -90,7 +90,7 @@ A vendor can access artifacts only if you explicitly export and share them. The 
 
 ### What LLMs does PIL work with?
 
-Any sufficiently capable LLM can be used. The pipeline depends on a single injected function — `LLMFn: (prompt: string) => Promise<string>` — with no hard dependency on any specific SDK. The caller provides the implementation.
+Any sufficiently capable LLM can be used. The pipeline depends on a single injected LLM adapter — a function that accepts a prompt string and returns the model's text response — with no hard dependency on any specific SDK or provider. The caller provides the implementation. In the TypeScript reference implementation this adapter is typed as `LLMFn: (prompt: string) => Promise<string>`; a Python implementation would express the same contract as a callable `(prompt: str) -> str`.
 
 In practice, leading models from Anthropic, OpenAI, Google, and open-source providers all work. The quality of extraction and consolidation scales with the model's reasoning capability — smaller or older models may produce lower-quality generalizations, but the pipeline degrades gracefully (lower-confidence candidates rather than failures).
 
@@ -136,11 +136,11 @@ The practical limit is Tier 2 disambiguation quality at very large stores (thous
 
 ### Is PIL ready for production use?
 
-The pipeline is functional and tested — extraction, accumulation, consolidation, retrieval, apply, and revise all work end-to-end, covered by 74 unit and scenario tests. However, PIL is currently in active Phase 1 development. Specific caveats:
+The pipeline is functional and tested — extraction, accumulation, consolidation, retrieval, apply, and revise all work end-to-end, covered by 112 unit and scenario tests. All Phase 1 milestones (1a–1d) are complete: passive elicitation, evidence consolidation, and automatic retrieval injection all function. Specific caveats for production deployments:
 
-- The artifact schema and API surface may evolve in breaking ways before Phase 4 (Portability).
-- OpenClaw hook wiring for fully passive elicitation (Milestones 1c/1d) is not yet complete.
-- Enterprise governance features (tiered stores, RBAC, audit trails) are Phase 5.
+- The artifact schema and API surface may evolve in breaking ways before Phase 5 (Portability).
+- Expert-to-Agent Dialogic Learning (Phase 4) is fully specified but not yet implemented.
+- Enterprise governance features (tiered stores, RBAC, audit trails) are Phase 6.
 - There is no dedicated CLI for artifact management yet.
 - File locking and concurrent-write safety are known gaps for multi-process deployments.
 

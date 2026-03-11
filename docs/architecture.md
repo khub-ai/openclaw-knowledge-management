@@ -59,18 +59,21 @@ Each artifact is a JSON object with required core fields and optional enrichment
 
 ## Kind taxonomy
 
-The `kind` field uses six values. The LLM assigns these during extraction from any input language.
+The `kind` field uses nine values. The first six are assigned by the LLM during passive Phase 1 extraction from any input language. The final three are produced only by Phase 4 dialogic learning sessions and are never emitted by the passive pipeline.
 
-| Kind | What it captures | Example |
-|---|---|---|
-| `preference` | Subjective style or taste | "Always use bullet points for summaries" |
-| `convention` | Agreed naming, terminology, or standards | "We call it the staging environment" |
-| `fact` | Objective, verifiable information | "The API endpoint is https://api.example.com/v2" |
-| `procedure` | A specific step-by-step process or recipe | "To deploy: run build, then push, then notify team" |
-| `judgment` | An evaluative heuristic or quality criterion | "Favor brevity over completeness in executive summaries" |
-| `strategy` | A general approach to a class of problems | "When debugging, isolate variables before forming hypotheses" |
+| Kind | What it captures | Example | Phase |
+|---|---|---|---|
+| `preference` | Subjective style or taste | "Always use bullet points for summaries" | 1 |
+| `convention` | Agreed naming, terminology, or standards | "We call it the staging environment" | 1 |
+| `fact` | Objective, verifiable information | "The API endpoint is https://api.example.com/v2" | 1 |
+| `procedure` | A specific step-by-step process or recipe | "To deploy: run build, then push, then notify team" | 1 + 4 |
+| `judgment` | An evaluative heuristic or quality criterion | "Favor brevity over completeness in executive summaries" | 1 + 4 |
+| `strategy` | A general approach to a class of problems | "When debugging, isolate variables before forming hypotheses" | 1 + 4 |
+| `boundary` | When a rule does not apply | "This survivability check is weaker in commodity-driven businesses" | 4 only |
+| `revision-trigger` | Evidence that should cause revision of a conclusion | "Downgrade the thesis if confidence depends on management promises" | 4 only |
+| `failure-case` | A past mistake that refined later judgment | "Applied the fragility rule too mechanically; rejected a sound business" | 4 only |
 
-**Relationship to the four-type cognitive taxonomy** described in [memory-taxonomy.md](memory-taxonomy.md): `preference + convention + fact` map to *semantic* memory; `procedure` maps to *procedural* memory; `judgment + strategy` map to *evaluative* memory. The four-type taxonomy is conceptual framing; the six-value `kind` field is what appears in artifacts.
+**Relationship to the cognitive taxonomy** described in [memory-taxonomy.md](memory-taxonomy.md): `preference + convention + fact` map to *semantic* memory; `procedure` maps to *procedural* memory; `judgment + strategy` map to *evaluative* memory; `boundary + revision-trigger + failure-case` are produced by Phase 4 dialogic learning and carry structured expert know-how. The cognitive taxonomy is conceptual framing; the `kind` field is what appears in artifacts.
 
 ---
 
@@ -288,9 +291,31 @@ These thresholds are configurable and expected to be tuned through experience.
 
 ## Storage
 
-### Current implementation
+All storage files are plain JSON or JSONL — no binary formats, no TypeScript-specific serialisation. Any language that can read JSON can read and write them directly.
 
-JSONL file at `~/.openclaw/knowledge/artifacts.jsonl` (overridable via `KNOWLEDGE_STORE_PATH`). One artifact per line. Simple, human-inspectable, git-friendly.
+### Artifact store
+
+JSONL file at `~/.openclaw/knowledge/artifacts.jsonl` (overridable via `KNOWLEDGE_STORE_PATH`). One JSON object per line. Simple, human-inspectable, git-friendly.
+
+### Phase 4 session files
+
+Dialogic learning sessions are persisted separately as JSON objects at:
+
+```
+~/.openclaw/knowledge/sessions/<session-id>.json
+```
+
+Each file contains the full state of one expert session: the learning objective, domain, all dialogue turns, candidate rules with gap status, question history, and the IDs of artifacts promoted at session end. Session files are retained permanently as the audit record after the session ends.
+
+### Communication Profile
+
+User-level dialogue style preferences are stored at:
+
+```
+~/.openclaw/knowledge/communication-profile.json
+```
+
+This file is separate from session files and from `artifacts.jsonl` because it is user-level meta-knowledge — about how to conduct dialogue with this expert — rather than domain-specific knowledge.
 
 ### Future considerations
 
@@ -299,4 +324,4 @@ As the artifact count grows and graph traversal becomes important, the storage l
 - A lightweight graph database or adjacency list structure
 - Vector embeddings for semantic retrieval (Phase 2+)
 
-The storage backend is abstracted behind `persist()` and `retrieve()` functions in `store.ts`. Changing the storage implementation does not affect the artifact format or the rest of the pipeline.
+The storage backend is abstracted behind `persist()` and `retrieve()` operations (TypeScript reference: `store.ts`). Changing the storage implementation does not affect the artifact format or the rest of the pipeline.
