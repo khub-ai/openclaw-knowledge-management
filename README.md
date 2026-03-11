@@ -96,9 +96,9 @@ The system treats dialogue as a learning substrate and produces durable knowledg
 | Milestone | What it delivers | Status |
 |---|---|---|
 | **1a — Scaffolding** | Pipeline architecture with placeholder heuristics, playground | ✅ Done |
-| **1b — Explicit "remember"** | User says "remember this" → LLM-backed artifact creation → retrieval in future sessions | **Next** |
-| **1c — Passive elicitation** | Agent observes conversation via hooks and proposes knowledge without explicit instruction | Planned |
-| **1d — Tier 1 triggering** | Keyword index enables zero-cost retrieval on every message | Planned |
+| **1b — Explicit "remember"** | User says "remember this" → LLM-backed artifact creation → retrieval in future sessions | ✅ Done |
+| **1c — Passive elicitation** | Agent observes conversation via hooks and proposes knowledge without explicit instruction | 🔄 Core logic done; hook wiring pending |
+| **1d — Tier 1 triggering** | Keyword index enables zero-cost retrieval on every message | 🔄 Core logic done; auto-fire wiring pending |
 
 ### Long-term (Phases 2–5)
 
@@ -133,6 +133,10 @@ khub-knowledge-fabric/
 ├── tools/
 │   └── pil-chat/               # Interactive CLI chatbot for testing PIL
 │       └── index.ts
+├── specs/                      # Design and mechanism specifications
+│   ├── expert-to-agent-dialogic-learning.md            # Spec for learning from experts via dialogue
+│   ├── expert-to-agent-dialogic-learning-example-investing.md  # Worked example (investing domain)
+│   └── learnable-procedural-primitives-runtime.md      # Spec for LLM-centered procedural learning runtime
 └── docs/                       # Design documents
     ├── memory-taxonomy.md      # Four memory types, generalization, cognitive mechanisms
     ├── architecture.md         # Tiered triggering, knowledge graph, artifact schema
@@ -142,6 +146,9 @@ khub-knowledge-fabric/
     ├── security.md             # Threat model, risks, and mitigations by phase
     ├── enterprise-vision.md    # Scalability, institutional knowledge, tradeable artifacts, governance, investment thesis
     ├── faq.md                  # Frequently asked questions
+    ├── glossary.md             # Definitions for all key terms used across the project
+    ├── dialogic-learning-positioning.md  # Landscape comparison: expert-to-agent dialogic learning
+    ├── positioning-doc.md      # AI-assisted strategic positioning analysis
     ├── openclaw-plugin-setup.md # Installing and running PIL inside OpenClaw
     └── benchmarks/             # Annotated walkthroughs of runnable test programs
 ```
@@ -193,12 +200,16 @@ Milestones 1a–1d are implemented. The LLM-backed pipeline is functional and te
 | **Test suite** | `apps/computer-assistant/src/tests/` | 111 tests covering extraction, store, pipeline, scenarios, and benchmarks |
 | **Benchmark suite** | `apps/computer-assistant/benchmarks/` | Extraction precision/recall/F1; retrieval hit rate; 18+ scenarios |
 
-### What's next (Phase 2 onward)
+### Completing Phase 1
 
-- OpenClaw hook wiring for fully passive per-message elicitation (no explicit instruction needed)
+- **1c hook wiring**: register `message_received` hook in `index.ts` to call `processMessage()` on every inbound OpenClaw message + sender verification guard
+- **1d auto-fire wiring**: wire `retrieve()` to fire automatically on every `message_received`, stage results in session state, inject via `before_prompt_build`
+
+### Phase 2 onward
+
 - True Tier-2 triggering: cheap LLM disambiguation of partial tag matches
 - Decay: effective confidence decreases for unretrieved, unreinforced artifacts
-- Semantic/vector retrieval (Phase 2+)
+- Semantic/vector retrieval
 - Evaluative knowledge generalization (judgment heuristics, value frameworks)
 - Procedural recipe compilation to executable programs (Phase 3)
 - Import/export and cross-platform portability (Phase 4)

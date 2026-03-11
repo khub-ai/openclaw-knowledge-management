@@ -220,3 +220,15 @@ We defer the specifics deliberately: the right design will be clearer once phase
 | **Phase 3** | Procedural recipes, optional code synthesis | Per procedure compilation |
 | **Phase 4** | Standard format, import/export, cross-agent | None (format work) |
 | **Phase 5** | Governance, sharing, ecosystem | TBD |
+
+---
+
+## Related specifications
+
+These specs detail specific mechanisms and patterns that extend the roadmap phases above.
+
+- **[Expert-to-Agent Dialogic Learning](../specs/expert-to-agent-dialogic-learning.md)** — A Phase 2-era learning pattern in which an agent acquires deep, reusable knowledge from a domain expert through structured back-and-forth dialogue. Produces procedures, judgment rules, boundary conditions, and revision triggers rather than raw transcripts.
+  - Worked example: [Learning long-term investing judgment from an expert investor](../specs/expert-to-agent-dialogic-learning-example-investing.md)
+  - Landscape positioning: [Expert-to-Agent Dialogic Learning In The Current Landscape](./dialogic-learning-positioning.md)
+
+- **[LLM-Centered Procedural Learning Runtime](../specs/learnable-procedural-primitives-runtime.md)** — A Phase 3-era runtime for solving a fixed known set of structured problems through an LLM-centered loop of attempt, user guidance, revision, generalization, and validated artifact storage. Domain adapters (e.g. ARC) are optional; the runtime is domain-general.
