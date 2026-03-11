@@ -1,6 +1,6 @@
 # Roadmap
 
-This project is structured in five phases, progressing from a working personal knowledge store toward a portable, cross-agent knowledge ecosystem. Each phase produces something independently useful.
+This project is structured in six phases, progressing from a working personal knowledge store toward a portable, cross-agent knowledge ecosystem. Each phase produces something independently useful.
 
 **The near-term priority is practical utility.** Phase 1 is broken into incremental milestones so that something simple but functional is available soon, while the longer-term vision (phases 2–5) demonstrates that the architecture can support ambitious goals.
 
@@ -29,16 +29,15 @@ Phase 1 is broken into four milestones. Each produces a working system — the n
 - 74 unit + scenario tests; extraction/retrieval benchmark suite
 - **What you get:** A functional personal knowledge store. Knowledge accumulates from dialog, consolidates into rules, and is injected into future sessions. Artifacts are JSONL files the user can inspect and edit.
 
-### Milestone 1c — Passive elicitation via hooks *(core logic done; hook wiring pending)*
-- `processMessage()` already handles passive observation — no change to the core pipeline needed
-- Remaining work: register `message_received` hook in `index.ts` to call `processMessage()` on every inbound message in OpenClaw
-- Add sender verification before extraction (required security guard — see [security.md](security.md))
-- Deduplicate against existing store (handled by `matchCandidate()`)
+### Milestone 1c — Passive elicitation via hooks ✅ *(done)*
+- `message_received` hook registered in `index.ts` and `src/hooks.ts`; calls `processMessage()` on every inbound OpenClaw message
+- Sender verification guard (`isTrustedSender()`) enforces trusted-sender allowlist before extraction (see [security.md](security.md))
+- Deduplication against existing store handled by `matchCandidate()` in the core pipeline
 - **What you get:** The agent learns from any conversation without explicit instruction.
 
-### Milestone 1d — Tier 1 reflexive triggering *(retrieval logic done; auto-fire wiring pending)*
-- `retrieve()` already uses tag-overlap scoring (Tier 1 equivalent) to return relevant artifacts
-- Remaining work: wire `retrieve()` to fire automatically on every `message_received`, stage results in session state for injection via `before_prompt_build`
+### Milestone 1d — Tier 1 reflexive triggering ✅ *(done)*
+- `before_prompt_build` hook fires `retrieve()` automatically on every prompt; results injected as `prependContext`
+- Tag-overlap scoring (Tier 1 equivalent) returns relevant artifacts at near-zero cost
 - True in-memory inverted index (`tagIndex`, `topicIndex`) for zero-cost lookup at scale
 - **What you get:** Knowledge retrieval on every message at near-zero cost. High-confidence artifacts applied automatically; lower-confidence ones presented as suggestions.
 
@@ -52,6 +51,8 @@ A developer can install the extension, accumulate knowledge across sessions (bot
 **Goal:** Turn specific observations into general rules and patterns.
 
 This is the transition from "memory" to "knowledge management." The agent stops merely recording what the user said and starts producing generalized rules, conventions, and judgment heuristics that apply across contexts.
+
+> **Note:** Phase 2 covers *passive* generalization — the agent learning automatically from ordinary use. *Active* expert-directed learning (where the agent conducts purposeful dialogue to elicit procedures, judgments, and revision rules from a domain expert) is a distinct mode addressed in Phase 4.
 
 ### Key capabilities
 - Episodic → semantic generalization (e.g., 5 corrections of summary format → 1 preference rule: "always use bullet points")
@@ -90,7 +91,31 @@ For repeatable tasks, the agent writes a program once then runs it reliably. For
 
 ---
 
-## Phase 4 — Portability and Cross-Agent Compatibility
+## Phase 4 — Expert-to-Agent Dialogic Learning
+
+**Goal:** Agent acquires deep, reusable knowledge from a domain expert through structured dialogue — not passive observation.
+
+This is a distinct learning mode from Phase 2's passive generalization. Instead of the agent inferring rules from accumulated ordinary interaction, it conducts purposeful back-and-forth with an expert to surface tacit know-how that rarely appears in documents: procedures, judgment heuristics, boundary conditions, and revision triggers.
+
+→ *[Full spec: Expert-to-Agent Dialogic Learning](../specs/expert-to-agent-dialogic-learning.md)* · *[Worked example: investing domain](../specs/expert-to-agent-dialogic-learning-example-investing.md)* · *[Landscape positioning](./dialogic-learning-positioning.md)*
+
+### Key capabilities
+- Structured dialogue loop: case elicitation → process extraction → tentative generalization → boundary testing → revision question → consolidated artifact
+- Nine-type question taxonomy (case elicitation, process extraction, priority, abstraction, boundary, counterexample, revision, transfer, confidence); taxonomy remains open-ended and extends during a session
+- Minimum consolidation criteria before a rule is treated as deep knowledge: concrete case + generalization + scope statement + exception or failure mode + revision trigger
+- Six artifact types produced: procedural, judgment, strategy, boundary, revision, and failure
+- Expert correction of tentative generalizations as a first-class design mechanism
+- Artifacts created by dialogic sessions are fully compatible with the Phase 2 accumulation and confidence model
+
+### Knowledge economy incentive
+Dialogic learning becomes economically self-sustaining when combined with Phase 5 portability: domain experts who invest in structured elicitation sessions can package and distribute the resulting artifacts. A senior tax attorney, clinical pharmacist, or experienced investment analyst can publish a curated knowledge package representing their expertise — importable directly into any PIL-compatible agent. The portability layer provides the economic mechanism that makes expert effort worthwhile.
+
+### Deliverable
+A user can conduct a structured expert session in which the agent learns deep, bounded, revisable know-how — the kind of knowledge that takes years to accumulate and normally leaves when the expert leaves. Results are stored as the same structured artifacts used throughout PIL, inspectable and portable from day one.
+
+---
+
+## Phase 5 — Portability and Cross-Agent Compatibility
 
 **Goal:** Knowledge artifacts work across agents and platforms.
 
@@ -107,11 +132,11 @@ A user can export their knowledge from OpenClaw and import it into another assis
 
 ---
 
-## Phase 5 — Governance and Ecosystem *(long-term)*
+## Phase 6 — Governance and Ecosystem *(long-term)*
 
 **Goal:** Knowledge as a shareable, governed, and potentially tradeable unit — beyond the individual user.
 
-This phase converts the artifact format and ownership model built in phases 1–4 into a foundation for team and organizational knowledge management. It is also where a new kind of economic value becomes possible.
+This phase converts the artifact format and ownership model built in phases 1–5 into a foundation for team and organizational knowledge management. It is also where a new kind of economic value becomes possible.
 
 → *[Enterprise vision: detailed considerations and business models](enterprise-vision.md)*
 
@@ -167,7 +192,7 @@ This is qualitatively different from document retention. The knowledge is *activ
 
 ### Ecosystem: a new economic layer for knowledge artifacts
 
-When knowledge artifacts are user-owned, portable, verifiable, and typed, they become a tradeable unit. This is the economic opportunity Phase 5 opens.
+When knowledge artifacts are user-owned, portable, verifiable, and typed, they become a tradeable unit. This is the economic opportunity Phase 6 opens.
 
 **Knowledge packages as products**
 
@@ -195,16 +220,16 @@ None of these require fundamental changes to the artifact format. They are servi
 
 ---
 
-### Technical foundation for Phase 5
+### Technical foundation for Phase 6
 
-The architecture built in phases 1–4 is designed to support these use cases without rearchitecting:
+The architecture built in phases 1–5 is designed to support these use cases without rearchitecting:
 
 - **Artifact format** is text-based, versioned, and typed — it can carry governance metadata as optional enrichment fields without breaking existing consumers.
 - **Provenance fields** already record creator, source, confidence, and revision history — a compliance audit trail is primarily a query and presentation layer on top of what already exists.
 - **Model-agnostic** design means org knowledge is not locked to whichever LLM a team uses today; it survives vendor transitions.
-- **Additive-only field evolution** means Phase 5 governance fields are backwards-compatible with Phase 1 artifacts.
+- **Additive-only field evolution** means Phase 6 governance fields are backwards-compatible with Phase 1 artifacts.
 
-We defer the specifics deliberately: the right design will be clearer once phases 1–4 have generated real-world experience with how artifacts are used, shared, and valued. What we avoid is making decisions in phases 1–4 that would foreclose Phase 5 options.
+We defer the specifics deliberately: the right design will be clearer once phases 1–5 have generated real-world experience with how artifacts are used, shared, and valued. What we avoid is making decisions in phases 1–5 that would foreclose Phase 6 options.
 
 ---
 
@@ -214,12 +239,13 @@ We defer the specifics deliberately: the right design will be clearer once phase
 |---|---|---|
 | **1a** ✅ | Pipeline scaffolding, placeholder heuristics | None |
 | **1b** ✅ | LLM extraction, evidence accumulation, consolidation, tag retrieval, inject labeling, computer-assistant demo, 74 tests | Per message processed |
-| **1c** 🔄 | Core logic done; `message_received` hook wiring + sender verification pending | Per message (batch possible) |
-| **1d** 🔄 | Tag-based retrieval done; auto-fire on every message + in-memory inverted index pending | None (index lookup) |
+| **1c** ✅ | `message_received` hook + sender verification; agent passively learns from every inbound message | Per message (batch possible) |
+| **1d** ✅ | `before_prompt_build` hook; `retrieve()` fires automatically; relevant artifacts injected into every prompt | None (index lookup) |
 | **Phase 2** | Generalization, Tier 2 triggering, decay, feedback | Occasional cheap LLM calls |
 | **Phase 3** | Procedural recipes, optional code synthesis | Per procedure compilation |
-| **Phase 4** | Standard format, import/export, cross-agent | None (format work) |
-| **Phase 5** | Governance, sharing, ecosystem | TBD |
+| **Phase 4** | Expert-to-Agent Dialogic Learning: structured expert sessions, six artifact types, minimum consolidation criteria | Per session (structured dialogue) |
+| **Phase 5** | Standard format, import/export, cross-agent compatibility | None (format work) |
+| **Phase 6** | Governance, sharing, ecosystem | TBD |
 
 ---
 
@@ -227,7 +253,7 @@ We defer the specifics deliberately: the right design will be clearer once phase
 
 These specs detail specific mechanisms and patterns that extend the roadmap phases above.
 
-- **[Expert-to-Agent Dialogic Learning](../specs/expert-to-agent-dialogic-learning.md)** — A Phase 2-era learning pattern in which an agent acquires deep, reusable knowledge from a domain expert through structured back-and-forth dialogue. Produces procedures, judgment rules, boundary conditions, and revision triggers rather than raw transcripts.
+- **[Expert-to-Agent Dialogic Learning](../specs/expert-to-agent-dialogic-learning.md)** — A Phase 4 active learning mode in which an agent acquires deep, reusable knowledge from a domain expert through structured back-and-forth dialogue. Architecturally distinct from Phase 2's passive generalization: the agent conducts purposeful dialogue rather than inferring rules from ordinary use. Produces procedures, judgment rules, boundary conditions, and revision triggers rather than raw transcripts.
   - Worked example: [Learning long-term investing judgment from an expert investor](../specs/expert-to-agent-dialogic-learning-example-investing.md)
   - Landscape positioning: [Expert-to-Agent Dialogic Learning In The Current Landscape](./dialogic-learning-positioning.md)
 

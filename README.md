@@ -97,17 +97,18 @@ The system treats dialogue as a learning substrate and produces durable knowledg
 |---|---|---|
 | **1a — Scaffolding** | Pipeline architecture with placeholder heuristics, playground | ✅ Done |
 | **1b — Explicit "remember"** | User says "remember this" → LLM-backed artifact creation → retrieval in future sessions | ✅ Done |
-| **1c — Passive elicitation** | Agent observes conversation via hooks and proposes knowledge without explicit instruction | 🔄 Core logic done; hook wiring pending |
-| **1d — Tier 1 triggering** | Keyword index enables zero-cost retrieval on every message | 🔄 Core logic done; auto-fire wiring pending |
+| **1c — Passive elicitation** | Agent observes conversation via hooks and proposes knowledge without explicit instruction | ✅ Done |
+| **1d — Tier 1 triggering** | Keyword index enables zero-cost retrieval on every message | ✅ Done |
 
-### Long-term (Phases 2–5)
+### Long-term (Phases 2–6)
 
 | Phase | Focus | Status |
 |---|---|---|
 | **2 — Generalization Engine** | Episodic → semantic/evaluative generalization, Tier 2 triggering, decay, feedback | Planned |
 | **3 — Procedural Memory & Code Synthesis** | Structured recipes, optional program compilation, tool library | Planned |
-| **4 — Portability** | Standard artifact format, import/export, cross-agent compatibility | Planned |
-| **5 — Governance & Ecosystem** | Team/org knowledge tiers, access controls, compliance audit trails, knowledge ecosystem and new business models | Long-term |
+| **4 — Expert-to-Agent Dialogic Learning** | Active expert elicitation through structured dialogue; produces procedures, judgments, boundary conditions, and revision triggers | Planned |
+| **5 — Portability** | Standard artifact format, import/export, cross-agent compatibility | Planned |
+| **6 — Governance & Ecosystem** | Team/org knowledge tiers, access controls, compliance audit trails, knowledge ecosystem and new business models | Long-term |
 
 → *[Detailed roadmap with milestones](docs/roadmap.md)* · *[Enterprise vision and investment thesis](docs/enterprise-vision.md)*
 
@@ -195,24 +196,24 @@ Milestones 1a–1d are implemented. The LLM-backed pipeline is functional and te
 | **Tag-based retrieval** | `src/store.ts` | `retrieve()` — tag overlap scoring (Tier 1) + content fallback |
 | **Inject label logic** | `src/store.ts` | `[established]` / `[suggestion]` / `[provisional]` gating |
 | **Feedback tracking** | `src/store.ts` | `recordAccepted()` / `recordRejected()` — nudge confidence from user signals |
-| **Plugin wiring** | `index.ts` / `tools.ts` | `knowledge_search` tool registered with OpenClaw; hook stubs ready |
+| **Plugin wiring** | `index.ts` / `src/hooks.ts` / `tools.ts` | `knowledge_search` tool registered; `message_received` + `before_prompt_build` hooks implemented (Milestones 1c/1d) |
 | **Computer-assistant demo** | `apps/computer-assistant/` | REPL, Anthropic LLM adapter, OS actions, PIL-aware agent |
-| **Test suite** | `apps/computer-assistant/src/tests/` | 111 tests covering extraction, store, pipeline, scenarios, and benchmarks |
+| **Test suite** | `apps/computer-assistant/src/tests/` | 112 tests covering extraction, store, pipeline, scenarios, and benchmarks |
 | **Benchmark suite** | `apps/computer-assistant/benchmarks/` | Extraction precision/recall/F1; retrieval hit rate; 18+ scenarios |
 
-### Completing Phase 1
+### Phase 1 complete ✅
 
-- **1c hook wiring**: register `message_received` hook in `index.ts` to call `processMessage()` on every inbound OpenClaw message + sender verification guard
-- **1d auto-fire wiring**: wire `retrieve()` to fire automatically on every `message_received`, stage results in session state, inject via `before_prompt_build`
+All four milestones are implemented. The LLM-backed pipeline is functional: knowledge is extracted passively from every inbound message, accumulated across interactions, consolidated into generalized rules, and injected into future prompts via the `before_prompt_build` hook.
 
-### Phase 2 onward
+### Phase 2 and beyond
 
 - True Tier-2 triggering: cheap LLM disambiguation of partial tag matches
 - Decay: effective confidence decreases for unretrieved, unreinforced artifacts
 - Semantic/vector retrieval
 - Evaluative knowledge generalization (judgment heuristics, value frameworks)
 - Procedural recipe compilation to executable programs (Phase 3)
-- Import/export and cross-platform portability (Phase 4)
+- Expert-to-Agent Dialogic Learning: structured expert sessions, six artifact types (Phase 4)
+- Import/export and cross-platform portability (Phase 5)
 - CLI for inspecting, editing, and deleting artifacts
 
 ## Non-goals
@@ -224,7 +225,7 @@ Milestones 1a–1d are implemented. The LLM-backed pipeline is functional and te
 
 ## Status
 
-Milestones 1a–1d implemented. The LLM-backed pipeline is functional: knowledge is extracted from user messages, accumulated across interactions, consolidated into generalized rules, and injected into future prompts. A working computer-assistant demo shows PIL learning user-specific patterns (aliases, file-handling preferences, procedures) across sessions. 111 tests pass with no API key required; a benchmark suite measures extraction precision/recall and retrieval hit rate against a curated scenario set.
+Milestones 1a–1d implemented. The LLM-backed pipeline is functional: knowledge is extracted from user messages, accumulated across interactions, consolidated into generalized rules, and injected into future prompts. A working computer-assistant demo shows PIL learning user-specific patterns (aliases, file-handling preferences, procedures) across sessions. 112 tests pass with no API key required; a benchmark suite measures extraction precision/recall and retrieval hit rate against a curated scenario set.
 
 ## Contributing
 
