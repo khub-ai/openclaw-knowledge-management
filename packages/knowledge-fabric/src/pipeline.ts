@@ -30,6 +30,7 @@ import {
   persist,
   getInjectLabel,
   revise,
+  detectConflicts,
   type InjectLabel,
 } from "./store.js";
 
@@ -46,6 +47,23 @@ export type InjectableArtifact = {
   label: InjectLabel;
 };
 
+/**
+ * Phase 2b — Represents a detected contradiction between a newly created or
+ * updated artifact and an existing consolidated artifact.
+ *
+ * The conflict is stored on both artifacts as a `contradicts` relation edge.
+ * The `newArtifact` has its `confidence` penalized by ~30% to signal that the
+ * knowledge is disputed until the user resolves the contradiction.
+ */
+export type ConflictReport = {
+  /** The newly created or updated artifact (penalized confidence, has contradicts edge) */
+  newArtifact: KnowledgeArtifact;
+  /** The existing consolidated artifact it contradicts (also has contradicts back-edge) */
+  conflictingArtifact: KnowledgeArtifact;
+  /** One-sentence explanation of the contradiction */
+  explanation: string;
+};
+
 export type ProcessResult = {
   /** Candidates the LLM extracted from the message */
   candidates: ExtractionCandidate[];
@@ -60,6 +78,12 @@ export type ProcessResult = {
    * query, use retrieve() from store.ts directly.
    */
   injectable: InjectableArtifact[];
+  /**
+   * Phase 2b — Conflicts detected between new/updated artifacts and existing
+   * consolidated knowledge. Empty array when conflict detection is disabled
+   * (conflictLlm = null) or when no contradictions are found.
+   */
+  conflicts: ConflictReport[];
 };
 
 // ---------------------------------------------------------------------------
@@ -70,25 +94,29 @@ export type ProcessResult = {
  * Process a user message through the full PIL pipeline.
  *
  * Stages:
- *   1. Extract — LLM identifies persistable knowledge candidates
- *   2. Match   — compare each candidate against existing store artifacts
- *   3. Resolve — novel → create; accumulating → add evidence; confident → update stats
- *   4. Decide  — determine which newly-created/updated artifacts are injectable
+ *   1. Extract   — LLM identifies persistable knowledge candidates
+ *   2. Match     — compare each candidate against existing store artifacts
+ *   3. Resolve   — novel → create; accumulating → add evidence; confident → update stats
+ *   3.5 Conflict — check new/updated artifacts for contradictions (Phase 2b)
+ *   4. Decide    — determine which newly-created/updated artifacts are injectable
  *
- * @param message    - User's message in any language
- * @param llm        - LLM adapter function (used for extraction + consolidation)
- * @param provenance - Session or message reference stored with each artifact
- * @param matchLlm   - Optional separate LLM for Stage 2 semantic matching.
- *                     Defaults to `llm` (same model). Pass `null` to disable
- *                     semantic matching and use Jaccard-only tag matching.
- *                     A cheap/fast model (e.g. haiku) works well here since
- *                     the task is a simple pattern-equivalence classification.
+ * @param message     - User's message in any language
+ * @param llm         - LLM adapter function (used for extraction + consolidation)
+ * @param provenance  - Session or message reference stored with each artifact
+ * @param matchLlm    - Optional separate LLM for Stage 2 semantic matching.
+ *                      Defaults to `llm`. Pass `null` to disable semantic matching.
+ *                      A cheap/fast model (e.g. haiku) works well here.
+ * @param conflictLlm - Optional LLM for Phase 2b conflict detection.
+ *                      Defaults to `matchLlm ?? llm`. Pass `null` to disable
+ *                      conflict detection entirely (e.g. high-throughput batch
+ *                      processing where conflicts are checked separately).
  */
 export async function processMessage(
   message: string,
   llm: LLMFn,
   provenance = "unknown",
   matchLlm: LLMFn | null = llm,
+  conflictLlm: LLMFn | null = matchLlm ?? llm,
 ): Promise<ProcessResult> {
   // ── Stage 1: Extract ──────────────────────────────────────────────────────
   const existingTags = await getActiveTags();
@@ -113,6 +141,57 @@ export async function processMessage(
     }
   }
 
+  // ── Stage 3.5: Conflict detection (Phase 2b) ─────────────────────────────
+  //
+  // For each new or updated artifact, ask a cheap LLM whether it directly
+  // contradicts any existing consolidated artifact with overlapping content.
+  // On conflict:
+  //   - The new artifact's confidence is penalized 30% (disputed knowledge)
+  //   - Both artifacts receive a "contradicts" relation edge (bidirectional)
+  //   - The penalized version replaces the original in created/updated arrays
+  //
+  // Stage 4 (injectable decision) runs on the penalized artifacts, so a
+  // contradicted claim is less likely to auto-inject as [established].
+  const conflicts: ConflictReport[] = [];
+  if (conflictLlm !== null && (created.length > 0 || updated.length > 0)) {
+    const toCheck = [...created, ...updated];
+    for (const artifact of toCheck) {
+      const detected = await detectConflicts(artifact, conflictLlm);
+      for (const { conflictingArtifact, explanation } of detected) {
+        // Penalize confidence: contradicted claim is uncertain until resolved
+        const penalized: KnowledgeArtifact = {
+          ...artifact,
+          confidence: Math.max(
+            0.10,
+            Math.round(artifact.confidence * 0.70 * 100) / 100,
+          ),
+          relations: [
+            ...(artifact.relations ?? []),
+            { type: "contradicts" as const, targetId: conflictingArtifact.id, note: explanation },
+          ],
+        };
+        await persist(penalized);
+
+        // Add reciprocal edge to the existing artifact (deduplicated)
+        const updatedRelations = [
+          ...(conflictingArtifact.relations ?? []).filter(
+            (r) => !(r.type === "contradicts" && r.targetId === artifact.id),
+          ),
+          { type: "contradicts" as const, targetId: artifact.id, note: explanation },
+        ];
+        await revise(conflictingArtifact, { relations: updatedRelations });
+
+        // Replace in created/updated so Stage 4 sees the penalized version
+        const ci = created.findIndex((a) => a.id === artifact.id);
+        if (ci >= 0) created[ci] = penalized;
+        const ui = updated.findIndex((a) => a.id === artifact.id);
+        if (ui >= 0) updated[ui] = penalized;
+
+        conflicts.push({ newArtifact: penalized, conflictingArtifact, explanation });
+      }
+    }
+  }
+
   // ── Stage 4: Decide injectable ────────────────────────────────────────────
   const injectable: InjectableArtifact[] = [];
   for (const a of [...created, ...updated]) {
@@ -120,7 +199,7 @@ export async function processMessage(
     if (label) injectable.push({ artifact: a, label });
   }
 
-  return { candidates, created, updated, injectable };
+  return { candidates, created, updated, injectable, conflicts };
 }
 
 // ---------------------------------------------------------------------------

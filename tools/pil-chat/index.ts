@@ -34,6 +34,7 @@ import {
   processMessage,
   formatForInjection,
   type InjectableArtifact,
+  type ConflictReport,
 } from "@khub-ai/knowledge-fabric/pipeline";
 import {
   retrieve,
@@ -366,11 +367,22 @@ function toPilActivity(
       tags: c.tags ?? [],
       content: c.content,
     })),
+    conflicts: (result.conflicts ?? []).map((c: ConflictReport) => ({
+      newArtifactId: c.newArtifact.id,
+      conflictingArtifactId: c.conflictingArtifact.id,
+      explanation: c.explanation,
+    })),
   };
 }
 
-/** Convert a KnowledgeArtifact to the dashboard-safe StoreEntry shape. */
-function toStoreEntry(a: KnowledgeArtifact): StoreEntry {
+/**
+ * Convert a KnowledgeArtifact to the dashboard-safe StoreEntry shape.
+ *
+ * @param a            - The artifact to convert
+ * @param allArtifacts - Full artifact list (including retired) used to resolve
+ *                       conflict cross-references. Pass [] when not available.
+ */
+function toStoreEntry(a: KnowledgeArtifact, allArtifacts: KnowledgeArtifact[] = []): StoreEntry {
   const eff = effectiveConfidence(a);
 
   // Compute decay components for the dashboard decay panel.
@@ -390,6 +402,18 @@ function toStoreEntry(a: KnowledgeArtifact): StoreEntry {
     decayFactor = Math.pow(0.5, daysSince / halfLifeDays);
   }
 
+  // Resolve conflict cross-references for the detail modal.
+  const conflicts = (a.relations ?? [])
+    .filter((r) => r.type === "contradicts")
+    .map((r) => {
+      const conflicting = allArtifacts.find((x) => x.id === r.targetId);
+      return {
+        id: r.targetId,
+        content: conflicting?.content ?? "(artifact not found)",
+        explanation: r.note ?? "",
+      };
+    });
+
   return {
     id: a.id,
     kind: a.kind,
@@ -407,13 +431,15 @@ function toStoreEntry(a: KnowledgeArtifact): StoreEntry {
     validationStrength,
     halfLifeDays:  Math.round(halfLifeDays),
     decayFactor:   Math.round(decayFactor * 1000) / 1000,
+    conflicts,
   };
 }
 
 /** Load and map all active (non-retired) artifacts to StoreEntry[]. */
 async function buildStoreSnapshot(): Promise<StoreEntry[]> {
   const all = await loadAll();
-  return all.filter((a) => !a.retired).map(toStoreEntry);
+  const active = all.filter((a) => !a.retired);
+  return active.map((a) => toStoreEntry(a, all));
 }
 
 /**
@@ -506,12 +532,13 @@ function buildProcessTurn(
         commandOutput:
           `Path    : ${displayPath}\n` +
           `Total   : ${all.length}  (${active.length} active, ${all.length - active.length} retired)`,
-        storeSnapshot: active.map(toStoreEntry),
+        storeSnapshot: active.map((a) => toStoreEntry(a, all)),
       };
     }
 
     if (userInput === "/list") {
-      const active = (await loadAll()).filter((a) => !a.retired);
+      const all    = await loadAll();
+      const active = all.filter((a) => !a.retired);
       const output = active.length === 0
         ? "(no artifacts)"
         : active
@@ -522,7 +549,7 @@ function buildProcessTurn(
               return `${label} [${a.kind}/${a.stage ?? "?"}] conf=${conf}  "${snip}"`;
             })
             .join("\n");
-      return { isCommand: true, commandOutput: output, storeSnapshot: active.map(toStoreEntry) };
+      return { isCommand: true, commandOutput: output, storeSnapshot: active.map((a) => toStoreEntry(a, all)) };
     }
 
     if (userInput === "/clear") {
@@ -638,7 +665,7 @@ const deleteArtifactsFn: DeleteArtifactsFn = async (ids: string[]): Promise<Stor
   const all       = await loadAll();
   const remaining = all.filter((a) => !ids.includes(a.id));
   await rewriteStore(remaining);
-  return remaining.filter((a) => !a.retired).map(toStoreEntry);
+  return remaining.filter((a) => !a.retired).map((a) => toStoreEntry(a, remaining));
 };
 
 const setArtifactsConfidenceFn: SetArtifactsConfidenceFn = async (
@@ -648,7 +675,7 @@ const setArtifactsConfidenceFn: SetArtifactsConfidenceFn = async (
   const all     = await loadAll();
   const updated = all.map((a) => ids.includes(a.id) ? { ...a, confidence } : a);
   await rewriteStore(updated);
-  return updated.filter((a) => !a.retired).map(toStoreEntry);
+  return updated.filter((a) => !a.retired).map((a) => toStoreEntry(a, updated));
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────

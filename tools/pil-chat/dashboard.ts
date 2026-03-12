@@ -40,6 +40,12 @@ export interface PilActivity {
     tags: string[];
     content: string;
   }>;
+  /** Phase 2b — conflicts detected during this turn */
+  conflicts: Array<{
+    newArtifactId: string;
+    conflictingArtifactId: string;
+    explanation: string;
+  }>;
 }
 
 export interface StoreEntry {
@@ -66,6 +72,13 @@ export interface StoreEntry {
   halfLifeDays: number;
   /** Current decay factor (1.0 = no decay, 0.0 = fully decayed). */
   decayFactor: number;
+  // ── Conflict fields (Phase 2b) ───────────────────────────────────────────
+  /** Artifacts this entry directly contradicts, resolved at snapshot time. */
+  conflicts: Array<{
+    id: string;
+    content: string;
+    explanation: string;
+  }>;
 }
 
 export interface TurnResult {
@@ -220,9 +233,14 @@ body {
 .ev-updated    { color: #dcdcaa; }
 .ev-injectable { color: #569cd6; }
 .ev-candidate  { color: #666; }
+.ev-conflict   { color: #c97c4a; font-weight: bold; }
 .ev-system     { color: #4a4a4a; font-style: italic; }
 .ev-error      { color: #f44747; }
 .ev-command    { color: #666; }
+.conflict-indicator {
+  color: #c97c4a; font-size: 11px; cursor: help;
+  margin-left: 3px; vertical-align: middle;
+}
 #store-scroll { overflow-y: auto; flex: 1; }
 #store-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 #store-table th {
@@ -593,10 +611,27 @@ function showDetail(a) {
       </div>\`;
   }
 
+  // Conflict section
+  let conflictsHtml = '';
+  if (a.conflicts && a.conflicts.length > 0) {
+    const items = a.conflicts.map(c =>
+      \`<div style="margin-bottom:6px;padding:6px 8px;background:#1e1a16;border:1px solid #5a3a1a;border-radius:2px">
+        <div style="color:#c97c4a;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">⚡ Contradicts</div>
+        <div style="color:#d4a870;font-size:11px;white-space:pre-wrap;word-break:break-word">\${esc(snip(c.content, 120))}</div>
+        <div style="color:#7a5c2a;font-size:10px;margin-top:3px;font-style:italic">\${esc(c.explanation)}</div>
+      </div>\`
+    ).join('');
+    conflictsHtml = \`
+      <div style="margin-top:10px;padding:8px 10px;background:#1a1a1a;border:1px solid #5a3a1a;border-radius:3px">
+        <div style="color:#c97c4a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-size:10px">⚡ Conflicts (\${a.conflicts.length})</div>
+        \${items}
+      </div>\`;
+  }
+
   document.getElementById('detail-meta').innerHTML =
     \`<b>\${esc(a.kind)}</b> / \${esc(a.stage)} &nbsp;·&nbsp; conf=\${a.confidence.toFixed(3)}\${ev}<br>\` +
     \`tags: \${esc(tags)}<br><span style="color:#555;font-size:10px">\${esc(a.id)}</span>\` +
-    decayHtml;
+    decayHtml + conflictsHtml;
   document.getElementById('detail-content').textContent = a.content;
   document.getElementById('detail-overlay').classList.add('open');
 }
@@ -686,6 +721,8 @@ function renderPilActivity(data) {
     addFeed('injectable', p, \`→ \${i.label} [\${i.kind}] conf=\${(i.confidence||0).toFixed(2)}  "\${snip(i.content, 45)}"\`);
   for (const c of (data.candidates || []))
     addFeed('candidate',  p, \`? [\${c.kind}/\${c.certainty}]  "\${snip(c.content, 45)}"\`);
+  for (const cf of (data.conflicts || []))
+    addFeed('conflict',   p, \`⚡ CONFLICT: "\${snip(cf.explanation, 70)}"\`);
 }
 
 // ── Store table ───────────────────────────────────────────────────────────────
@@ -693,7 +730,7 @@ function renderStore(entries) {
   // Keep the entries map in sync so the detail modal can look up full content.
   storeEntries = {};
   if (!entries || !entries.length) {
-    storeEl.innerHTML = '<tr><td colspan="6" style="color:#555;padding:8px;">(no artifacts)</td></tr>';
+    storeEl.innerHTML = '<tr><td colspan="7" style="color:#555;padding:8px;">(no artifacts)</td></tr>';
     selectedIds.clear();
     updateActionBar();
     return;
@@ -713,9 +750,12 @@ function renderStore(entries) {
                     ? 'kd-' + a.kind.replace('-','').replace('-','') : 'kd-fact';
     const stCls   = ['candidate','accumulating','consolidated'].includes(a.stage)
                     ? 'st-' + a.stage : 'st-candidate';
-    const lbl     = a.label
+    const conflictBadge = (a.conflicts && a.conflicts.length > 0)
+      ? \`<span class="conflict-indicator" title="⚡ \${esc(a.conflicts[0].explanation)}">⚠</span>\`
+      : '';
+    const lbl     = (a.label
                     ? \`<span class="\${labelCls(a.label)}">\${esc(a.label)}</span>\`
-                    : '<span class="lbl-none">—</span>';
+                    : '<span class="lbl-none">—</span>') + conflictBadge;
     const decayed = a.confidence - eff > 0.03;
     const decayHint = decayed
       ? \`<span class="decay-indicator" title="Decay active: stored=\${a.confidence.toFixed(2)} → eff=\${eff.toFixed(2)}">↓</span>\`

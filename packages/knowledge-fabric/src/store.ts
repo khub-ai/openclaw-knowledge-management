@@ -346,6 +346,107 @@ export async function matchCandidate(
 }
 
 // ---------------------------------------------------------------------------
+// Phase 2b — Conflict detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the prompt sent to the LLM to check whether a newly created or
+ * updated artifact directly contradicts any existing consolidated rules.
+ *
+ * The phrase "DIRECTLY CONTRADICT" is distinctive enough to serve as a
+ * reliable mock-LLM match key in tests.
+ */
+function buildConflictDetectionPrompt(
+  artifact: KnowledgeArtifact,
+  candidates: KnowledgeArtifact[],
+): string {
+  const numbered = candidates
+    .map((a, i) => `${i + 1}. [${a.kind}] "${a.content}"`)
+    .join("\n");
+
+  return `You are reviewing a knowledge base for contradictions.
+
+NEW KNOWLEDGE (kind: ${artifact.kind}):
+"${artifact.content}"
+
+EXISTING CONSOLIDATED RULES:
+${numbered}
+
+Does the new knowledge DIRECTLY CONTRADICT any existing rule?
+
+A contradiction means they give OPPOSITE guidance for the SAME situation:
+  - "always use X" vs "never use X"
+  - "prefer A over B" vs "prefer B over A"
+  - "do X first" vs "do Y first"
+
+NOT a contradiction:
+  - Different topics or contexts (unrelated preferences)
+  - Complementary rules that can both apply simultaneously
+  - One is more specific or conditional than the other
+
+If a contradiction exists, reply: CONTRADICTS <number>: <one-sentence explanation>
+If no contradiction: NONE`.trim();
+}
+
+/**
+ * Phase 2b — Detect whether a new or updated artifact directly contradicts
+ * any existing consolidated artifact in the store.
+ *
+ * A single cheap LLM call is made only when consolidated artifacts with
+ * overlapping tags or content exist. Returns at most one conflict per call —
+ * the most glaring contradiction found.
+ *
+ * No conflict is recorded if the pool of relevant consolidated artifacts is
+ * empty (fast path: no LLM call).
+ *
+ * @param artifact - The newly created or updated artifact to check
+ * @param llm      - LLM adapter (a fast/cheap model is sufficient)
+ */
+export async function detectConflicts(
+  artifact: KnowledgeArtifact,
+  llm: LLMFn,
+): Promise<{ conflictingArtifact: KnowledgeArtifact; explanation: string }[]> {
+  const all = await loadAll();
+  // Only consolidated, active artifacts; exclude the artifact itself
+  const pool = all.filter(
+    (a) => !a.retired && a.stage === "consolidated" && a.id !== artifact.id,
+  );
+  if (pool.length === 0) return [];
+
+  // Rank by tag overlap + content similarity; take top 8 to keep prompt small
+  const ranked = pool
+    .map((a) => ({
+      a,
+      score:
+        (artifact.tags?.length && a.tags?.length
+          ? tagOverlap(artifact.tags, a.tags) * 0.6
+          : 0) +
+        jaccard(artifact.content, a.content) * 0.4,
+    }))
+    .filter(({ score }) => score > 0.02)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(({ a }) => a);
+
+  if (ranked.length === 0) return [];
+
+  const prompt = buildConflictDetectionPrompt(artifact, ranked);
+  const response = (await llm(prompt)).trim();
+
+  if (!response || /^NONE/i.test(response)) return [];
+
+  const m = response.match(/^CONTRADICTS\s+(\d+):\s+(.+)$/i);
+  if (!m) return [];
+
+  const idx = parseInt(m[1]!, 10) - 1;
+  const explanation = m[2]!.trim();
+
+  if (idx < 0 || idx >= ranked.length) return [];
+
+  return [{ conflictingArtifact: ranked[idx]!, explanation }];
+}
+
+// ---------------------------------------------------------------------------
 // Evidence accumulation (Stage 3 — Resolve)
 // ---------------------------------------------------------------------------
 

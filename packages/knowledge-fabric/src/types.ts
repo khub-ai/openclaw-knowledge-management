@@ -65,11 +65,14 @@ export type RelationType =
   | "references"   // this artifact uses or depends on another
   | "constrains"   // this artifact limits how another is applied
   | "supersedes"   // this artifact replaced another (revision trail)
-  | "supports";    // this artifact provides evaluative guidance for another
+  | "supports"     // this artifact provides evaluative guidance for another
+  | "contradicts"; // Phase 2b: this artifact conflicts with another
 
 export type ArtifactRelation = {
   type: RelationType;
   targetId: string;
+  /** Optional human-readable note, e.g. the explanation of a detected conflict. */
+  note?: string;
 };
 
 // ---------------------------------------------------------------------------

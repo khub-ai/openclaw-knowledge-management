@@ -22,6 +22,7 @@ import {
   isInjectable,
   loadAll,
   effectiveConfidence,
+  detectConflicts,
 } from "@khub-ai/knowledge-fabric/store";
 import { candidateToArtifact } from "@khub-ai/knowledge-fabric/extract";
 import { CONFIDENCE_SEED, CONSOLIDATION_THRESHOLD, DECAY_CONSTANTS } from "@khub-ai/knowledge-fabric/types";
@@ -592,5 +593,113 @@ describe("effectiveConfidence", () => {
 
     const after = await loadAll();
     expect(after[0]?.lastRetrievedAt).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectConflicts — Phase 2b
+// ---------------------------------------------------------------------------
+
+describe("detectConflicts", () => {
+  it("returns empty array when no consolidated artifacts exist in the store", async () => {
+    const artifact = makeArtifact({
+      stage: "candidate",
+      tags: ["summary-format"],
+      content: "Always use bullet points",
+    });
+    // Store has nothing; pool will be empty — no LLM call needed
+    const neverCalled: import("@khub-ai/knowledge-fabric/types").LLMFn = async () => {
+      throw new Error("LLM should not be called when pool is empty");
+    };
+    const result = await detectConflicts(artifact, neverCalled);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array when LLM responds NONE", async () => {
+    const existing = makeArtifact({
+      stage: "consolidated",
+      tags: ["summary-format"],
+      content: "Always use bullet points for output",
+    });
+    await persist(existing);
+
+    const newArtifact = makeArtifact({
+      stage: "candidate",
+      tags: ["summary-format"],
+      content: "Use numbered lists for step-by-step output",
+    });
+
+    const noneMock = createPatternMockLLM([
+      { match: "DIRECTLY CONTRADICT", response: "NONE" },
+    ]);
+    const result = await detectConflicts(newArtifact, noneMock);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns a conflict when LLM responds CONTRADICTS", async () => {
+    const existing = makeArtifact({
+      id: "existing-rule",
+      stage: "consolidated",
+      tags: ["summary-format", "output-style"],
+      content: "Always use bullet points for summaries",
+    });
+    await persist(existing);
+
+    const newArtifact = makeArtifact({
+      stage: "candidate",
+      tags: ["summary-format", "output-style"],
+      content: "Never use bullet points; always use prose paragraphs",
+    });
+
+    const conflictMock = createPatternMockLLM([
+      {
+        match: "DIRECTLY CONTRADICT",
+        response: "CONTRADICTS 1: One requires bullet points, the other forbids them",
+      },
+    ]);
+    const result = await detectConflicts(newArtifact, conflictMock);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.conflictingArtifact.id).toBe("existing-rule");
+    expect(result[0]!.explanation).toBe("One requires bullet points, the other forbids them");
+  });
+
+  it("excludes the artifact itself from the conflict pool", async () => {
+    // A consolidated artifact — checking conflicts against itself would be circular
+    const self = makeArtifact({
+      id: "self-id",
+      stage: "consolidated",
+      tags: ["summary-format"],
+      content: "Always use bullet points",
+    });
+    await persist(self);
+
+    // No other consolidated artifacts in the pool
+    const neverCalled: import("@khub-ai/knowledge-fabric/types").LLMFn = async () => {
+      throw new Error("LLM should not be called — pool is empty after self-exclusion");
+    };
+    const result = await detectConflicts(self, neverCalled);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array when LLM response does not match expected format", async () => {
+    const existing = makeArtifact({
+      stage: "consolidated",
+      tags: ["code-style"],
+      content: "Use semicolons in TypeScript",
+    });
+    await persist(existing);
+
+    const newArtifact = makeArtifact({
+      stage: "candidate",
+      tags: ["code-style"],
+      content: "Never use semicolons in TypeScript",
+    });
+
+    // Malformed response — neither NONE nor CONTRADICTS <n>: <text>
+    const malformedMock = createPatternMockLLM([
+      { match: "DIRECTLY CONTRADICT", response: "UNCLEAR" },
+    ]);
+    const result = await detectConflicts(newArtifact, malformedMock);
+    expect(result).toHaveLength(0);
   });
 });
