@@ -241,7 +241,8 @@ We defer the specifics deliberately: the right design will be clearer once phase
 | **1b** ✅ | LLM extraction, evidence accumulation, consolidation, tag retrieval, inject labeling, computer-assistant demo, 74 tests | Per message processed |
 | **1c** ✅ | `message_received` hook + sender verification; agent passively learns from every inbound message | Per message (batch possible) |
 | **1d** ✅ | `before_prompt_build` hook; `retrieve()` fires automatically; relevant artifacts injected into every prompt | None (index lookup) |
-| **Phase 2** | Generalization, Tier 2 triggering, decay, feedback | Occasional cheap LLM calls |
+| **2a** ✅ | Validation-modulated decay (`effectiveConfidence()`); decay floor for consolidated artifacts; dual-bar confidence + Tags column in dashboard | None (read-time computation) |
+| **Phase 2** (remainder) | Conflict detection, cross-artifact generalization, Tier 2 LLM triggering | Occasional cheap LLM calls |
 | **Phase 3** | Procedural recipes, optional code synthesis | Per procedure compilation |
 | **Phase 4** | Expert-to-Agent Dialogic Learning: structured expert sessions, six artifact types, minimum consolidation criteria | Per session (structured dialogue) |
 | **Phase 5** | Standard format, import/export, cross-agent compatibility | None (format work) |

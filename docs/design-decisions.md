@@ -152,12 +152,12 @@ The architecture is informed by a systematic cross-check against human cognitive
 
 | Human mechanism | System analogue | Status |
 |---|---|---|
-| Memory consolidation | Evidence accumulates in `candidate`/`accumulating` artifacts → LLM consolidation call → `consolidated` generalization | Designed (via `stage`, `evidenceCount`, `evidence[]`); not yet implemented |
-| Forgetting / decay | Effective confidence decreases for unretrieved, unreinforced artifacts | Designed (via `lastRetrievedAt`, `reinforcementCount`); not yet implemented |
-| Emotional salience | `salience` field adjusts auto-apply threshold independent of confidence | Designed; not yet implemented |
+| Memory consolidation | Evidence accumulates in `candidate`/`accumulating` artifacts → LLM consolidation call → `consolidated` generalization | ✅ Implemented (Phase 1b — via `stage`, `evidenceCount`, `evidence[]`, consolidation LLM call) |
+| Forgetting / decay | Effective confidence decreases for unretrieved, unreinforced artifacts; consolidated artifacts decay to a floor, not zero | ✅ Implemented (Phase 2a — `effectiveConfidence()` with validation-modulated half-life and decay floor; stored `confidence` unchanged) |
+| Emotional salience | `salience` field adjusts auto-apply threshold *and* decay floor independent of confidence | ✅ Implemented (Phase 1 threshold adjustment + Phase 2a floor multiplier: `high` × 1.25, `low` × 0.75) |
 | Spreading activation | Graph traversal during retrieval surfaces connected artifacts | Designed (via `relations`); not yet implemented |
 | Meta-cognition | Query layer over store for knowledge coverage awareness | Future work; no artifact changes needed |
-| Habituation | Feedback tracking reduces influence of repeatedly rejected artifacts | Designed (via `acceptedCount`, `rejectedCount`); not yet implemented |
+| Habituation | Feedback tracking reduces influence of repeatedly rejected artifacts | ✅ Partially implemented (Phase 2a — `rejectedCount` lowers `validationStrength`, shortening half-life and lowering decay floor; fully suppressing persistent rejections is future work) |
 | Context-dependent retrieval | `trigger` field expresses natural language conditions for when artifacts apply | Designed; not yet implemented |
 
 For full details, see [Memory Taxonomy — Lessons from human cognition](memory-taxonomy.md#lessons-from-human-cognition).

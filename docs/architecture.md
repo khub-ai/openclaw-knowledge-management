@@ -263,9 +263,11 @@ This means PIL can **observe inbound messages** and **inject into prompts**, but
 
 ## Effective confidence calculation
 
-Confidence has two phases:
+Confidence exists in two layers: the stored `confidence` field (the durable audit record, never modified by decay) and `effectiveConfidence` (computed at every read, never persisted to disk).
 
-**At extraction time**, `confidence` is seeded from the `certainty` field assigned by the LLM:
+### Stored confidence
+
+`confidence` is seeded at extraction time from the `certainty` field assigned by the LLM:
 
 ```
 certainty "definitive" → confidence = 0.65
@@ -273,21 +275,70 @@ certainty "tentative"  → confidence = 0.35
 certainty "uncertain"  → confidence = 0.15
 ```
 
-**At application time**, the raw `confidence` score is adjusted by evidence accumulation and feedback:
+It grows through evidence accumulation: supporting observations increment `evidenceCount`, and when the consolidation threshold is reached the artifact is distilled by an LLM call into a generalization at `stage: "consolidated"`. The stored `confidence` is ground truth — it reflects the strength of the evidence record, not recency of use.
+
+### Effective confidence (validation-modulated decay)
+
+`effectiveConfidence` is computed on every read from the stored `confidence`, validation history, and time since last retrieval. Implementation lives in `effectiveConfidence()` in `store.ts`; constants are in `DECAY_CONSTANTS` in `types.ts`.
 
 ```
-effectiveConfidence = confidence
-  × evidenceFactor(evidenceCount)          // grows toward 1.0 as evidence accumulates
-  × decayFactor(age, lastRetrievedAt, reinforcementCount)
-  × acceptanceRate(acceptedCount, rejectedCount)
+validationStrength = reinforcementCount + 2 × acceptedCount − rejectedCount
+halfLifeDays       = BASE_HALF_LIFE_DAYS × (1 + VALIDATION_ALPHA × validationStrength)
+decayFactor        = 0.5 ^ (daysSinceLastRetrieved / halfLifeDays)
+                     (1.0 if lastRetrievedAt is absent — no decay until first use)
 ```
 
-The `salience` field modifies the auto-apply threshold rather than the confidence itself:
-- `salience: "low"` → auto-apply at `effectiveConfidence ≥ 0.75`
-- `salience: "medium"` → auto-apply at `effectiveConfidence ≥ 0.85`
-- `salience: "high"` → auto-apply at `effectiveConfidence ≥ 0.95` (almost always suggest rather than auto-apply)
+Constants:
 
-These thresholds are configurable and expected to be tuned through experience.
+| Constant | Value | Meaning |
+|---|---|---|
+| `BASE_HALF_LIFE_DAYS` | 30 | Half-life (days) for an artifact with zero validation |
+| `VALIDATION_ALPHA` | 0.20 | Each validation unit extends half-life by 20% |
+| `DECAY_FLOOR_BASE` | 0.20 | Minimum floor for a consolidated artifact with no validation |
+| `DECAY_FLOOR_MAX` | 0.60 | Ceiling — the most validated artifact's floor cannot exceed this |
+| `DECAY_FLOOR_PER_VALIDATION` | 0.04 | Each validation unit raises the floor by 4% |
+
+For `consolidated` artifacts a floor prevents complete forgetting:
+
+```
+floor = min(DECAY_FLOOR_MAX,
+            DECAY_FLOOR_BASE + DECAY_FLOOR_PER_VALIDATION × validationStrength)
+      × salience_multiplier   // high: × 1.25  |  low: × 0.75  |  medium: × 1.0
+```
+
+`candidate` and `accumulating` artifacts have no floor (floor = 0): unconfirmed observations expire naturally if the user never reinforces them.
+
+Final formula:
+
+```
+effectiveConfidence = max(floor, floor + (confidence − floor) × decayFactor)
+```
+
+**Side effect of `retrieve()`:** every call to `retrieve()` that returns at least one result updates `lastRetrievedAt` on all returned artifacts. Actively-used knowledge therefore keeps its effective confidence high automatically. Empty-query list-all calls are exempted from this update to avoid artificially resetting decay for bulk inspection.
+
+### Injection label gating
+
+`getInjectLabel()` uses `effectiveConfidence` (not raw `confidence`) when choosing the label for `consolidated` artifacts:
+
+```
+effectiveConfidence ≥ auto-apply threshold  →  [established]  (injected as settled knowledge)
+effectiveConfidence <  auto-apply threshold  →  [suggestion]   (presented as a suggestion)
+```
+
+A consolidated artifact that was once `[established]` automatically falls back to `[suggestion]` as its effective confidence decays, without any explicit user action.
+
+### Auto-apply thresholds (adjusted by salience)
+
+The `salience` field adjusts the per-artifact auto-apply threshold:
+
+| `salience` | Auto-apply threshold | Notes |
+|---|---|---|
+| `"low"` | ≥ 0.75 | Minor preferences; auto-apply liberally |
+| *(unset)* | ≥ 0.80 | Default |
+| `"medium"` | ≥ 0.85 | Standard knowledge; normal caution |
+| `"high"` | ≥ 0.95 | Critical rules; almost always suggest rather than auto-apply |
+
+Note that `salience: "high"` simultaneously raises the auto-apply threshold *and* the decay floor: high-salience artifacts are harder to auto-apply silently (more likely to surface as explicit suggestions) but also more resistant to being forgotten entirely.
 
 ## Storage
 
