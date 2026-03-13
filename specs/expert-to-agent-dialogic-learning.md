@@ -66,6 +66,10 @@ This spec is domain-general. It can apply to investing, debugging, legal reasoni
 
 For explanatory purposes, examples in this spec assume a long-term fundamental investing expert, because that domain is rich enough to show judgment, strategy, procedure, and revision, while still being understandable to a broad audience.
 
+### Single-Expert Assumption
+
+Phase 4 as specified here assumes a single expert teaching a single agent. The `communication-profile.json` file stores one profile with no expert-identity key, and the `domain` field on sessions is assumed to be unambiguous within a single user's deployment. Multi-expert deployments — where different people teach the same agent in the same domain — are explicitly out of scope for Phase 4. If that use case arises, the profile storage and domain-matching logic will need to be keyed by an `expertId`. That extension is deferred to Phase 5 or a future revision of this spec.
+
 ## What Counts As Deep Knowledge
 
 For the purposes of this system, deep knowledge includes:
@@ -181,7 +185,21 @@ LLM selection is used in three situations:
 
 Before selecting a question type, the agent checks the question history for the current candidate rule. If that type was already asked and the corresponding gap is still open, the agent should rephrase rather than re-ask. If rephrase attempts exceed two for the same gap, the agent should record the gap as unresolved and move forward rather than asking a third time.
 
-### Cost Guidance
+### Expert Redirect
+
+An expert redirect occurs when the expert explicitly changes the subject, introduces a new case unrelated to the current candidate rule, or signals that they want to move to a different topic. The agent must handle this without losing the state of the interrupted thread.
+
+**Detection:** A redirect is detected when an LLM call (one per turn, batched with extraction) determines that the expert's turn does not contain evidence relevant to any open candidate rule and instead introduces a new topic or case. Explicit signals ("let me tell you about something different", "forget that for now") are treated as redirects immediately without waiting for LLM assessment.
+
+**Response when a redirect is detected:**
+
+1. Tag the current turn in the transcript with `correctionType: "redirect"`.
+2. Archive the current candidate rule's thread: record the gap status as-is, mark the rule `status: "paused"`, and add a note pointing to the turn ID where the redirect occurred. The rule is not discarded — it remains in `candidateRules` and can be resumed later.
+3. Open a new candidate rule for the topic the expert has introduced, starting from the `eliciting-case` stage.
+4. At a natural pause (when the new candidate rule reaches synthesis, or when the expert signals they are done with the new thread), the agent may offer to return to the paused rule: "Earlier you were describing [topic]. Would you like to come back to that?"
+5. The expert may also explicitly request a return to a paused thread at any time; the agent should resume from the last known gap status rather than starting over.
+
+**Rich-answer gap reassessment** (multiple gaps closed in one turn) is handled separately by LLM-backed selection and is not a redirect. A redirect is a topic change, not a comprehensive answer.
 
 - Default path using rule-based selection: zero additional LLM calls per turn for question selection.
 - Complex path using LLM-assisted selection: one LLM call per turn.
@@ -303,14 +321,16 @@ Each candidate rule being developed during the session has:
 - `id` — unique identifier within the session.
 - `content` — the current best statement of the rule, updated as corrections are applied.
 - `kind` — the expected `KnowledgeKind` of the artifact when consolidated.
+- `status` — one of `active` (currently being developed), `paused` (thread interrupted by a redirect, resumable), `synthesized` (promoted to the main store), or `archived` (incomplete at session end, retained for reference).
 - `gaps` — a record of which of the five consolidation criteria have been met. A candidate rule is ready for synthesis when all five are satisfied.
 - `relatedTurnIds` — the turn IDs that contributed evidence to this rule.
+- `pausedAtTurnId` — set when `status` becomes `paused`; records where the thread was interrupted so it can be resumed from the correct point.
 
 ### Consolidation Gap Status Fields
 
 The five consolidation criteria are tracked as individual boolean fields:
 
-- `hasConcretCase` — at least one concrete real-world example has been provided.
+- `hasConcreteCase` — at least one concrete real-world example has been provided.
 - `hasGeneralizedRestatement` — the agent has proposed a generalized version and the expert has accepted or corrected it.
 - `hasScopeOrBoundary` — a scope statement or boundary condition has been captured.
 - `hasExceptionOrFailureMode` — at least one exception, counterexample, or failure mode has been recorded.
@@ -324,7 +344,7 @@ Each turn in the session transcript records:
 - `questionType` — for agent turns, which question type from the taxonomy was used.
 - `candidateRuleId` — which candidate rule this turn was primarily advancing.
 - `extractedUnits` — candidate knowledge fragments parsed from this turn.
-- `correctionType` — for expert turns that contain a correction: `rule-revision`, `scope-adjustment`, or `counterexample-added`.
+- `correctionType` — for expert turns that contain a correction or redirection: `rule-revision`, `scope-adjustment`, `counterexample-added`, or `redirect`.
 
 ### Custom Question Type Fields
 
@@ -343,7 +363,24 @@ On session end:
 2. Incomplete rules remain in the session file with their gap status noted, available for continuation in a future session.
 3. The session file is retained permanently as the audit record.
 
+### Promotion Idempotency
+
+Promotion must be safe to retry after a crash or interrupted session. The mechanism:
+
+1. Before writing any artifact, the implementation checks `artifacts.jsonl` for existing entries whose provenance is `session:<session-id>`. If any are found, promotion for this session has already run (fully or partially). Skip artifacts that are already present; write only those that are missing.
+2. After all artifacts for a session have been successfully written, the session file is updated with a top-level `committed: true` flag. This is the authoritative signal that promotion is complete.
+3. On resume after a crash, the implementation checks `committed`. If false or absent, it re-runs idempotent promotion (step 1 prevents duplicates).
+4. Concurrent promotion from two processes is not supported in Phase 4. The session file is not locked. If concurrent access is needed, it must be coordinated at a higher level (e.g. by the OpenClaw plugin runtime, not by this spec).
+
 ## Multi-Session Continuity
+
+### Domain Matching Policy
+
+Domain matching in Phase 4 uses **exact string equality** on the `domain` field. Two sessions are in the same domain if and only if their `domain` strings are identical (case-sensitive). The user is responsible for using consistent domain labels across sessions (e.g. always `long-term-fundamental-investing`, never mixing with `investing` or `fundamental-investing`).
+
+Rationale: semantic or fuzzy domain matching risks loading artifacts from a related but distinct domain and treating them as prior knowledge for the current one. The false-positive cost (stale artifacts injected as inherited knowledge) is higher than the false-negative cost (user types a slightly different label and starts fresh). Semantic domain matching is deferred to Phase 5.
+
+Implementations should surface the domain label to the user at session start and warn if no prior sessions match, so the user can correct a typo before the session runs.
 
 ### Starting A New Session In The Same Domain
 
@@ -463,6 +500,18 @@ When a correction is detected:
 5. The correction turn is tagged in the transcript with a `correctionType` value.
 
 If the rule was already promoted to the main store from a prior session, the correction produces a new artifact with a `supersedes` relation to the old one. The old artifact is marked `retired: true`. The full audit trail is preserved in both the session transcript and the artifact relation graph.
+
+### Security, Privacy, and Redaction (Phase 6 Dependency)
+
+Session files are retained permanently and contain the full dialogue transcript, including anything the expert said. This is a deliberate design decision: the transcript is the authoritative audit record for every artifact that was promoted.
+
+The Phase 4 spec does not define redaction, access control, or encryption policy for session files. These are deployment-context concerns addressed at Phase 6 (Governance). The following are known open issues to be resolved there:
+
+- **Redaction**: an expert may inadvertently include sensitive information (names, prices, client details) in a session transcript. Phase 6 should specify whether redaction is supported, when it runs, and whether it can be applied retroactively without invalidating the artifact provenance chain.
+- **Access control**: session files sit alongside `artifacts.jsonl` on the local filesystem. Phase 4 assumes a trusted single-user local deployment. Multi-user or cloud deployments must enforce access controls outside the scope of this spec.
+- **Encryption at rest**: not specified for Phase 4. Phase 6 should determine whether session files and `artifacts.jsonl` should be encrypted, and if so, with what key management model.
+
+Implementations targeting high-accountability domains (medicine, legal, finance) should treat these as blockers before deployment and not wait for Phase 6 to land.
 
 ### Mode Invocation
 
