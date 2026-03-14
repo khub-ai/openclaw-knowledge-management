@@ -1,0 +1,3 @@
+@echo off
+setlocal
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File %~dp0notify-agent-chatlog-change.ps1 %*
