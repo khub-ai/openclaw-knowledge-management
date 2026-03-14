@@ -1,11 +1,17 @@
 # Demo: Expert-to-Agent Dialogic Learning
 
-This walkthrough shows Phase 4 end-to-end: an expert teaches the agent a
+This walkthrough shows Phase 4 end-to-end: an expert teaches the agent an
 investing screening rule across one session, the agent promotes it to the
 knowledge store, and a second session retrieves it automatically.
 
 The demo uses `pil-chat` — the standalone CLI chatbot included in the repo.
 No OpenClaw installation is required.
+
+> **Note on the transcript below:** The agent responses shown are
+> representative of what the system produces — exact wording varies because
+> question generation, gap assessment, and synthesis all depend on LLM calls.
+> The flow (gap-by-gap progression → synthesis proposal → correction →
+> promotion) is deterministic; the wording is not.
 
 ---
 
@@ -20,6 +26,19 @@ the result as a durable, retrievable knowledge artifact.
 This is the knowledge-acquisition equivalent of a structured interview, not a
 conversation. The agent knows exactly which questions to ask and when to stop.
 
+### Current implementation scope
+
+| Feature | Status |
+|---|---|
+| Gap-driven question ladder (5 gaps) | ✅ Implemented |
+| LLM synthesis + correction parsing | ✅ Implemented |
+| Session persistence + `committed` flag | ✅ Implemented |
+| Artifact promotion with session provenance | ✅ Implemented |
+| Cross-session retrieval via Phase 1 pipeline | ✅ Implemented |
+| Communication-profile calibration | 🔲 Deferred — `DEFAULT_PROFILE` used |
+| Gap inheritance from prior sessions | 🔲 Deferred — metadata tracked, not used |
+| Expert redirect (multi-thread) | 🔲 Deferred — single candidate rule per session |
+
 ---
 
 ## Prerequisites
@@ -30,6 +49,13 @@ cd khub-knowledge-fabric
 pnpm install
 export ANTHROPIC_API_KEY=sk-ant-...   # macOS/Linux/WSL
 # $env:ANTHROPIC_API_KEY="sk-ant-..." # Windows PowerShell
+```
+
+Alternatively, if `pnpm` is not on your `PATH`, the pil-chat entrypoint can
+be run directly with Node (v18+):
+
+```bash
+node tools/pil-chat/index.js --fresh --verbose
 ```
 
 ---
@@ -48,8 +74,9 @@ pnpm chat -- --fresh --verbose
 You: /teach investing "screen survivability before analyzing upside"
 ```
 
-The agent creates a session, records the domain and objective, and immediately
-asks the first question — always a concrete case:
+The agent creates a session file, records the domain and objective, and
+immediately asks the opening case-elicitation question. The gap bar does not
+appear on this line — it appears after your first response.
 
 ```
 [Teach mode] Session: <uuid>  domain: investing
@@ -57,11 +84,6 @@ asks the first question — always a concrete case:
 Agent: Can you walk me through a specific recent situation where you applied
        this screening approach — ideally a real company or case you actually
        looked at?
-```
-
-The gap bar is empty at this point:
-```
-  Gaps: [ case] [ process] [ boundary] [ exception] [ revision]
 ```
 
 ### Answer the agent's questions
@@ -200,7 +222,9 @@ You: /endteach
 
 ## Verify the artifact was stored
 
-The promoted rule is in `artifacts.jsonl`:
+The promoted rule is in `artifacts.jsonl` with confidence `0.80` and
+`stage: "consolidated"` — values set explicitly by `promoteSession()`,
+bypassing the default extraction seeding:
 
 ```bash
 grep '"provenance"' ~/.openclaw/knowledge/artifacts.jsonl | grep "session:"
@@ -218,6 +242,11 @@ Expected output (prettified):
   "tags": ["investing"]
 }
 ```
+
+`confidence: 0.8` equals the default auto-apply threshold, so the artifact
+injects as `[established]` in a fresh session (no decay). After sufficient
+time without retrieval, decay will reduce effective confidence below the
+threshold and the label will fall to `[suggestion]`.
 
 The session file is also retained as an audit record:
 ```bash
@@ -244,8 +273,9 @@ explicitly:
 You: I'm looking at a retailer that got cheap after a demand shock. Worth digging in?
 ```
 
-The rule is retrieved and injected automatically into the system prompt before
-the LLM responds. With `--verbose`, you'll see:
+The rule is retrieved and injected by the Phase 1 pipeline (the same
+`before_prompt_build` hook used in normal sessions — there is no special Phase 4
+retrieval path). With `--verbose`, you'll see the injection line:
 
 ```
   [PIL] → [established] [procedure] "Before analyzing upside in a distressed
@@ -259,8 +289,8 @@ told to use it.
 
 ## Resume teaching in a new session
 
-Start teaching again in the same domain — the session picks up the prior
-session's artifact IDs automatically:
+Start teaching again in the same domain. The session records which prior sessions
+and artifact IDs exist in this domain — shown in the header:
 
 ```bash
 pnpm chat -- --verbose
@@ -275,8 +305,11 @@ Agent: Can you give me a specific example of a situation where you turned to
        replacement cost as the primary valuation anchor?
 ```
 
-The agent knows what it already learned in Session 1 and will not re-ask for
-that knowledge if it surfaces again.
+> **Note:** The "Inherited N artifact(s)" line confirms the prior session's
+> artifacts are recorded in the new session's metadata. Automatic gap inheritance
+> (skipping questions already answered by prior sessions) is not yet implemented
+> — the question ladder starts fresh. This is a known v1 limitation, tracked
+> for a future revision.
 
 ---
 
@@ -293,6 +326,17 @@ that knowledge if it surfaces again.
 The five-gap consolidation criterion is the key: the agent doesn't store what
 you say — it extracts what you *know*, in a form that generalises to future
 cases. The rule produced is inspectable, editable, and portable.
+
+---
+
+## Known v1 gaps vs. full spec
+
+| Gap | Full spec | v1 |
+|---|---|---|
+| Adaptive questioning style | Communication-profile calibration via 3-question pre-session | Hardcoded `DEFAULT_PROFILE` |
+| Gap inheritance | Prior session answers skip already-closed gaps | Not implemented; metadata tracked only |
+| Multi-thread teaching | Expert can redirect mid-session; paused rules resumable | Single active rule per session |
+| Dashboard integration | Gap bar visible in web dashboard | CLI gap bar only |
 
 ---
 
