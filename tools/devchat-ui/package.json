@@ -1,0 +1,16 @@
+{
+  "name": "devchat-ui",
+  "version": "0.1.0",
+  "description": "Browser-based dashboard for monitoring and controlling multi-agent developer chatlogs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs --open",
+    "dev":   "node server.mjs --open --port 3737"
+  },
+  "dependencies": {
+    "ws": "^8.17.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

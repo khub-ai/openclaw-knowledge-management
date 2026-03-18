@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>devchat-ui</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Markdown rendering (no build step) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<header id="topbar">
+  <div id="topbar-left">
+    <span id="logo">💬 devchat</span>
+    <div id="agent-pills"></div>
+  </div>
+  <div id="topbar-right">
+    <input id="search-input" type="search" placeholder="Search entries…" autocomplete="off">
+    <button id="btn-compose-toggle" title="Compose new entry">✏️</button>
+    <button id="btn-config" title="Settings">⚙</button>
+  </div>
+</header>
+
+<!-- ── Body ─────────────────────────────────────────────────────────────────── -->
+<div id="layout">
+
+  <!-- Left: filter sidebar -->
+  <aside id="sidebar">
+    <section class="panel-section">
+      <h3>Authors</h3>
+      <div id="author-filters"></div>
+    </section>
+    <section class="panel-section">
+      <h3>Date range</h3>
+      <label>From <input type="date" id="filter-from"></label>
+      <label>To   <input type="date" id="filter-to"></label>
+    </section>
+    <section class="panel-section">
+      <h3>Show</h3>
+      <label><input type="checkbox" id="filter-new"> New only</label>
+      <label><input type="checkbox" id="filter-code"> Has code block</label>
+    </section>
+    <button id="btn-clear-filters" class="btn-sm">Clear filters</button>
+  </aside>
+
+  <!-- Centre: chatlog -->
+  <main id="main">
+    <div id="chatlog-toolbar">
+      <button class="btn-sm" id="btn-collapse-all">Collapse all</button>
+      <button class="btn-sm" id="btn-expand-all">Expand all</button>
+      <button class="btn-sm" id="btn-collapse-before">Collapse before…</button>
+      <span id="entry-count" class="muted"></span>
+    </div>
+
+    <div id="chatlog-list"></div>
+
+    <div id="new-badge" hidden>↓ <span id="new-count">0</span> new</div>
+
+    <!-- Compose box (hidden by default) -->
+    <div id="compose-area" hidden>
+      <div id="compose-header">
+        <label>Post as
+          <select id="compose-author"></select>
+        </label>
+        <button class="btn-sm" id="btn-preview-toggle">Preview</button>
+      </div>
+      <textarea id="compose-body" rows="5" placeholder="Write a Markdown message…"></textarea>
+      <div id="compose-preview" hidden></div>
+      <div id="compose-footer">
+        <span class="muted" id="compose-hint">Ctrl+Enter to post</span>
+        <button id="btn-post" class="btn-primary">Post</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Right: agents + automation -->
+  <aside id="agents-panel">
+    <section class="panel-section">
+      <h3>Agents</h3>
+      <div id="agent-cards"></div>
+    </section>
+    <section class="panel-section">
+      <h3>Automation</h3>
+      <div id="rule-list"></div>
+      <button class="btn-sm" id="btn-add-rule">+ Add rule</button>
+    </section>
+  </aside>
+
+</div>
+
+<!-- ── Agent log drawer ──────────────────────────────────────────────────────── -->
+<div id="log-drawer" hidden>
+  <div id="log-drawer-header">
+    <span id="log-drawer-title">Agent log</span>
+    <button id="btn-log-close">✕</button>
+  </div>
+  <pre id="log-drawer-content"></pre>
+</div>
+
+<!-- ── Config modal ──────────────────────────────────────────────────────────── -->
+<div id="config-modal" hidden>
+  <div id="config-modal-inner">
+    <h2>Settings</h2>
+    <label>Chatlog path
+      <input type="text" id="cfg-chatlog">
+    </label>
+    <label>Rules path
+      <input type="text" id="cfg-rules">
+    </label>
+    <label>Port
+      <input type="number" id="cfg-port" min="1024" max="65535">
+    </label>
+    <p class="muted">Port change takes effect after server restart.</p>
+    <div id="config-modal-footer">
+      <button id="btn-config-cancel" class="btn-sm">Cancel</button>
+      <button id="btn-config-save" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+<div id="modal-backdrop" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
