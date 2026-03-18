@@ -85,14 +85,11 @@ function parseEntries(content) {
   const hits = [];
   let m;
   while ((m = re.exec(content)) !== null) {
-    hits.push({ end: m.index + m[0].length, timestamp: m[1], author: m[2] });
+    hits.push({ start: m.index, end: m.index + m[0].length, timestamp: m[1], author: m[2] });
   }
   return hits.map((h, i) => {
-    const bodyEnd = i + 1 < hits.length ? hits[i + 1].end - hits[i + 1].end + hits[i + 1].end : content.length;
-    // Correct body extraction: from end-of-header to start-of-next-header
-    const nextIdx = i + 1 < hits.length
-      ? content.lastIndexOf('\n###', hits[i + 1].end)
-      : content.length;
+    // Body runs from end-of-this-header to start-of-next-header (or EOF)
+    const nextIdx = i + 1 < hits.length ? hits[i + 1].start : content.length;
     const body = content.slice(h.end, nextIdx).trim();
     return { id: sha256(`${h.timestamp}:${h.author}`), timestamp: h.timestamp, author: h.author, body };
   });
