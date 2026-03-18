@@ -34,6 +34,7 @@ node tools/devchat-watch/watch.mjs
 |---|---|---|
 | `--agent <name>` | `claudecode` | Agent to invoke: `claudecode` or `codex` |
 | `--dev-id <id>` | `DEV#1` | Developer ID this instance speaks as |
+| `--respond-to <ids>` | `DEV#0` | Comma-separated list of authors that trigger a response. Only entries from these authors cause the agent to run. Prevents AI-to-AI ping-pong. |
 | `--chatlog <path>` | `.private/devchats/chatlog.md` | Path to the shared chatlog |
 | `--rules <path>` | `.private/devchats/rules.txt` | Path to formatting rules injected into the prompt |
 | `--debounce <ms>` | `2000` | Milliseconds to wait after a file-change event before processing |
@@ -44,6 +45,9 @@ node tools/devchat-watch/watch.mjs
 ```cmd
 REM Run as DEV#2 using Codex
 tools\devchat-watch\watch.cmd --agent codex --dev-id DEV#2
+
+REM Also respond when DEV#1 writes (allow DEV#1 ↔ DEV#2 exchange under DEV#0 oversight)
+tools\devchat-watch\watch.cmd --dev-id DEV#2 --respond-to DEV#0,DEV#1
 
 REM Preview the prompt that would be sent, without invoking anything
 tools\devchat-watch\watch.cmd --dry-run
@@ -58,22 +62,24 @@ tools\devchat-watch\watch.cmd --chatlog C:\projects\myrepo\.private\devchats\cha
 2. A debounce timer (default 2 s) waits for the file to settle between rapid saves.
 3. The file is read and hashed (SHA-256). If the hash matches the last processed version,
    the change is skipped.
-4. The last `### YYYY-MM-DD HH:MM:SS - DEV#N` header is parsed. If the author matches
-   `--dev-id`, the change is skipped (loop prevention).
+4. The last `### YYYY-MM-DD HH:MM:SS - DEV#N` header is parsed.
+   - If the author matches `--dev-id`, the change is skipped (self-echo guard).
+   - If the author is not in the `--respond-to` list, the change is skipped (cross-agent ping-pong guard).
 5. A prompt is assembled from `rules.txt` + the full chatlog content. The agent is instructed
    to output its response body only, or the literal token `NO_RESPONSE_NEEDED`.
 6. The agent is spawned non-interactively:
    - `claude --print` — prompt is written to stdin
    - `codex --full-auto` — prompt is written to stdin
-7. If a response is returned, it is appended to the chatlog as a new entry with the current
-   timestamp and `--dev-id`.
-8. The hash of the freshly-written file is saved to the state file so the watcher ignores its
-   own write on the next event.
+7. If a response is returned (checked via exact trimmed equality against `NO_RESPONSE_NEEDED`),
+   it is **appended** to the chatlog with `fs.appendFile`. Append-only writes avoid the write-race
+   that a full rewrite would cause if two concurrent watchers process the same base version.
+8. The file is re-read and hashed. The new hash is saved to the state file so the watcher
+   ignores its own write on the next event.
 
 ### State file
 
-`.private/devchats/.watch-state-DEV<N>.json` — auto-created alongside the chatlog.
-Gitignored via `.private/`. Contains:
+`.private/devchats/.watch-state-DEVN.json` — auto-created in the same directory as the chatlog.
+Gitignored via `.private/`. The filename uses the numeric part of `--dev-id` (e.g. `DEV#2` → `.watch-state-DEV2.json`). Contains:
 
 ```json
 {
@@ -85,12 +91,17 @@ Gitignored via `.private/`. Contains:
 
 ### Loop prevention
 
-Two independent guards prevent runaway write loops:
+Three independent guards prevent runaway write loops:
 
-1. **Content hash** — the hash of the last file the watcher processed/wrote is persisted.
+1. **Content hash** — the SHA-256 of the last file the watcher processed/wrote is persisted.
    If the next event produces the same hash, it is skipped.
-2. **Author check** — if the last chatlog entry's `DEV#N` matches `--dev-id`, the watcher
+2. **Self-echo check** — if the last chatlog entry's `DEV#N` matches `--dev-id`, the watcher
    never responds (an agent will not reply to its own output).
+3. **Respond-to filter** — the watcher only triggers when the last entry was written by an
+   author in the `--respond-to` list (default: `DEV#0`). Entries from other AI agents are
+   ignored, preventing DEV#1 and DEV#2 from answering each other indefinitely.
+   To allow AI-to-AI exchange under human oversight, include both authors explicitly:
+   `--respond-to DEV#0,DEV#1`.
 
 ---
 

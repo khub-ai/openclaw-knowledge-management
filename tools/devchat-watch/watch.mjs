@@ -2,38 +2,49 @@
 /**
  * watch.mjs — Cross-platform devchat watcher
  *
- * Watches chatlog.md for changes. When a new entry appears from a developer
- * other than this agent, invokes `claude --print` (or `codex`) with the full
+ * Watches chatlog.md for changes. When a new entry appears from an author in
+ * the --respond-to list, invokes `claude --print` (or `codex`) with the full
  * chatlog as context and appends the response as a new formatted entry.
  *
  * Usage:
  *   node tools/devchat-watch/watch.mjs [options]
  *
  * Options:
- *   --agent <name>      claudecode | codex          (default: claudecode)
- *   --dev-id <id>       DEV#N                       (default: DEV#1)
- *   --chatlog <path>    path to chatlog.md          (default: .private/devchats/chatlog.md)
- *   --rules <path>      path to rules.txt           (default: .private/devchats/rules.txt)
- *   --debounce <ms>     write-settle wait time      (default: 2000)
- *   --dry-run           print prompt; skip invoke and write
+ *   --agent <name>        claudecode | codex             (default: claudecode)
+ *   --dev-id <id>         DEV#N                          (default: DEV#1)
+ *   --respond-to <ids>    Comma-separated DEV#N list.    (default: DEV#0)
+ *                         Agent only responds when the last entry is from one
+ *                         of these authors. Prevents cross-agent ping-pong.
+ *   --chatlog <path>      path to chatlog.md             (default: .private/devchats/chatlog.md)
+ *   --rules <path>        path to rules.txt              (default: .private/devchats/rules.txt)
+ *   --debounce <ms>       write-settle wait time         (default: 2000)
+ *   --dry-run             print prompt; skip invoke and write
  *
  * Loop prevention:
- *   After writing a response the new content hash is saved to a state file in
- *   .private/devchats/. If the next change event reads the same hash, it is
- *   skipped. In addition, if the last chatlog entry's author matches --dev-id
- *   the agent never responds to its own output.
+ *   1. Content hash dedup — the SHA-256 of the last processed file is saved in
+ *      a state file. If the next event produces the same hash, it is skipped.
+ *   2. Author check — if the last chatlog entry's DEV#N matches --dev-id, the
+ *      watcher never responds (an agent will not reply to its own output).
+ *   3. Respond-to filter — the watcher only triggers for entries authored by
+ *      --respond-to members. All other authors are ignored, preventing AI
+ *      agents from ping-ponging with each other.
+ *
+ * Write safety:
+ *   Responses are written with fs.appendFile rather than a full rewrite. This
+ *   avoids a write-race condition where two concurrent watchers responding to
+ *   the same base version would silently overwrite each other's entry.
  *
  * State file:
  *   .private/devchats/.watch-state-DEV<N>.json  (gitignored via .private/)
  */
 
-import { watch }                from 'node:fs';
-import { readFile, writeFile }  from 'node:fs/promises';
-import { existsSync }           from 'node:fs';
-import { createHash }           from 'node:crypto';
-import { spawn }                from 'node:child_process';
-import { resolve, dirname }     from 'node:path';
-import { fileURLToPath }        from 'node:url';
+import { watch }                          from 'node:fs';
+import { readFile, writeFile, appendFile } from 'node:fs/promises';
+import { existsSync }                      from 'node:fs';
+import { createHash }                      from 'node:crypto';
+import { spawn }                           from 'node:child_process';
+import { resolve, dirname }                from 'node:path';
+import { fileURLToPath }                   from 'node:url';
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -48,15 +59,25 @@ function argFlag(flag) { return argv.includes(flag); }
 const __dir    = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dir, '..', '..');
 
-const AGENT    = argVal('--agent',    'claudecode');
-const DEV_ID   = argVal('--dev-id',   'DEV#1');
-const CHATLOG  = resolve(repoRoot, argVal('--chatlog', '.private/devchats/chatlog.md'));
-const RULES    = resolve(repoRoot, argVal('--rules',   '.private/devchats/rules.txt'));
-const DEBOUNCE = parseInt(argVal('--debounce', '2000'), 10);
-const DRY_RUN  = argFlag('--dry-run');
+const AGENT      = argVal('--agent',      'claudecode');
+const DEV_ID     = argVal('--dev-id',     'DEV#1');
+const CHATLOG    = resolve(repoRoot, argVal('--chatlog', '.private/devchats/chatlog.md'));
+const RULES      = resolve(repoRoot, argVal('--rules',   '.private/devchats/rules.txt'));
+const DEBOUNCE   = parseInt(argVal('--debounce', '2000'), 10);
+const DRY_RUN    = argFlag('--dry-run');
 
-// State file lives alongside the chatlog in the gitignored .private dir.
-const STATE = CHATLOG.replace(/\.md$/, `.watch-state-${DEV_ID.replace('#', '')}.json`);
+// --respond-to: comma-separated list of DEV#N authors that should trigger a reply.
+// Default is DEV#0 only, preventing AI-to-AI ping-pong by default.
+const RESPOND_TO = new Set(
+  argVal('--respond-to', 'DEV#0')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+);
+
+// State file lives alongside the chatlog inside the gitignored .private dir.
+// Path: <chatlog-dir>/.watch-state-DEVN.json
+const STATE = resolve(dirname(CHATLOG), `.watch-state-${DEV_ID.replace('#', '')}.json`);
 
 // ── Chatlog parsing ───────────────────────────────────────────────────────────
 
@@ -228,6 +249,14 @@ async function processChange() {
       return;
     }
 
+    // Respond-to filter: only trigger for configured authors.
+    // This prevents AI agents from ping-ponging with each other.
+    if (!RESPOND_TO.has(entry.author)) {
+      log(`Last entry is from ${entry.author} — not in --respond-to (${[...RESPOND_TO].join(', ')}). Skipping.`);
+      await saveState(hash);
+      return;
+    }
+
     log(`Entry from ${entry.author}. Composing response as ${DEV_ID}...`);
 
     const prompt = await buildPrompt(content);
@@ -251,20 +280,25 @@ async function processChange() {
       return;
     }
 
-    if (!response || response.includes('NO_RESPONSE_NEEDED')) {
+    // Exact trimmed equality — avoids discarding a legitimate reply that happens
+    // to mention the NO_RESPONSE_NEEDED token in passing.
+    if (!response || response.trim() === 'NO_RESPONSE_NEEDED') {
       log('Agent determined no response needed.');
       await saveState(hash);
       return;
     }
 
     // Append entry to chatlog.
-    const newEntry  = formatEntry(DEV_ID, response);
-    const updated   = content.endsWith('\n') ? content + newEntry : content + '\n' + newEntry;
+    // appendFile avoids the write-race that a full rewrite would create when
+    // two concurrent watchers respond to the same base version simultaneously.
+    const newEntry   = formatEntry(DEV_ID, response);
+    const appendStr  = content.endsWith('\n') ? newEntry : '\n' + newEntry;
+    await appendFile(CHATLOG, appendStr, 'utf8');
 
-    await writeFile(CHATLOG, updated, 'utf8');
-
-    // Save hash of what WE just wrote — our own next change event will be skipped.
-    await saveState(sha256(updated));
+    // Re-read the file to compute the exact hash of what is on disk — our own
+    // next change event will be skipped when it matches this hash.
+    const written = await readFile(CHATLOG, 'utf8');
+    await saveState(sha256(written.replace(/\r\n/g, '\n')));
 
     log(`Response written as ${DEV_ID}.`);
     log(`Preview: ${response.slice(0, 160)}${response.length > 160 ? '…' : ''}`);
@@ -294,11 +328,13 @@ if (!existsSync(CHATLOG)) {
 }
 
 console.log('[watch] devchat-watch starting');
-console.log(`[watch]   agent   : ${AGENT}`);
-console.log(`[watch]   dev-id  : ${DEV_ID}`);
-console.log(`[watch]   chatlog : ${CHATLOG}`);
-console.log(`[watch]   debounce: ${DEBOUNCE}ms`);
-if (DRY_RUN) console.log('[watch]   mode    : DRY RUN');
+console.log(`[watch]   agent      : ${AGENT}`);
+console.log(`[watch]   dev-id     : ${DEV_ID}`);
+console.log(`[watch]   respond-to : ${[...RESPOND_TO].join(', ')}`);
+console.log(`[watch]   chatlog    : ${CHATLOG}`);
+console.log(`[watch]   state file : ${STATE}`);
+console.log(`[watch]   debounce   : ${DEBOUNCE}ms`);
+if (DRY_RUN) console.log('[watch]   mode       : DRY RUN');
 console.log('');
 
 watch(CHATLOG, { persistent: true }, scheduleProcess);
