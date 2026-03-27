@@ -39,14 +39,14 @@ None of these approaches is wrong for its intended purpose. The point is that no
 
 Knowledge Fabric's engine is a **multi-agent inference loop** built around six roles. Four operate within the inference loop itself; two sit outside it as an escalation chain.
 
-| Role | Function |
-|---|---|
-| **MEDIATOR** | Orchestrates the loop: checks the rule registry (Round 0), verifies hypotheses, writes execution plans, requests new tools, and revises on failure |
-| **SOLVER** | Proposes a natural-language hypothesis describing the transformation rule |
-| **EXECUTOR** | Runs the execution plan deterministically using the registered tool library |
-| **Tool Generator** | Called by MEDIATOR on demand; generates and verifies Python tools against training pairs |
-| **SUPERVISOR** | Notified when the inference loop exhausts its revision budget; diagnoses system-level gaps and proposes structural improvements |
-| **HUMAN** | Notified when SUPERVISOR cannot close the gap; provides the minimal insight needed to unblock the system |
+| Role | Function | Current Implementation |
+|---|---|---|
+| **MEDIATOR** | Orchestrates the loop: checks the rule registry (Round 0), verifies hypotheses, writes execution plans, requests new tools, and revises on failure | Claude Sonnet 4.6 |
+| **SOLVER** | Proposes a natural-language hypothesis describing the transformation rule | Claude Sonnet 4.6 |
+| **EXECUTOR** | Runs the execution plan deterministically using the registered tool library | Python runtime (no LLM) |
+| **Tool Generator** | Called by MEDIATOR on demand; generates and verifies Python tools against training pairs | Claude Sonnet 4.6 |
+| **SUPERVISOR** | Notified when the inference loop exhausts its revision budget; diagnoses system-level gaps and proposes structural improvements | Claude Code |
+| **HUMAN** | Notified when SUPERVISOR cannot close the gap; provides the minimal insight needed to unblock the system | Human |
 
 The inference loop runs in rounds: MEDIATOR first checks the accumulated rule registry (**Round 0**) — if a prior rule matches the current task's pattern, it adopts that rule and goes directly to execution, bypassing SOLVER entirely. If no rule matches, MEDIATOR invokes SOLVER (**Round 1**), then verifies the hypothesis and writes a pseudo-code plan (**Round 2**), then EXECUTOR runs the plan (**Round 3**). If EXECUTOR fails, MEDIATOR revises and the loop repeats until the revision budget is exhausted, at which point SUPERVISOR is notified.
 
