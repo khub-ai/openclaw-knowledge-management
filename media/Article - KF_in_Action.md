@@ -35,28 +35,38 @@ None of these approaches is wrong for its intended purpose. The point is that no
 
 ## The Core Mechanism
 
-Knowledge Fabric's engine is a **multi-agent inference loop** built around four components, each with a distinct role. Three are always active; a fourth is invoked on demand.
+Knowledge Fabric's engine is a **multi-agent inference loop** built around six roles. Four operate within the inference loop itself; two sit outside it as an escalation chain.
 
-- **SOLVER** — proposes a hypothesis describing the transformation rule
-- **MEDIATOR** — verifies the hypothesis and translates it into an execution plan
-- **EXECUTOR** — runs the plan deterministically and checks the result
-- **Tool Generator** — called by MEDIATOR when a required capability does not yet exist
+| Role | Function |
+|---|---|
+| **MEDIATOR** | Orchestrates the loop: checks the rule registry (Round 0), verifies hypotheses, writes execution plans, requests new tools, and revises on failure |
+| **SOLVER** | Proposes a natural-language hypothesis describing the transformation rule |
+| **EXECUTOR** | Runs the execution plan deterministically using the registered tool library |
+| **Tool Generator** | Called by MEDIATOR on demand; generates and verifies Python tools against training pairs |
+| **SUPERVISOR** | Notified when the inference loop exhausts its revision budget; diagnoses system-level gaps and proposes structural improvements |
+| **HUMAN** | Notified when SUPERVISOR cannot close the gap; provides the minimal insight needed to unblock the system |
 
-These components run in sequence: SOLVER proposes, MEDIATOR verifies and plans, EXECUTOR applies. If EXECUTOR fails, MEDIATOR revises and the loop repeats. Before any of this runs, a preliminary **Round 0** checks the accumulated rule registry — if a prior rule matches the current task's pattern, the system can bypass SOLVER entirely and go straight to execution.
+The inference loop runs in rounds: MEDIATOR first checks the accumulated rule registry (**Round 0**) — if a prior rule matches the current task's pattern, it adopts that rule and goes directly to execution, bypassing SOLVER entirely. If no rule matches, MEDIATOR invokes SOLVER (**Round 1**), then verifies the hypothesis and writes a pseudo-code plan (**Round 2**), then EXECUTOR runs the plan (**Round 3**). If EXECUTOR fails, MEDIATOR revises and the loop repeats until the revision budget is exhausted, at which point SUPERVISOR is notified.
 
-### The Agents in Detail
+The SUPERVISOR role is deliberately flexible. In the ARC-AGI use case, Claude Code (Anthropic's AI-powered development environment) acts as SUPERVISOR — it analyzes failures, identifies root causes, and proposes code-level fixes autonomously. In other domains, SUPERVISOR could be a senior domain expert, a QA system, or any trusted agent with the authority to modify the system. If SUPERVISOR cannot resolve the gap, it escalates to HUMAN, who provides the minimum viable insight — not the solution — and SUPERVISOR translates that into a structural upgrade.
 
-**SOLVER** is the hypothesis engine. Given a task — a set of input/output training pairs (small grids of colored cells, each pair showing a before and after state) — SOLVER reasons simultaneously across three dimensions: spatial structure, procedural transformation, and analogical pattern. It produces a single, falsifiable hypothesis: a precise natural-language description of the rule governing the transformation.
+### The Roles in Detail
 
-**MEDIATOR** is the verifier and orchestrator. It takes SOLVER's hypothesis and rigorously tests it mentally against every training pair. If the hypothesis holds, MEDIATOR translates it into deterministic pseudo-code — a structured JSON execution plan specifying which tools to call and in what order. If the plan requires a capability that does not yet exist in the tool registry, MEDIATOR issues a **tool generation request**, specifying the required behavior with concrete input/output examples drawn directly from the training pairs.
+**MEDIATOR** is the orchestrator and the only agent active in every round. In Round 0, it scans the rule registry and determines whether any existing rule applies to the current task. If a match is found, it constructs the execution plan directly from the rule. If not, it invokes SOLVER and works with the resulting hypothesis: verifying it mentally against all training pairs, translating it into pseudo-code, requesting new tools as needed, and revising when EXECUTOR fails.
 
-**EXECUTOR** runs the pseudo-code against the test input deterministically using the registered tool library. No LLM inference happens at execution time. The answer is either correct or it isn't.
+**SOLVER** is the hypothesis engine. Given a set of input/output training pairs (small grids of colored cells, each pair showing a before and after state), SOLVER reasons simultaneously across three dimensions: spatial structure, procedural transformation, and analogical pattern. It produces a single, falsifiable hypothesis: a precise natural-language description of the transformation rule.
 
-**Tool Generator** receives MEDIATOR's specification and generates a Python function. It immediately tests the generated code against all training pairs and self-corrects on failure, up to three attempts. Only code that passes every training pair is registered. Code that cannot pass is discarded.
+**EXECUTOR** runs MEDIATOR's pseudo-code against the test input deterministically using the registered tool library. No LLM inference happens at execution time. The answer is either correct or it isn't.
+
+**Tool Generator** receives a tool specification from MEDIATOR — including the required behavior and concrete input/output examples from the training pairs — and generates a verified Python function. It tests the generated code against all training pairs and self-corrects on failure, up to three attempts. Only code that passes every training pair is registered. Code that cannot pass is discarded.
+
+**SUPERVISOR** is notified when the inference loop fails — that is, when MEDIATOR has exhausted its revision budget and the task remains unsolved. SUPERVISOR's job is not to solve the task but to identify *why the system could not solve it* and repair the gap at a class level: improving a prompt, adding a built-in tool, fixing the rule registry. The repair must generalize — it should help the system solve a whole family of similar problems, not just the current one. In the ARC-AGI use case this role is played by Claude Code; in other deployments it could be any trusted expert agent or human specialist.
+
+**HUMAN** is the escalation of last resort. When SUPERVISOR has exhausted its own diagnostic capacity, it asks the human a precise question: not "what is the answer?" but "what is the missing insight?" The human's response is typically brief — a conceptual observation, not a solution. SUPERVISOR then translates that insight into a concrete system upgrade and validates it by rerunning the failing task with no further assistance.
 
 ### Failure: The Self-Correction Loop
 
-When EXECUTOR produces a wrong answer, the system does not simply retry. MEDIATOR receives the failed output, diagnoses the gap between what the hypothesis predicted and what actually happened, and issues a **revised pseudo-code plan**. This revision loop runs up to five cycles (the "revision budget") before the task is marked as failed and escalated. Each revision is a targeted correction, not a random retry. If a tool is found to be wrong, MEDIATOR can request a corrected tool, which re-enters the Tool Generator's verification loop independently.
+When EXECUTOR produces a wrong answer, MEDIATOR receives the failed output, diagnoses the gap between what the hypothesis predicted and what actually happened, and issues a **revised pseudo-code plan**. This revision loop runs up to five cycles (the "revision budget") before the task is marked as failed and SUPERVISOR is notified. Each revision is a targeted correction, not a random retry. If a tool is found to be wrong, MEDIATOR can request a corrected tool, which re-enters the Tool Generator's verification loop independently.
 
 ### Success: Generalizing Knowledge
 
@@ -153,7 +163,7 @@ The puzzle (shown in the screenshot above) presents two or three sparse linear s
 
 The system failed this task three times in a row. In the first attempt, SOLVER correctly noticed diagonal radiation but assumed all sequences transform identically — missing the asymmetry entirely. MEDIATOR, finding no tool for "diagonal radiation for all sequences uniformly," stalled and produced zero execution steps, an automatic failure. In the second attempt, after fixing the stall, MEDIATOR requested a new tool called `radiate_sequences` with a monolithic spec. The Tool Generator iterated through all five allowed attempts and failed every time — not because the code was badly written, but because the spec itself was wrong: without knowing that spine and peripherals are conceptually different operations, every generated variant applied the same algorithm to everything and got visually plausible but numerically incorrect results. In the third attempt, SOLVER proposed a Chebyshev-distance radiation hypothesis that reached 68% cell accuracy — close enough to look promising, but wrong — and the revision budget ran out.
 
-At this point the human provided a single sentence of insight: *"You need to identify the longest sequence and do the radiation step. For the rest, just propagate them out in all directions until blocked."* One follow-up clarified the order: *"The long sequence has priority — do it first, starting from the tip, one cell at a time."* That was the entirety of the human's contribution. Claude Code (Anthropic's AI-powered development environment) translated this into three targeted system upgrades: a verified two-phase Python builtin (`radiate_sequences`) added to the tool library; a prompt addition to SOLVER explicitly asking whether all groups play the same role or different roles; and a new rule (`r_102`) encoding the structural fingerprint of this puzzle class so future similar puzzles bypass the solver entirely via Round 0 matching.
+At this point SUPERVISOR (Claude Code, in this deployment) had itself exhausted its diagnostic capacity and escalated to HUMAN with a precise question about the missing conceptual distinction. The human provided a single sentence: *"You need to identify the longest sequence and do the radiation step. For the rest, just propagate them out in all directions until blocked."* One follow-up clarified the order: *"The long sequence has priority — do it first, starting from the tip, one cell at a time."* That was the entirety of the human's contribution. SUPERVISOR translated this into three targeted system upgrades: a verified two-phase Python builtin (`radiate_sequences`) added to the tool library; a prompt addition to SOLVER explicitly asking whether all groups play the same role or different roles; and a new rule (`r_102`) encoding the structural fingerprint of this puzzle class so future similar puzzles bypass the solver entirely via Round 0 matching.
 
 The task was then rerun with no hints. The result:
 
@@ -174,31 +184,33 @@ The system never needed the human's insight again. Any future puzzle with a simi
 
 ---
 
-## Claude Code as Development Manager
+## SUPERVISOR: Claude Code as Development Manager
 
-This is where Knowledge Fabric diverges most sharply from conventional AI development — and where an honest assessment is warranted.
+The SUPERVISOR role is where Knowledge Fabric diverges most sharply from conventional AI development — and where an honest assessment is warranted.
 
-When the multi-agent loop exhausts its revision budget and fails, Claude Code (Anthropic's AI-powered development environment) analyzes the failure, categorizes the gap — whether it lies in the hypothesis strategy, the tool library, the execution logic, or the rule representation — and proposes a targeted system-level change: not a workaround, but a structural improvement to the system itself. It then reruns the system with no hints and no task-specific shortcuts to confirm the fix produces a correct solution autonomously.
+In the ARC-AGI use case, Claude Code (Anthropic's AI-powered development environment) acts as SUPERVISOR. When the inference loop exhausts its revision budget, Claude Code analyzes the failure, categorizes the gap — whether it lies in the hypothesis strategy, the tool library, the execution logic, or the rule representation — and proposes a targeted system-level change: not a workaround, but a structural improvement to the system itself. It then reruns the system with no hints and no task-specific shortcuts to confirm the fix produces a correct solution autonomously.
 
 A critical discipline governs this process: **gap repair must never become answer injection**. The distinction is concrete: adding a new built-in tool or a new reasoning step to the solver prompt is gap repair — any future puzzle can benefit from it. Pre-seeding the specific answer for the failing task — telling the system which rule applies, or what the output should be — is answer injection. Answer injection produces a one-time fix that transfers nothing. Gap repair permanently expands the class of problems the system can solve on its own.
 
-When Claude Code cannot close the gap, it surfaces a precise question to the human: not "what is the answer?" but "what is the missing insight?" The human responds with a minimal hint — as illustrated in the 1190bc91 case study above, sometimes a single sentence. Claude Code then translates that hint into a concrete system upgrade and reruns the task end-to-end to verify it.
+When SUPERVISOR cannot close the gap, it escalates to HUMAN with a precise question: not "what is the answer?" but "what is the missing insight?" The human responds with a minimal hint — as illustrated in the 1190bc91 case study above, sometimes a single sentence. SUPERVISOR then translates that hint into a concrete system upgrade and reruns the task end-to-end to verify it.
+
+This escalation chain — inference loop → SUPERVISOR → HUMAN — is significant for two reasons. First, it means the human is genuinely a last resort, not a routine participant. The system and its SUPERVISOR exhaust their own capacity before asking for help. Second, it means the SUPERVISOR role can be filled by different agents in different deployments: an AI coding assistant like Claude Code for software-adjacent domains, a senior domain expert for specialized fields, or a QA team for high-stakes applications. The architecture does not prescribe who SUPERVISOR is — only what it must do.
 
 ### Is This a Unique Way to Do AI?
 
 Honestly: **the individual components are not new. The discipline and the specific recursive structure are.**
 
-Every senior software engineer diagnoses failures, proposes fixes, and validates them. What Claude Code does in this system is structurally the same — it is just that the "engineer" is itself an LLM operating on an LLM-powered system. The recursion is interesting but not without precedent; self-improving AI systems have been explored in various forms.
+Every senior software engineer diagnoses failures, proposes fixes, and validates them. What Claude Code does as SUPERVISOR is structurally the same — it is just that the "engineer" is itself an LLM operating on an LLM-powered system. The recursion is interesting but not without precedent; self-improving AI systems have been explored in various forms.
 
 What is **genuinely notable** here is threefold:
 
 1. **The gap repair discipline is formalized and enforced**, not left to developer judgment. The distinction between gap repair and answer injection is precise, documented, and treated as a correctness criterion. Most development teams, human or AI-assisted, do not apply this discipline rigorously. They patch the immediate failure. The result is a system that accumulates workarounds rather than capabilities.
 
-2. **The human's role is explicitly minimized and bounded**. The system is designed so that Claude Code exhausts its own diagnostic capacity before escalating. When escalation happens, the human provides the minimum viable insight — not the solution. This is different from conventional HITL (Human-in-the-Loop) systems where the human is a routine participant. Here the human is an expert consultant called only when the system's own reasoning reaches its limit.
+2. **The human's role is explicitly minimized and bounded**. The system is designed so that SUPERVISOR exhausts its own diagnostic capacity before escalating to HUMAN. When escalation happens, the human provides the minimum viable insight — not the solution. This is different from conventional HITL (Human-in-the-Loop) systems where the human is a routine participant. Here the human is an expert consultant called only when the system's own reasoning reaches its limit.
 
-3. **The improvement target is the AI system's generalization capacity, not its task performance**. When Claude Code adds a reasoning step to the solver prompt or adds a built-in tool, it is not solving the current puzzle — it is expanding the class of puzzles the system can solve autonomously in the future. This orientation toward structural generalization rather than local correctness is what distinguishes the process.
+3. **The improvement target is the AI system's generalization capacity, not its task performance**. When SUPERVISOR adds a reasoning step to the solver prompt or adds a built-in tool, it is not solving the current task — it is expanding the class of tasks the system can solve autonomously in the future. This orientation toward structural generalization rather than local correctness is what distinguishes the process.
 
-The fair claim is this: Claude Code is not just a coding assistant here; it is a principled methodology for continuous structural improvement of an AI system, applied recursively. That is significant, even if none of the individual components are unprecedented.
+The fair claim is this: SUPERVISOR is not just a debugging assistant; it is a principled methodology for continuous structural improvement of an AI system, applied recursively. That is significant, even if none of the individual components are unprecedented.
 
 ---
 
