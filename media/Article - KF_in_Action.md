@@ -1,6 +1,19 @@
 # Knowledge Fabric in Action: How an AI System Learns, Accumulates, and Applies Generalized Knowledge
 
-*Note: What follows describes a specialized instantiation of Knowledge Fabric (KF) applied to solving ARC-AGI puzzles — a benchmark designed to test abstract reasoning and generalization in AI systems at a level that has historically required human-like intelligence. The core KF principles are fully in place here. We intend to apply the same architecture to other domains in the near future.*
+**Knowledge Fabric (KF)** is a framework for building AI systems that accumulate generalized knowledge — in the form of rules and executable tools — as they solve tasks, and apply that knowledge to solve future tasks more reliably and at lower cost. Unlike systems that rely on retrieval or weight updates, KF externalizes what it learns into an inspectable, auditable, locally-owned knowledge base that grows more capable with every task it completes.
+
+*What follows describes a specialized instantiation of KF applied to solving ARC-AGI puzzles. The core KF principles are fully in place here; we intend to apply the same architecture to other domains in the near future.*
+
+---
+
+## ARC-AGI: The Proving Ground
+
+[ARC-AGI](https://arcprize.org/) (Abstraction and Reasoning Corpus for Artificial General Intelligence) is a benchmark designed to test genuine abstract reasoning — the kind that cannot be solved by memorization or pattern-matching on surface features. Each puzzle presents a small number of input/output training pairs (typically 2–5), where each pair shows a colored grid before and after some transformation. The system must infer the transformation rule from those examples alone and apply it correctly to a new input it has never seen.
+
+![ARC-AGI task 1190bc91 — two training pairs on the left; test input on the right](./ARC-AGI-2-1190bc91.png)
+*Task [1190bc91](https://arcprize.org/tasks/1190bc91) on the ARC Prize playground. The left panel shows two training pairs (input → output). The right panel shows the test input; the system must produce the correct output grid.*
+
+The benchmark is deliberately resistant to lookup and interpolation. Two puzzles that look visually similar can have entirely different rules. This makes ARC-AGI an ideal proving ground for Knowledge Fabric: success requires genuine generalization from a handful of examples, which is precisely what KF is built to do.
 
 ---
 
@@ -22,21 +35,28 @@ None of these approaches is wrong for its intended purpose. The point is that no
 
 ## The Core Mechanism
 
-Knowledge Fabric's engine is a **multi-agent inference loop** that separates concerns across three specialized roles, each with a distinct cognitive function.
+Knowledge Fabric's engine is a **multi-agent inference loop** built around four components, each with a distinct role. Three are always active; a fourth is invoked on demand.
 
-### The Agents
+- **SOLVER** — proposes a hypothesis describing the transformation rule
+- **MEDIATOR** — verifies the hypothesis and translates it into an execution plan
+- **EXECUTOR** — runs the plan deterministically and checks the result
+- **Tool Generator** — called by MEDIATOR when a required capability does not yet exist
 
-**SOLVER** is the hypothesis engine. Given a task — a set of input/output training pairs — SOLVER reasons simultaneously across three dimensions: spatial structure, procedural transformation, and analogical pattern. It produces a single, falsifiable hypothesis: a precise description of the rule governing the transformation.
+These components run in sequence: SOLVER proposes, MEDIATOR verifies and plans, EXECUTOR applies. If EXECUTOR fails, MEDIATOR revises and the loop repeats. Before any of this runs, a preliminary **Round 0** checks the accumulated rule registry — if a prior rule matches the current task's pattern, the system can bypass SOLVER entirely and go straight to execution.
 
-**MEDIATOR** is the verifier and orchestrator. It takes SOLVER's hypothesis and rigorously tests it against every training pair. If the hypothesis holds, MEDIATOR translates it into deterministic pseudo-code — a structured execution plan. Critically, if the plan requires a capability that doesn't yet exist, MEDIATOR issues a **tool generation request**, specifying the tool's behavior with concrete examples drawn from the training pairs themselves.
+### The Agents in Detail
 
-**EXECUTOR** runs the pseudo-code against the test input deterministically. It operates on a registered tool registry — a growing library of verified, reusable Python functions. No LLM inference happens at execution time. The answer is either correct or it isn't.
+**SOLVER** is the hypothesis engine. Given a task — a set of input/output training pairs (small grids of colored cells, each pair showing a before and after state) — SOLVER reasons simultaneously across three dimensions: spatial structure, procedural transformation, and analogical pattern. It produces a single, falsifiable hypothesis: a precise natural-language description of the rule governing the transformation.
 
-Before any of this runs, a **Round 0 rule match** scans the accumulated rule registry against the current task. If a prior rule matches the pattern, the system can bypass hypothesis generation entirely — a direct expression of compounding knowledge.
+**MEDIATOR** is the verifier and orchestrator. It takes SOLVER's hypothesis and rigorously tests it mentally against every training pair. If the hypothesis holds, MEDIATOR translates it into deterministic pseudo-code — a structured JSON execution plan specifying which tools to call and in what order. If the plan requires a capability that does not yet exist in the tool registry, MEDIATOR issues a **tool generation request**, specifying the required behavior with concrete input/output examples drawn directly from the training pairs.
+
+**EXECUTOR** runs the pseudo-code against the test input deterministically using the registered tool library. No LLM inference happens at execution time. The answer is either correct or it isn't.
+
+**Tool Generator** receives MEDIATOR's specification and generates a Python function. It immediately tests the generated code against all training pairs and self-corrects on failure, up to three attempts. Only code that passes every training pair is registered. Code that cannot pass is discarded.
 
 ### Failure: The Self-Correction Loop
 
-When EXECUTOR produces a wrong answer, the system does not simply retry. MEDIATOR receives the failed output, diagnoses the gap between the hypothesis and the actual transformation, and issues a **revised pseudo-code plan** — up to five revision cycles. Each revision is a targeted correction, not a random retry. If a tool was wrong, MEDIATOR can request a corrected tool, which enters its own **verification sub-loop**: the generated code is tested against all training pairs, with up to three self-correction attempts before registration. Tools that cannot pass verification are rejected and never enter the registry.
+When EXECUTOR produces a wrong answer, the system does not simply retry. MEDIATOR receives the failed output, diagnoses the gap between what the hypothesis predicted and what actually happened, and issues a **revised pseudo-code plan**. This revision loop runs up to five cycles (the "revision budget") before the task is marked as failed and escalated. Each revision is a targeted correction, not a random retry. If a tool is found to be wrong, MEDIATOR can request a corrected tool, which re-enters the Tool Generator's verification loop independently.
 
 ### Success: Generalizing Knowledge
 
@@ -112,16 +132,45 @@ def fill_enclosed(grid, **kwargs):
     return result
 ```
 
-This tool was generated autonomously — the system wrote it, tested it against every training pair, and registered it only after it produced exact pixel-perfect matches. Once registered, it is available to any future task that involves enclosed regions, at zero additional LLM cost.
+This tool was generated autonomously — the system wrote it, tested it against every training pair, and registered it only after it produced exact matches on all training pairs. Once registered, it is available to any future task that involves enclosed regions, at zero additional LLM cost.
 
 ### Why Tools Matter Beyond Convenience
 
 The creation of tools is not a workflow optimization — it addresses a fundamental limitation of LLMs. Language models are poor at tasks requiring **repetitive precision**: counting cells, tracking coordinates across a large grid, applying the same geometric operation consistently to dozens of objects. A single off-by-one error in a 30×30 grid produces a wrong answer even when the reasoning was correct.
 
-Deterministic Python tools eliminate this failure mode entirely. Once `fill_enclosed` exists and is verified, it produces the exact same output every time, on any grid, with zero probability of a counting error. This has two direct consequences:
+Deterministic Python tools eliminate this failure mode entirely. Once `fill_enclosed` exists and is verified, it produces the exact same output every time, on any input, with zero probability of a counting error. This has two direct consequences:
 
 - **Reliability**: tasks that previously failed due to execution errors now pass consistently. The system's accuracy ceiling rises as the tool library grows.
-- **Cost**: tool execution has no LLM inference cost. A task solved via Rule 0 match + a registered tool costs a fraction of a task that requires full hypothesis generation. As the registry fills, average cost per task drops measurably.
+- **Cost**: tool execution has no LLM inference cost. A task solved via Round 0 rule match plus a registered tool costs a fraction of a task requiring full hypothesis generation. As the registry fills, average cost per task drops measurably.
+
+---
+
+## Case Study: Task 1190bc91
+
+Task [1190bc91](https://arcprize.org/tasks/1190bc91) illustrates the full Knowledge Fabric cycle — including failure, diagnosis, human insight, and structural repair — in a single concrete example.
+
+The puzzle (shown in the screenshot above) presents two or three sparse linear sequences of colored cells on a black background. The output fills the entire grid according to a rule that, once understood, is elegant: the **longest sequence** acts as a spine, with each of its cells radiating its color outward along all four diagonal directions, tip-to-tail, stopping when it hits a filled cell or the grid boundary. The **shorter sequences** then flood-fill outward in all eight directions, naturally staying confined to whatever regions the spine's radiation left unfilled. The critical insight is that these two roles are asymmetric — the spine must complete its radiation before the shorter sequences touch anything.
+
+The system failed this task three times in a row. In the first attempt, SOLVER correctly noticed diagonal radiation but assumed all sequences transform identically — missing the asymmetry entirely. MEDIATOR, finding no tool for "diagonal radiation for all sequences uniformly," stalled and produced zero execution steps, an automatic failure. In the second attempt, after fixing the stall, MEDIATOR requested a new tool called `radiate_sequences` with a monolithic spec. The Tool Generator iterated through all five allowed attempts and failed every time — not because the code was badly written, but because the spec itself was wrong: without knowing that spine and peripherals are conceptually different operations, every generated variant applied the same algorithm to everything and got visually plausible but numerically incorrect results. In the third attempt, SOLVER proposed a Chebyshev-distance radiation hypothesis that reached 68% cell accuracy — close enough to look promising, but wrong — and the revision budget ran out.
+
+At this point the human provided a single sentence of insight: *"You need to identify the longest sequence and do the radiation step. For the rest, just propagate them out in all directions until blocked."* One follow-up clarified the order: *"The long sequence has priority — do it first, starting from the tip, one cell at a time."* That was the entirety of the human's contribution. Claude Code (Anthropic's AI-powered development environment) translated this into three targeted system upgrades: a verified two-phase Python builtin (`radiate_sequences`) added to the tool library; a prompt addition to SOLVER explicitly asking whether all groups play the same role or different roles; and a new rule (`r_102`) encoding the structural fingerprint of this puzzle class so future similar puzzles bypass the solver entirely via Round 0 matching.
+
+The task was then rerun with no hints. The result:
+
+```
+Round 0: matching rules... Matched 1 rule(s): ['r_102']
+Round 2: MEDIATOR: Step 1: radiate_sequences({'background': 0})
+Round 3: EXECUTOR: All demos passed.
+✓ CORRECT | 100.0% | 44.2s | $0.17
+```
+
+| | Failed attempt | After repair |
+|---|---|---|
+| Time | 585 seconds | 44 seconds |
+| Cost | $0.91 | $0.17 |
+| Outcome | Fail | Correct (100%) |
+
+The system never needed the human's insight again. Any future puzzle with a similar structure — linear sequences where the longest dominates and the shorter ones fill remaining space — will be recognized in Round 0 and solved directly. One human sentence became a permanent capability.
 
 ---
 
@@ -129,11 +178,11 @@ Deterministic Python tools eliminate this failure mode entirely. Once `fill_encl
 
 This is where Knowledge Fabric diverges most sharply from conventional AI development — and where an honest assessment is warranted.
 
-When the multi-agent loop exhausts its revision budget and fails, Claude Code analyzes the failure, categorizes the gap — whether it lies in the hypothesis strategy, the tool library, the execution logic, or the rule representation — and proposes a targeted system-level change: not a workaround, but a structural improvement to the system itself. It then reruns the system with no hints and no task-specific shortcuts to confirm the fix produces a correct solution autonomously.
+When the multi-agent loop exhausts its revision budget and fails, Claude Code (Anthropic's AI-powered development environment) analyzes the failure, categorizes the gap — whether it lies in the hypothesis strategy, the tool library, the execution logic, or the rule representation — and proposes a targeted system-level change: not a workaround, but a structural improvement to the system itself. It then reruns the system with no hints and no task-specific shortcuts to confirm the fix produces a correct solution autonomously.
 
-A critical discipline governs this process: **gap repair must never become answer injection**. Injecting the answer (pre-seeding the correct rule, providing the hypothesis directly) produces a one-time fix that the system cannot transfer to future tasks. Repairing the gap — improving the reasoning prompt, adding a verified built-in tool, correcting the rule matching logic — permanently expands what the system can discover on its own.
+A critical discipline governs this process: **gap repair must never become answer injection**. The distinction is concrete: adding a new built-in tool or a new reasoning step to the solver prompt is gap repair — any future puzzle can benefit from it. Pre-seeding the specific answer for the failing task — telling the system which rule applies, or what the output should be — is answer injection. Answer injection produces a one-time fix that transfers nothing. Gap repair permanently expands the class of problems the system can solve on its own.
 
-When Claude Code cannot close the gap, it surfaces a precise question to the human: not "what is the answer?" but "what is the missing insight?" The human responds with a minimal hint — sometimes a single sentence. Claude Code then translates that hint into a concrete system upgrade and reruns the task end-to-end to verify it.
+When Claude Code cannot close the gap, it surfaces a precise question to the human: not "what is the answer?" but "what is the missing insight?" The human responds with a minimal hint — as illustrated in the 1190bc91 case study above, sometimes a single sentence. Claude Code then translates that hint into a concrete system upgrade and reruns the task end-to-end to verify it.
 
 ### Is This a Unique Way to Do AI?
 
@@ -149,7 +198,7 @@ What is **genuinely notable** here is threefold:
 
 3. **The improvement target is the AI system's generalization capacity, not its task performance**. When Claude Code adds a reasoning step to the solver prompt or adds a built-in tool, it is not solving the current puzzle — it is expanding the class of puzzles the system can solve autonomously in the future. This orientation toward structural generalization rather than local correctness is what distinguishes the process.
 
-The fair claim for the article is this: Claude Code is not just a coding assistant here; it is a principled methodology for continuous structural improvement of an AI system, applied recursively. That is significant, even if none of the individual components are unprecedented.
+The fair claim is this: Claude Code is not just a coding assistant here; it is a principled methodology for continuous structural improvement of an AI system, applied recursively. That is significant, even if none of the individual components are unprecedented.
 
 ---
 
@@ -190,7 +239,3 @@ Knowledge Fabric's architecture delivers the greatest value in domains where:
 **Software engineering and code review** — code patterns generalize across codebases; tools can run static analysis, compute complexity metrics, and detect anti-patterns deterministically. Rule bases accumulate institutional knowledge that currently lives only in senior engineers' heads.
 
 The common thread: **any domain where expertise can be expressed as generalizable rules, where execution requires precision, and where the knowledge has enough value to be worth owning.**
-
----
-
-*The ARC-AGI benchmark was chosen as the initial proving ground precisely because it makes no concessions to memorization: every puzzle requires genuine generalization from a small number of training pairs. If the architecture holds there, the path to higher-stakes domains is a question of prompt adaptation and domain-specific tooling — not fundamental re-engineering.*
