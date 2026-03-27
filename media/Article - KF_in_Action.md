@@ -4,6 +4,22 @@
 
 ---
 
+## Context: How AI Systems Retain Knowledge Today
+
+Before describing what Knowledge Fabric does, it is worth situating it against the current landscape. Most AI systems handle knowledge retention in one of the following ways:
+
+| Approach | How knowledge is "retained" |
+|---|---|
+| RAG | Retrieves documents — abstraction is limited to chunk selection, not rule extraction |
+| Fine-tuning | Updates weights — knowledge is implicit in parameters, not inspectable or provenance-tracked |
+| Memory systems (MemGPT, etc.) | Stores facts and conversation summaries — generalization across tasks is not the design goal |
+| Tool use (function calling) | Operates on pre-defined tools — dynamic tool generation from task evidence is not standard practice |
+| o1/o3 reasoning | Deep per-task reasoning — accumulated cross-task knowledge is not part of the architecture |
+
+None of these approaches is wrong for its intended purpose. The point is that none of them is designed to do what Knowledge Fabric does: extract abstract, generalizable rules from task experience, generate and verify executable tools, and accumulate both in a local, auditable knowledge base that compounds in value over time.
+
+---
+
 ## The Core Mechanism
 
 Knowledge Fabric's engine is a **multi-agent inference loop** that separates concerns across three specialized roles, each with a distinct cognitive function.
