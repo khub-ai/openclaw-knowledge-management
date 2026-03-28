@@ -1,21 +1,10 @@
-# Knowledge Fabric in Action: How an AI System Learns, Accumulates, and Applies Generalized Knowledge
+# Knowledge Fabric: The Missing Learning Layer for Scalable Agentic AI
 
-**Knowledge Fabric (KF)** is a framework for building AI systems that accumulate generalized knowledge — in the form of rules and executable tools — as they solve tasks, and apply that knowledge to solve future tasks more reliably and at lower cost. Unlike systems that rely on retrieval or weight updates, KF externalizes what it learns into an inspectable, auditable, locally-owned knowledge base that grows more capable with every task it completes.
+Agentic AI is advancing quickly, but one essential layer is still missing: a scalable way for agents to learn, consolidate experience, and apply generalized knowledge across tasks over time. Knowledge Fabric is designed to fill that gap. It provides a structured learning layer that helps AI systems turn isolated interactions into reusable knowledge, making agentic workflows more scalable, more consistent, and more effective in complex real-world development and decision-making settings.
 
-*What follows describes a specialized instantiation of KF applied to solving ARC-AGI puzzles. The core KF principles are fully in place here; we intend to apply the same architecture to other domains in the near future.*
+*What follows focuses on a specialized ARC-AGI instantiation of Knowledge Fabric. The goal is not to claim ARC-AGI as the end state, but to use it as a concrete proving ground for a broader learning architecture that can be applied across domains.*
 
 > **Early stage notice**: Knowledge Fabric is in active early-stage development and is not yet ready for commercialization. What is described here reflects current research progress, not a production-ready product.
-
----
-
-## ARC-AGI: The Proving Ground
-
-[ARC-AGI](https://arcprize.org/) (Abstraction and Reasoning Corpus for Artificial General Intelligence) is a benchmark designed to test genuine abstract reasoning — the kind that cannot be solved by memorization or pattern-matching on surface features. Each puzzle presents a small number of input/output training pairs (typically 2-5), where each pair shows a colored grid before and after some transformation. The system must infer the transformation rule from those examples alone and apply it correctly to a new input it has never seen.
-
-![ARC-AGI task 1190bc91 — two training pairs on the left; test input on the right](./ARC-AGI-2-1190bc91.png)
-*Task [1190bc91](https://arcprize.org/tasks/1190bc91) on the ARC Prize playground. The left panel shows two training pairs (input → output). The right panel shows the test input; the system must produce the correct output grid.*
-
-The benchmark is deliberately resistant to lookup and interpolation. Two puzzles that look visually similar can have entirely different rules. This makes ARC-AGI an ideal proving ground for Knowledge Fabric: success requires genuine generalization from a handful of examples, which is precisely what KF is built to do.
 
 ---
 
@@ -35,7 +24,21 @@ None of these approaches is wrong for its intended purpose. The point is that no
 
 ---
 
+## ARC-AGI: The Proving Ground
+
+[ARC-AGI](https://arcprize.org/) (Abstraction and Reasoning Corpus for Artificial General Intelligence) is a benchmark designed to test genuine abstract reasoning — the kind that cannot be solved by memorization or pattern-matching on surface features. Each puzzle presents a small number of input/output training pairs (typically 2-5), where each pair shows a colored grid before and after some transformation. The system must infer the transformation rule from those examples alone and apply it correctly to a new input it has never seen.
+
+![ARC-AGI task 1190bc91 — two training pairs on the left; test input on the right](./ARC-AGI-2-1190bc91.png)
+*Task [1190bc91](https://arcprize.org/tasks/1190bc91) on the ARC Prize playground. The left panel shows two training pairs (input → output). The right panel shows the test input; the system must produce the correct output grid.*
+
+The benchmark is deliberately resistant to lookup and interpolation. Two puzzles that look visually similar can have entirely different rules. That makes ARC-AGI a useful proving ground for the broader Knowledge Fabric thesis: if a system can extract reusable rules and tools under these conditions, it is demonstrating the kind of learning layer scalable agentic systems will need in harder real-world domains.
+
+---
+
+
 ## The Core Mechanism
+
+At a high level, Knowledge Fabric revives an old idea in AI and pairs it with a new one: inductive learning plus modern generative models. The premise is that inductive learning can be an efficient path to scalable intelligence, because it allows a system to extract high-level concepts, rules, and procedures from specific experiences and reuse them across future tasks. Modern LLMs make this approach newly practical: they can interpret examples, form hypotheses, express generalized rules in natural language, and generate executable tools that turn abstractions into reliable action. This also points to a more scalable model of agentic AI: as reusable knowledge accumulates, more of the system's effective learning and task handling can occur through locally stored rules and verified tools rather than ever-larger server-side context windows and repeated full-cost reasoning from scratch. In principle, this shifts part of the scaling burden from centralized inference to client-side knowledge accumulation and execution, which could make large-scale agentic systems more efficient and more deployable, though that remains to be validated in real-world operation. Knowledge Fabric combines these strengths into a system designed not just to reason about each task in isolation, but to accumulate reusable knowledge over time.
 
 Knowledge Fabric's engine is a **multi-agent inference loop** built around six roles. Four operate within the inference loop itself; two sit outside it as an escalation chain.
 
