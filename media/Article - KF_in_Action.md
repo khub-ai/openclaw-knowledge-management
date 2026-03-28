@@ -10,7 +10,7 @@
 
 ## ARC-AGI: The Proving Ground
 
-[ARC-AGI](https://arcprize.org/) (Abstraction and Reasoning Corpus for Artificial General Intelligence) is a benchmark designed to test genuine abstract reasoning — the kind that cannot be solved by memorization or pattern-matching on surface features. Each puzzle presents a small number of input/output training pairs (typically 2–5), where each pair shows a colored grid before and after some transformation. The system must infer the transformation rule from those examples alone and apply it correctly to a new input it has never seen.
+[ARC-AGI](https://arcprize.org/) (Abstraction and Reasoning Corpus for Artificial General Intelligence) is a benchmark designed to test genuine abstract reasoning — the kind that cannot be solved by memorization or pattern-matching on surface features. Each puzzle presents a small number of input/output training pairs (typically 2-5), where each pair shows a colored grid before and after some transformation. The system must infer the transformation rule from those examples alone and apply it correctly to a new input it has never seen.
 
 ![ARC-AGI task 1190bc91 — two training pairs on the left; test input on the right](./ARC-AGI-2-1190bc91.png)
 *Task [1190bc91](https://arcprize.org/tasks/1190bc91) on the ARC Prize playground. The left panel shows two training pairs (input → output). The right panel shows the test input; the system must produce the correct output grid.*
@@ -89,7 +89,7 @@ Rules are stored as structured natural language entries. Here is a real rule ext
 ```
 Condition: [gravity] Grid contains multiple disconnected objects classifiable as either
            (a) closed hollow rectangles (complete rectangular perimeter with all interior
-           cells background, bounding box at least 3×3) or
+           cells background, bounding box at least 3x3) or
            (b) open/cross shapes (plus, T, L, asymmetric cross, incomplete frame,
            or any non-rectangular outline)
 
@@ -148,7 +148,7 @@ This tool was generated autonomously — the system wrote it, tested it against 
 
 ### Why Tools Matter Beyond Convenience
 
-The creation of tools is not a workflow optimization — it addresses a fundamental limitation of LLMs. Language models are poor at tasks requiring **repetitive precision**: counting cells, tracking coordinates across a large grid, applying the same geometric operation consistently to dozens of objects. A single off-by-one error in a 30×30 grid produces a wrong answer even when the reasoning was correct.
+The creation of tools is not a workflow optimization — it addresses a fundamental limitation of LLMs. Language models are poor at tasks requiring **repetitive precision**: counting cells, tracking coordinates across a large grid, applying the same geometric operation consistently to dozens of objects. A single off-by-one error in a 30x30 grid produces a wrong answer even when the reasoning was correct.
 
 Deterministic Python tools eliminate this failure mode entirely. Once `fill_enclosed` exists and is verified, it produces the exact same output every time, on any input, with zero probability of a counting error. This has two direct consequences:
 
@@ -244,6 +244,32 @@ The following limitations are acknowledged in the current implementation and are
 | Rule lineage | Every piece of knowledge traces back to the task and correction event that created it |
 | Cost compounding | Each solved task reduces average cost for all future similar tasks |
 
+### Why This Matters Now
+
+Several converging pressures make this architecture timely:
+
+**LLM inference cost is still high and unpredictable.** A system that progressively replaces LLM calls with deterministic rule lookups and verified tool executions has a natural cost trajectory: the more it learns, the cheaper it gets. This is the opposite of systems where every query incurs the same inference cost regardless of prior experience.
+
+**Vendor dependence is a strategic risk.** The rules and tools accumulated by Knowledge Fabric are model-agnostic — plain text and Python, not weights tied to any provider. The underlying LLM can be swapped without losing accumulated knowledge. For organizations concerned about lock-in, this is a meaningful architectural property.
+
+**Institutional knowledge is currently trapped in model weights or human heads.** Fine-tuned models encode expertise opaquely; experienced employees leave. Knowledge Fabric externalizes expertise into an inspectable, transferable artifact — a rule base that can be audited, versioned, and handed off.
+
+**Governance requirements are tightening.** Regulators in healthcare, finance, and legal domains are increasingly asking not just "what did the AI decide?" but "why, and on what basis?" A system where every decision traces to a named rule with a documented lineage is fundamentally easier to govern than one where the answer emerges from opaque model weights.
+
+### Deployment Realism
+
+Enterprise readers will reasonably ask how this system operates in practice. Based on current experience with the ARC-AGI use case:
+
+**Human supervision requirement**: HUMAN intervention is rare by design — the system and SUPERVISOR exhaust their own capacity before escalating. In practice, most task failures are handled by SUPERVISOR autonomously. Precise escalation frequency statistics across a large representative sample are not yet available.
+
+**Rule base curation**: Auto-deprecation handles underperforming rules without human involvement. SUPERVISOR handles structural gaps when the loop fails. Periodic review of the rule base is advisable but not required for routine operation.
+
+**Rollback**: The rule registry is a plain JSON file. Individual rules can be deprecated or deleted with no database migration required. Rolling back a problematic rule is a single file edit.
+
+**Knowledge segmentation**: Each deployment maintains its own isolated local knowledge base by default. Cross-deployment knowledge sharing requires explicit export and is fully under the operator's control — there is no automatic pooling between users or instances.
+
+**Escalation frequency**: We do not yet have clean statistics on how often SUPERVISOR escalates to HUMAN across a representative task sample. This is an area we intend to measure and report as the system matures.
+
 ### Domains That Benefit Most
 
 Knowledge Fabric's architecture delivers the greatest value in domains where:
@@ -267,3 +293,30 @@ Knowledge Fabric's architecture delivers the greatest value in domains where:
 **Software engineering and code review** — code patterns can generalize across codebases, tools can run static analysis and detect anti-patterns deterministically, and rule bases can accumulate institutional knowledge that currently lives only in senior engineers' heads. Application to this domain has not yet been attempted.
 
 The common thread: **any domain where expertise can be expressed as generalizable rules, where execution requires precision, and where the knowledge has enough value to be worth owning.**
+
+---
+
+## What Is Already Demonstrated vs. What Remains to Be Proven
+
+In the interest of precision, here is an honest account of where the evidence stands today.
+
+**Already demonstrated:**
+
+- Persistent rule and tool accumulation across tasks within a session
+- Deterministic execution via autonomously generated and verified Python tools
+- SUPERVISOR-guided structural repair without answer injection
+- Round 0 rule matching bypassing full inference on previously learned patterns
+- Concrete cost reduction on matched task families (e.g. $0.91 to $0.17 on one task family)
+- Successful operation across a growing set of ARC-AGI puzzle types
+
+**Still to be proven:**
+
+- Broad benchmark lift across the full ARC-AGI-2 test set
+- Performance on ARC-AGI-3 (released 2026), which introduces further reasoning challenges beyond ARC-AGI-2
+- Durable rule transfer across many structurally diverse task families at scale
+- Stable long-run rule quality as the registry scales to hundreds of rules
+- SUPERVISOR effectiveness in domains beyond software and code reasoning
+- Enterprise operational workflows: multi-user rule bases, access control, audit export
+- Behaviour under adversarial or out-of-distribution inputs
+
+This distinction matters. The architecture is principled and the early results are encouraging. The claims about what the system *can do* in the sections above describe design properties that are implemented and functioning. The claims about what it *will do* at scale and across domains are hypotheses that we intend to test — not assurances.
