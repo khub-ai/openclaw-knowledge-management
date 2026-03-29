@@ -24,11 +24,19 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import io
 import json
 import os
 import sys
 import time
 from pathlib import Path
+
+# Force UTF-8 stdout/stderr on Windows (avoids cp1252 UnicodeEncodeError from
+# LLM-generated text containing arrows, bullets, and other non-ASCII chars).
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "buffer"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from rich.console import Console
 from rich.table import Table

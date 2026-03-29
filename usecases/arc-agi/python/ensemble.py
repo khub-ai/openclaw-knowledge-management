@@ -540,7 +540,7 @@ async def run_ensemble(
     # Preference rule extraction — fires when a human insight corrected
     # a wrong hypothesis and the corrected approach succeeded.
     #
-    # This is a (wrong_hypothesis → correction → success) training event.
+    # This is a (wrong_hypothesis -> correction -> success) training event.
     # MEDIATOR distills it into a preference rule: a soft prior about
     # *which hypothesis property to prefer* when evidence is ambiguous.
     # The preference does not hard-code the answer — it biases the solver
@@ -591,7 +591,7 @@ async def run_ensemble(
                 if rule_engine.promote_candidate(m.rule_id):
                     promoted.append(m.rule_id)
         if promoted:
-            log(f"  Promoted candidate→active: {promoted}", force=True)
+            log(f"  Promoted candidate->active: {promoted}", force=True)
 
     # ------------------------------------------------------------------
     # Generalization pass — after a successful run with new task rules,
