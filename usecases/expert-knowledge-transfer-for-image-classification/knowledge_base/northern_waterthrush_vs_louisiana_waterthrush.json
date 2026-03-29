@@ -1,0 +1,113 @@
+{
+  "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+  "rules": [
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the supercilium is broad, white, and flares out behind the eye, it is a Louisiana Waterthrush.",
+      "feature": "supercilium width and color",
+      "favors": "Louisiana Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the supercilium is narrow and yellowish-buff, uniform in width, it is a Northern Waterthrush.",
+      "feature": "supercilium width and color",
+      "favors": "Northern Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the throat is clean and unstreaked white, it is a Louisiana Waterthrush.",
+      "feature": "throat streaking",
+      "favors": "Louisiana Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the throat has fine dark streaks or spots, it is a Northern Waterthrush.",
+      "feature": "throat streaking",
+      "favors": "Northern Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the flanks are buffy-pink and the lower belly is nearly white with sparse streaking, it is a Louisiana Waterthrush.",
+      "feature": "flank color and underpart streaking",
+      "favors": "Louisiana Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the underparts are yellowish-buff with densely streaked breast, it is a Northern Waterthrush.",
+      "feature": "underpart color and streaking",
+      "favors": "Northern Waterthrush",
+      "confidence": "high",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the legs are bubblegum-pink, it is a Louisiana Waterthrush.",
+      "feature": "leg color",
+      "favors": "Louisiana Waterthrush",
+      "confidence": "medium",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the bird is observed walking along a mountain stream in early spring, it is likely a Louisiana Waterthrush.",
+      "feature": "habitat in early spring",
+      "favors": "Louisiana Waterthrush",
+      "confidence": "medium",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    },
+    {
+      "pair": "Northern Waterthrush vs Louisiana Waterthrush",
+      "class_id_a": 183,
+      "class_id_b": 184,
+      "rule": "If the bird is located in boggy or swampy areas, it is likely a Northern Waterthrush.",
+      "feature": "habitat preference",
+      "favors": "Northern Waterthrush",
+      "confidence": "medium",
+      "source": "teaching_sessions/northern_waterthrush_vs_louisiana_waterthrush.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:40.839956+00:00"
+    }
+  ]
+}

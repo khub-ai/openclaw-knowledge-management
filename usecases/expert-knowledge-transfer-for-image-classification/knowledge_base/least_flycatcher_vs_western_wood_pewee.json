@@ -1,0 +1,125 @@
+{
+  "pair": "Least Flycatcher vs Western Wood Pewee",
+  "rules": [
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If a bold, complete white eye ring is present, the bird is a Least Flycatcher.",
+      "feature": "eye ring",
+      "favors": "Least Flycatcher",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If no eye ring is present and the face appears plain, the bird is a Western Wood-Pewee.",
+      "feature": "eye ring",
+      "favors": "Western Wood-Pewee",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the primary projection is short with a blunt, rounded folded wing, the bird is a Least Flycatcher.",
+      "feature": "primary projection",
+      "favors": "Least Flycatcher",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the primary projection is long with a pointed folded wing tip, the bird is a Western Wood-Pewee.",
+      "feature": "primary projection",
+      "favors": "Western Wood-Pewee",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the breast displays a vested appearance with gray side patches framing a paler center, the bird is a Western Wood-Pewee.",
+      "feature": "breast pattern",
+      "favors": "Western Wood-Pewee",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the breast has an even, pale gray wash without vested contrast, the bird is a Least Flycatcher.",
+      "feature": "breast pattern",
+      "favors": "Least Flycatcher",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the bird is small, around 5 inches in size, it is a Least Flycatcher.",
+      "feature": "body size",
+      "favors": "Least Flycatcher",
+      "confidence": "medium",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the bird is larger, closer to 6.5 inches in size, it is a Western Wood-Pewee.",
+      "feature": "body size",
+      "favors": "Western Wood-Pewee",
+      "confidence": "medium",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the bird's call is a sharp, emphatic *che-BEK*, the bird is a Least Flycatcher.",
+      "feature": "voice",
+      "favors": "Least Flycatcher",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    },
+    {
+      "pair": "Least Flycatcher vs Western Wood Pewee",
+      "class_id_a": 39,
+      "class_id_b": 102,
+      "rule": "If the bird's call is a descending, burry *pee-er* or *pee-ew*, the bird is a Western Wood-Pewee.",
+      "feature": "voice",
+      "favors": "Western Wood-Pewee",
+      "confidence": "high",
+      "source": "teaching_sessions/least_flycatcher_vs_western_wood_pewee.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:32:37.673721+00:00"
+    }
+  ]
+}

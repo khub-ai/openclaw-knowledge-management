@@ -1,7 +1,3 @@
-results/*.json
-knowledge_base/*.json
-!knowledge_base/.gitkeep
-!results/.gitkeep
 __pycache__/
 *.pyc
 .env

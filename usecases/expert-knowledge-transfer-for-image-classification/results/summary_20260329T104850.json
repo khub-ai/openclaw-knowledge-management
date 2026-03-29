@@ -1,0 +1,17 @@
+{
+  "zero_shot": {
+    "n": 600,
+    "correct": 468,
+    "accuracy": 0.78
+  },
+  "few_shot": {
+    "n": 600,
+    "correct": 497,
+    "accuracy": 0.8283
+  },
+  "kf_taught": {
+    "n": 599,
+    "correct": 434,
+    "accuracy": 0.7245
+  }
+}

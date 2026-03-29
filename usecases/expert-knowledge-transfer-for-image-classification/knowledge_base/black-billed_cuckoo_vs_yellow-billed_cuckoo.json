@@ -1,0 +1,89 @@
+{
+  "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+  "rules": [
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the lower mandible is clearly yellow, it is a Yellow-billed Cuckoo",
+      "feature": "bill color",
+      "favors": "Yellow-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the bill is entirely dark, it is a Black-billed Cuckoo",
+      "feature": "bill color",
+      "favors": "Black-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the undertail shows large, bold white spots, it is a Yellow-billed Cuckoo",
+      "feature": "tail pattern",
+      "favors": "Yellow-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the undertail appears grayish with only narrow pale fringes, it is a Black-billed Cuckoo",
+      "feature": "tail pattern",
+      "favors": "Black-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If rufous flashes in the wing in flight, it is a Yellow-billed Cuckoo",
+      "feature": "wing pattern",
+      "favors": "Yellow-billed Cuckoo",
+      "confidence": "medium",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the orbital ring is red, it is a Black-billed Cuckoo",
+      "feature": "orbital ring color",
+      "favors": "Black-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    },
+    {
+      "pair": "Black-billed Cuckoo vs Yellow-billed Cuckoo",
+      "class_id_a": 31,
+      "class_id_b": 33,
+      "rule": "If the orbital ring is yellow, it is a Yellow-billed Cuckoo",
+      "feature": "orbital ring color",
+      "favors": "Yellow-billed Cuckoo",
+      "confidence": "high",
+      "source": "teaching_sessions/black_billed_cuckoo_vs_yellow_billed_cuckoo.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:23.639239+00:00"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "pair": "Common Tern vs Forsters Tern",
+  "rules": [
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "If the outer primaries form a dark wedge on the upperwing, it is a Common Tern.",
+      "feature": "wingtip pattern",
+      "favors": "Common Tern",
+      "confidence": "high",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    },
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "If the outer primaries are frosted/silvery (pale wingtip), it is a Forster's Tern.",
+      "feature": "wingtip pattern",
+      "favors": "Forsters Tern",
+      "confidence": "high",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    },
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "If the tail is mostly grey from above, lean toward Common Tern.",
+      "feature": "tail pattern",
+      "favors": "Common Tern",
+      "confidence": "medium",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    },
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "If the tail is mostly white (with grey central feathers only), lean toward Forster's Tern.",
+      "feature": "tail pattern",
+      "favors": "Forsters Tern",
+      "confidence": "medium",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    },
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "In non-breeding plumage: if the head shows a bold eye-patch (black around and behind the eye, white forehead), it is a Forster's Tern.",
+      "feature": "non-breeding head pattern",
+      "favors": "Forsters Tern",
+      "confidence": "high",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    },
+    {
+      "pair": "Common Tern vs Forsters Tern",
+      "class_id_a": 144,
+      "class_id_b": 146,
+      "rule": "If the breeding bill is orange-red with a distinct black tip, lean toward Common Tern.",
+      "feature": "bill color and shape",
+      "favors": "Common Tern",
+      "confidence": "medium",
+      "source": "teaching_sessions/common_tern_vs_forsters_tern.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:01.241390+00:00"
+    }
+  ]
+}

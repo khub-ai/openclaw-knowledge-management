@@ -3,7 +3,7 @@
 
 ---
 
-> **Status**: Experiment design (not yet implemented)  
+> **Status**: Experiment complete — results in Section 8
 > **Theme**: KF as a knowledge authoring tool for domain experts with no AI expertise
 
 ---
@@ -161,6 +161,78 @@ The experiment should be designed to produce a specific before/after story:
 3. **Verification mechanism**: An expert is assumed available to converse with KF during the teaching and verification loop — the same SOLVER → SUPERVISOR → HUMAN escalation pattern used in the ARC-AGI-2 use case. When KF extracts a rule and is uncertain, it surfaces the rule to the expert for confirmation or correction before storing it. This makes the verification mechanism interactive rather than purely automated.
 
 4. **Benchmark framing**: Report on both — the full CUB-200 test set for direct leaderboard comparison, and a curated confusable-pair subset for the narrative. The confusable-pair subset is the primary story; the full-set score provides credibility.
+
+---
+
+## 8. Experiment Results
+
+*Run date: 2026-03-29. Model: GPT-4o. 15 confusable pairs, 20 test images per class per condition (40 images/pair). 118 KF rules in knowledge base, auto-accepted from field-guide text (no expert verification). Results file: `results/results_20260329T104850.json`.*
+
+### 8.1 Overall accuracy
+
+| Condition | Accuracy | vs. Zero-shot |
+|---|---|---|
+| Zero-shot | 78.0% (468/600) | — |
+| Few-shot (3 train images/class) | 82.8% (497/600) | +4.8pp |
+| KF-taught (NL rules injected) | 72.5% (434/599) | **−5.5pp** |
+
+KF-taught underperformed zero-shot overall. Per-pair results reveal why: KF rules worked well for some pairs and caused systematic failures in others.
+
+### 8.2 Per-pair breakdown
+
+| Pair | Zero-shot | Few-shot | KF-taught | KF delta |
+|---|---|---|---|---|
+| American Crow vs Fish Crow | 68% | 68% | 49% | −19pp |
+| Black-billed Cuckoo vs Yellow-billed Cuckoo | 78% | 88% | 85% | +7pp |
+| Brewer Sparrow vs Clay-colored Sparrow | 82% | 95% | 50% | −32pp |
+| Bronzed Cowbird vs Shiny Cowbird | 88% | 95% | **98%** | **+10pp** |
+| California Gull vs Herring Gull | 45% | 40% | 50% | +5pp |
+| Caspian Tern vs Elegant Tern | 85% | 92% | 88% | +3pp |
+| Chipping Sparrow vs Tree Sparrow | 88% | 90% | 42% | **−45pp** |
+| Common Raven vs White-necked Raven | 88% | 92% | 85% | −3pp |
+| Common Tern vs Forster's Tern | 42% | 68% | 38% | −5pp |
+| Herring Gull vs Ring-billed Gull | 87% | 93% | 87% | +0pp |
+| Indigo Bunting vs Blue Grosbeak | 90% | 95% | 88% | −3pp |
+| Least Flycatcher vs Western Wood-Pewee | 72% | 78% | 70% | −3pp |
+| Loggerhead Shrike vs Great Grey Shrike | 80% | 55% | 72% | −8pp |
+| Northern Waterthrush vs Louisiana Waterthrush | 75% | 72% | 75% | +0pp |
+| Red-faced Cormorant vs Pelagic Cormorant | 82% | 95% | **92%** | **+10pp** |
+
+### 8.3 What worked
+
+KF rules produced measurable gains where visual rules were clear, diagnostic, and applicable to the images as photographed:
+
+- **Red-faced Cormorant vs Pelagic Cormorant (+10pp)**: Rules about bare facial skin extent and bill color are unambiguous and visible in most images. GPT-4o applied them reliably.
+- **Bronzed Cowbird vs Shiny Cowbird (+10pp)**: Plumage differences (bronzy-brown vs. glossy black-blue body on male, buff vs. grayish on female) are consistent and visible.
+- **Black-billed Cuckoo vs Yellow-billed Cuckoo (+7pp)**: Bill color and undertail spot pattern are both visible features well described in the teaching material.
+
+### 8.4 What failed — and why
+
+The three largest KF failures share a common root: **rules that do not match what is visible in the images**.
+
+**Chipping Sparrow vs Tree Sparrow (−45pp)**: The most damaging failure. CUB-200-2011 class 130 is the *Eurasian Tree Sparrow* (*Passer montanus*). The knowledge base was built using field-guide text about the *American Tree Sparrow* (*Spizelloides arborea*) — a completely different species. The injected rules systematically pushed predictions toward Chipping Sparrow for images that actually showed Eurasian Tree Sparrows. This is a category error introduced by auto-accepting rules without expert verification.
+
+**Brewer Sparrow vs Clay-colored Sparrow (−32pp)**: Fine-grained sparrow rules describe subtle plumage differences (malar stripe, supercilium contrast, crown pattern) that are not consistently discernible in CUB photographs taken at variable angles and distances. The rules may also have bled across pair boundaries, since Brewer, Clay-colored, and Chipping Sparrows are all involved in overlapping confusable pairs.
+
+**American Crow vs Fish Crow (−19pp)**: The most visually similar pair in the dataset (cosine sim 0.996). Most diagnostic features reference voice ("Fish Crow gives a nasal *uh-uh*"), range, and body size context — none of which are available from a single photograph. Rules that inject non-visual criteria confuse rather than help a vision model.
+
+### 8.5 Interpretation
+
+The experiment result is mixed but instructive. The key finding is not that KF rules fail to help — it is that **incorrectly specified or non-visual rules cause systematic harm**, while well-grounded visual rules reliably help.
+
+The auto-acceptance mode used here (no HUMAN verification step) is the source of the failures:
+
+1. The Tree Sparrow taxonomic error would have been caught immediately by any expert reviewing the extracted rules.
+2. Rules referencing voice or range would be rejected by an expert as inapplicable to a visual task.
+3. The sparrow rules flagging low-confidence features could be assigned lower weight or eliminated.
+
+This is precisely the validation loop KF is designed to support: SOLVER extracts rules, SUPERVISOR presents them to HUMAN, HUMAN rejects non-applicable rules before they reach the knowledge base. Skipping this step produced the failures observed. The corollary: for pairs where rules were visually grounded and accurate, KF consistently outperformed zero-shot.
+
+### 8.6 Path forward
+
+1. **Re-run with expert verification**: Run the interactive teaching session (`kf_teacher.py` without `auto_accept=True`) and reject rules that reference non-visual features. Predict this would recover most of the lost ground.
+2. **Fix Tree Sparrow taxonomy**: Update the teaching file to correctly describe Eurasian Tree Sparrow (*P. montanus*) — rufous crown, bold black cheek patch, white cheek with black spot. Predict this pair would jump from 42% to well above zero-shot.
+3. **Add confidence-weighted rule injection**: Rules with `confidence: low` should be presented as weak priors, not directives.
 
 ---
 

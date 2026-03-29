@@ -1,0 +1,137 @@
+{
+  "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+  "rules": [
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the face shows a bold, dark malar stripe and a crisp pale submoustachial area, it is a Clay-colored Sparrow.",
+      "feature": "facial pattern",
+      "favors": "Clay-colored Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the face is uniformly patterned with no single bold element and low contrast, it is a Brewer's Sparrow.",
+      "feature": "facial contrast",
+      "favors": "Brewer's Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the nape features a clean gray collar contrasting sharply with a streaked crown, it is a Clay-colored Sparrow.",
+      "feature": "nape pattern",
+      "favors": "Clay-colored Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the nape is streaked brownish-gray without a clean gray collar, it is a Brewer's Sparrow.",
+      "feature": "nape pattern",
+      "favors": "Brewer's Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If there is a distinct pale median crown stripe visible, it is a Clay-colored Sparrow.",
+      "feature": "crown pattern",
+      "favors": "Clay-colored Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the crown is uniformly fine-streaked with no obvious pale center stripe, it is a Brewer's Sparrow.",
+      "feature": "crown pattern",
+      "favors": "Brewer's Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If a complete, crisp narrow white eye ring is observed, consider it a Brewer's Sparrow.",
+      "feature": "eye ring",
+      "favors": "Brewer's Sparrow",
+      "confidence": "medium",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the bird is in the arid sagebrush steppe of the interior West, it is likely a Brewer's Sparrow.",
+      "feature": "habitat",
+      "favors": "Brewer's Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the bird is found in open scrub or Great Plains breeding ground, it is more likely a Clay-colored Sparrow.",
+      "feature": "habitat",
+      "favors": "Clay-colored Sparrow",
+      "confidence": "medium",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the bird sings a long, complex series of buzzy, reedy trills and notes, it is a Brewer's Sparrow.",
+      "feature": "song",
+      "favors": "Brewer's Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    },
+    {
+      "pair": "Brewer Sparrow vs Clay-colored Sparrow",
+      "class_id_a": 115,
+      "class_id_b": 117,
+      "rule": "If the bird sings a series of 3–5 flat, toneless, insect-like buzzes at uniform pitch, it is a Clay-colored Sparrow.",
+      "feature": "song",
+      "favors": "Clay-colored Sparrow",
+      "confidence": "high",
+      "source": "teaching_sessions/brewer_sparrow_vs_clay_colored_sparrow.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:59.648546+00:00"
+    }
+  ]
+}

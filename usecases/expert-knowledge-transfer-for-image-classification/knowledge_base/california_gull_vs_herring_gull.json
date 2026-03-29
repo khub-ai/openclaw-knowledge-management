@@ -1,0 +1,89 @@
+{
+  "pair": "California Gull vs Herring Gull",
+  "rules": [
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the bill shows both a red spot and a black mark near the tip of the lower mandible, it is a California Gull.",
+      "feature": "bill markings",
+      "favors": "California Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the bill shows only a red (orange-red) spot with no black, it is a Herring Gull.",
+      "feature": "bill markings",
+      "favors": "Herring Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the eye is dark brown, lean toward California Gull.",
+      "feature": "eye color",
+      "favors": "California Gull",
+      "confidence": "medium",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the eye is pale yellow, it is a Herring Gull.",
+      "feature": "eye color",
+      "favors": "Herring Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the legs are greenish-yellow, it is a California Gull.",
+      "feature": "leg color",
+      "favors": "California Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the legs are flesh-pink, it is a Herring Gull.",
+      "feature": "leg color",
+      "favors": "Herring Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    },
+    {
+      "pair": "California Gull vs Herring Gull",
+      "class_id_a": 59,
+      "class_id_b": 62,
+      "rule": "If the bird appears smaller and rounder-headed than typical Herring Gulls nearby, consider California Gull.",
+      "feature": "overall size and head shape",
+      "favors": "California Gull",
+      "confidence": "medium",
+      "source": "teaching_sessions/california_gull_vs_herring_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:36.508019+00:00"
+    }
+  ]
+}

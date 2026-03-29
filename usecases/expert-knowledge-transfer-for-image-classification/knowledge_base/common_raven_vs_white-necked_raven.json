@@ -1,0 +1,53 @@
+{
+  "pair": "Common Raven vs White-necked Raven",
+  "rules": [
+    {
+      "pair": "Common Raven vs White-necked Raven",
+      "class_id_a": 107,
+      "class_id_b": 108,
+      "rule": "If any white is visible on the neck or upper back, it is a White-necked Raven.",
+      "feature": "white neck base",
+      "favors": "White-necked Raven",
+      "confidence": "high",
+      "source": "teaching_sessions/common_raven_vs_white_necked_raven.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:06.212038+00:00"
+    },
+    {
+      "pair": "Common Raven vs White-necked Raven",
+      "class_id_a": 107,
+      "class_id_b": 108,
+      "rule": "If the tail is long and distinctly wedge-shaped in soaring flight, it is a Common Raven.",
+      "feature": "tail shape",
+      "favors": "Common Raven",
+      "confidence": "high",
+      "source": "teaching_sessions/common_raven_vs_white_necked_raven.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:06.212038+00:00"
+    },
+    {
+      "pair": "Common Raven vs White-necked Raven",
+      "class_id_a": 107,
+      "class_id_b": 108,
+      "rule": "If the bill has a very strongly arched, deep profile (stubby appearance), lean toward White-necked Raven.",
+      "feature": "bill shape",
+      "favors": "White-necked Raven",
+      "confidence": "medium",
+      "source": "teaching_sessions/common_raven_vs_white_necked_raven.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:06.212038+00:00"
+    },
+    {
+      "pair": "Common Raven vs White-necked Raven",
+      "class_id_a": 107,
+      "class_id_b": 108,
+      "rule": "If the bird is very large (noticeably larger than a crow) with a long wedge tail, it is a Common Raven.",
+      "feature": "size in comparison with a crow and tail shape",
+      "favors": "Common Raven",
+      "confidence": "high",
+      "source": "teaching_sessions/common_raven_vs_white_necked_raven.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:06.212038+00:00"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "pair": "Loggerhead Shrike vs Great Grey Shrike",
+  "rules": [
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If the black mask extends across the forehead above the bill base, it is a Loggerhead Shrike.",
+      "feature": "facial mask extent",
+      "favors": "Loggerhead Shrike",
+      "confidence": "high",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    },
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If the forehead above the bill base is pale/grey (mask does not cross above bill), lean toward Great Grey Shrike.",
+      "feature": "facial mask extent",
+      "favors": "Great Grey Shrike",
+      "confidence": "high",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    },
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If a white rump patch is visible as the bird flies, it is a Great Grey Shrike.",
+      "feature": "rump color",
+      "favors": "Great Grey Shrike",
+      "confidence": "high",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    },
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If the bird is noticeably large and long-tailed, lean toward Great Grey Shrike.",
+      "feature": "size and tail length",
+      "favors": "Great Grey Shrike",
+      "confidence": "medium",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    },
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If the underparts show fine grey barring, it is a Great Grey Shrike.",
+      "feature": "underpart pattern",
+      "favors": "Great Grey Shrike",
+      "confidence": "high",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    },
+    {
+      "pair": "Loggerhead Shrike vs Great Grey Shrike",
+      "class_id_a": 111,
+      "class_id_b": 112,
+      "rule": "If underparts are clean white with no barring, lean toward Loggerhead Shrike.",
+      "feature": "underpart pattern",
+      "favors": "Loggerhead Shrike",
+      "confidence": "medium",
+      "source": "teaching_sessions/loggerhead_shrike_vs_great_grey_shrike.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:15.866899+00:00"
+    }
+  ]
+}

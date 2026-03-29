@@ -1,0 +1,77 @@
+{
+  "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+  "rules": [
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If bright red-orange bare skin extends across the forehead and around the eye, it is a Red-faced Cormorant.",
+      "feature": "facial skin color and extent",
+      "favors": "Red-faced Cormorant",
+      "confidence": "high",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    },
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If bare skin is restricted to a small area at the bill base only, it is a Pelagic Cormorant.",
+      "feature": "facial skin color and extent",
+      "favors": "Pelagic Cormorant",
+      "confidence": "high",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    },
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If the bill is pale (yellowish or greyish), it is a Red-faced Cormorant.",
+      "feature": "bill color",
+      "favors": "Red-faced Cormorant",
+      "confidence": "medium",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    },
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If the bill is dark throughout, lean toward Pelagic Cormorant.",
+      "feature": "bill color",
+      "favors": "Pelagic Cormorant",
+      "confidence": "medium",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    },
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If the bird appears exceptionally slender with a tiny head and very thin neck, it is a Pelagic Cormorant.",
+      "feature": "body size and proportions",
+      "favors": "Pelagic Cormorant",
+      "confidence": "high",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    },
+    {
+      "pair": "Red-faced Cormorant vs Pelagic Cormorant",
+      "class_id_a": 24,
+      "class_id_b": 25,
+      "rule": "If white flank patches are visible on a dark cormorant in breeding season, it is a Pelagic Cormorant.",
+      "feature": "breeding white flank patches",
+      "favors": "Pelagic Cormorant",
+      "confidence": "medium",
+      "source": "teaching_sessions/red_faced_cormorant_vs_pelagic_cormorant.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:31:12.031520+00:00"
+    }
+  ]
+}

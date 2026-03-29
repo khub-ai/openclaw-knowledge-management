@@ -1,0 +1,101 @@
+{
+  "pair": "Herring Gull vs Ring-billed Gull",
+  "rules": [
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the bill has a complete black ring near the tip, it is a Ring-billed Gull.",
+      "feature": "bill pattern",
+      "favors": "Ring-billed Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.012881+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the legs are yellow, it is a Ring-billed Gull.",
+      "feature": "leg color",
+      "favors": "Ring-billed Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.012881+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the legs are flesh-pink, it is a Herring Gull.",
+      "feature": "leg color",
+      "favors": "Herring Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.012881+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the bill is plain yellow with only a red spot (no ring), it is a Herring Gull.",
+      "feature": "bill pattern",
+      "favors": "Herring Gull",
+      "confidence": "high",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.013893+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the bird is noticeably smaller and slimmer than the gulls around it, consider Ring-billed.",
+      "feature": "size and body proportions",
+      "favors": "Ring-billed Gull",
+      "confidence": "medium",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.013893+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the bird is large and heavily built with a blocky head, lean toward Herring Gull.",
+      "feature": "size and body proportions",
+      "favors": "Herring Gull",
+      "confidence": "medium",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.013893+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the wingtip pattern consists of a black wingtip with white 'mirrors' on the outer two primaries but they are large and include more white, it is a Herring Gull.",
+      "feature": "wingtip pattern",
+      "favors": "Herring Gull",
+      "confidence": "low",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.013893+00:00"
+    },
+    {
+      "pair": "Herring Gull vs Ring-billed Gull",
+      "class_id_a": 62,
+      "class_id_b": 64,
+      "rule": "If the bird shows a black wingtip with smaller white 'mirrors' on the outer two primaries, it is a Ring-billed Gull.",
+      "feature": "wingtip pattern",
+      "favors": "Ring-billed Gull",
+      "confidence": "low",
+      "source": "teaching_sessions/herring_gull_vs_ring_billed_gull.md",
+      "verified_by": "auto",
+      "created_at": "2026-03-29T10:30:50.013893+00:00"
+    }
+  ]
+}
