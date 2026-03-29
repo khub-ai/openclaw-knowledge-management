@@ -13,11 +13,16 @@ Usage:
 
 from __future__ import annotations
 import argparse
+import io
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
+
+# Force UTF-8 stdout on Windows so print() never hits cp1252
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -90,7 +95,7 @@ def evaluate_pair(
                 raise ValueError(f"Unknown condition: {condition}")
 
             result["correct"] = is_correct(result.get("prediction", ""), img.class_name)
-            print("✓" if result["correct"] else "✗")
+            print("OK" if result["correct"] else "WRONG")
         except Exception as e:
             print(f"ERROR: {e}")
             result = {
@@ -129,7 +134,7 @@ def print_summary(summary: dict):
     print("RESULTS SUMMARY")
     print("=" * 50)
     for cond, stats in sorted(summary.items()):
-        bar = "█" * int(stats["accuracy"] * 30)
+        bar = "#" * int(stats["accuracy"] * 30)
         print(f"  {cond:<15} {stats['accuracy']*100:5.1f}%  {bar}  ({stats['correct']}/{stats['n']})")
     print()
 
@@ -146,7 +151,7 @@ def run(conditions: list[Condition]):
     all_results = []
 
     for pair in CONFUSABLE_PAIRS:
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print(f"Pair: {pair.class_name_a} vs {pair.class_name_b}  (sim={pair.cosine_sim:.4f})")
         for cond in conditions:
             results = evaluate_pair(client, pair, ds, cond)

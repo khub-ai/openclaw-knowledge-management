@@ -172,7 +172,7 @@ def verify_rules_interactive(
                     source=source,
                     verified_by="expert",
                 ))
-                print("  ✓ Accepted.")
+                print("  [OK] Accepted.")
                 break
             elif choice == "E":
                 new_rule = input("  Enter corrected rule text: ").strip()
@@ -185,10 +185,10 @@ def verify_rules_interactive(
                     source=source,
                     verified_by="expert",
                 ))
-                print("  ✓ Edited and accepted.")
+                print("  [OK] Edited and accepted.")
                 break
             elif choice == "R":
-                print("  ✗ Rejected.")
+                print("  [--] Rejected.")
                 break
             elif choice == "?":
                 print(f"\n  Full source text:\n  {teaching_text}\n")
