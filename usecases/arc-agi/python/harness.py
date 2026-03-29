@@ -37,8 +37,12 @@ from rich.panel import Panel
 # ---------------------------------------------------------------------------
 # Resolve paths before importing local modules
 # ---------------------------------------------------------------------------
-_HERE = Path(__file__).parent
-sys.path.insert(0, str(_HERE))
+_HERE    = Path(__file__).parent
+_KF_ROOT = _HERE.resolve().parents[3]   # khub-knowledge-fabric repo root
+# core/ lives at _KF_ROOT/core/ — must be on sys.path before local imports
+for _p in (str(_KF_ROOT), str(_HERE)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import ensemble
 from ensemble import run_ensemble

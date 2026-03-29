@@ -1,20 +1,46 @@
 """
-agents.py — Async Anthropic API calls for each ensemble agent.
+agents.py — ARC-AGI agent runner functions.
 
-Loads system prompts from the prompts/ directory next to this package,
-injects prior knowledge and task context, and returns structured responses.
+Loads system prompts from the prompts/ directory, injects prior knowledge
+and task context, and returns structured responses.
+
+Generic LLM infrastructure (get_client, call_agent, CostTracker, etc.) lives
+in core/pipeline/agents.py and is imported here.
 """
 
 from __future__ import annotations
+import sys
+from pathlib import Path
+
+# Ensure KF repo root is on sys.path for core/ imports
+_KF_ROOT = Path(__file__).resolve().parents[3]
+if str(_KF_ROOT) not in sys.path:
+    sys.path.insert(0, str(_KF_ROOT))
+
 import asyncio
 import json
 import os
 import re
 import time
-from pathlib import Path
 from typing import Optional
 
 import anthropic
+
+# ---------------------------------------------------------------------------
+# Generic infrastructure from core
+# ---------------------------------------------------------------------------
+from core.pipeline.agents import (          # noqa: E402
+    get_client,
+    CostTracker,
+    reset_cost_tracker,
+    get_cost_tracker,
+    DEFAULT_MODEL,
+    DEFAULT_MAX_TOKENS,
+    SHOW_PROMPTS,
+    _print_prompt,
+    call_agent as _core_call_agent,
+)
+import core.pipeline.agents as _core_agents  # to write back SHOW_PROMPTS
 
 from grid_tools import Grid, grid_to_str, summarize
 from typing import TYPE_CHECKING
@@ -48,20 +74,7 @@ def load_prompt(agent_id: str) -> str:
     return _prompt_cache[agent_id]
 
 
-# ---------------------------------------------------------------------------
-# Anthropic client (lazy singleton)
-# ---------------------------------------------------------------------------
-
-_client: Optional[anthropic.AsyncAnthropic] = None
-
-def get_client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
-        _client = anthropic.AsyncAnthropic(api_key=api_key)
-    return _client
+# get_client, CostTracker, reset_cost_tracker, get_cost_tracker imported from core above
 
 
 # ---------------------------------------------------------------------------
@@ -86,79 +99,8 @@ def format_task_for_prompt(task: dict) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Core call
-# ---------------------------------------------------------------------------
-
-DEFAULT_MODEL = "claude-sonnet-4-6"
-DEFAULT_MAX_TOKENS = 4096
-
-# Set to True by harness/ensemble to print prompts before each call
-SHOW_PROMPTS: bool = False
-
-# ---------------------------------------------------------------------------
-# Cost tracking
-# ---------------------------------------------------------------------------
-
-# Sonnet 4.6 pricing (USD per token)
-# Verify against https://www.anthropic.com/pricing if estimates diverge from Anthropic invoices.
-# Anthropic auto-caches repeated system prompts; cache_creation costs 25% more, cache_read 90% less.
-_PRICE_INPUT_PER_TOKEN          = 3.00  / 1_000_000   # standard input
-_PRICE_CACHE_CREATION_PER_TOKEN = 3.75  / 1_000_000   # cache write (25% surcharge)
-_PRICE_CACHE_READ_PER_TOKEN     = 0.30  / 1_000_000   # cache hit  (90% discount)
-_PRICE_OUTPUT_PER_TOKEN         = 15.00 / 1_000_000   # output
-
-
-class CostTracker:
-    """Accumulates token usage and computes USD cost for one task run."""
-
-    def __init__(self) -> None:
-        self.reset()
-
-    def reset(self) -> None:
-        self.input_tokens:          int = 0
-        self.cache_creation_tokens: int = 0
-        self.cache_read_tokens:     int = 0
-        self.output_tokens:         int = 0
-        self.api_calls:             int = 0
-
-    def add(self, input_tokens: int, output_tokens: int,
-            cache_creation: int = 0, cache_read: int = 0) -> None:
-        self.input_tokens          += input_tokens
-        self.cache_creation_tokens += cache_creation
-        self.cache_read_tokens     += cache_read
-        self.output_tokens         += output_tokens
-        self.api_calls             += 1
-
-    def cost_usd(self) -> float:
-        return (
-            self.input_tokens          * _PRICE_INPUT_PER_TOKEN +
-            self.cache_creation_tokens * _PRICE_CACHE_CREATION_PER_TOKEN +
-            self.cache_read_tokens     * _PRICE_CACHE_READ_PER_TOKEN +
-            self.output_tokens         * _PRICE_OUTPUT_PER_TOKEN
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "input_tokens":          self.input_tokens,
-            "cache_creation_tokens": self.cache_creation_tokens,
-            "cache_read_tokens":     self.cache_read_tokens,
-            "output_tokens":         self.output_tokens,
-            "api_calls":             self.api_calls,
-            "cost_usd":              round(self.cost_usd(), 6),
-        }
-
-
-# Module-level singleton — reset between tasks by the harness/ensemble
-_cost_tracker = CostTracker()
-
-
-def reset_cost_tracker() -> None:
-    _cost_tracker.reset()
-
-
-def get_cost_tracker() -> CostTracker:
-    return _cost_tracker
+# DEFAULT_MODEL, DEFAULT_MAX_TOKENS, SHOW_PROMPTS, CostTracker,
+# reset_cost_tracker, get_cost_tracker all imported from core above.
 
 
 async def call_agent(
@@ -168,77 +110,24 @@ async def call_agent(
     max_tokens: int = DEFAULT_MAX_TOKENS,
     max_retries: int = 5,
 ) -> tuple[str, int]:
+    """ARC-AGI wrapper: loads the system prompt by agent_id, then delegates
+    to core.pipeline.agents.call_agent.
+
+    Callers throughout the ARC-AGI codebase use call_agent("MEDIATOR", ...)
+    without knowing where the prompt comes from — this shim preserves that
+    interface while keeping core prompt-loading-free.
     """
-    Call an agent with its system prompt + a user message.
-    Returns (response_text, duration_ms).
-    Retries on 529 overloaded errors with exponential backoff.
-    """
+    # Propagate the SHOW_PROMPTS flag set by harness into the core module
+    _core_agents.SHOW_PROMPTS = SHOW_PROMPTS
     system_prompt = load_prompt(agent_id)
-
-    if SHOW_PROMPTS:
-        _print_prompt(agent_id, system_prompt, user_message, model)
-
-    client = get_client()
-    t0 = time.time()
-
-    for attempt in range(max_retries):
-        try:
-            response = await client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            duration_ms = int((time.time() - t0) * 1000)
-            text = response.content[0].text if response.content else ""
-            if response.usage:
-                u = response.usage
-                _cost_tracker.add(
-                    u.input_tokens,
-                    u.output_tokens,
-                    cache_creation=getattr(u, "cache_creation_input_tokens", 0) or 0,
-                    cache_read=getattr(u, "cache_read_input_tokens", 0) or 0,
-                )
-            return text, duration_ms
-        except anthropic.RateLimitError:
-            if attempt < max_retries - 1:
-                wait = 60 * (attempt + 1)  # 60s, 120s, 180s, 240s
-                print(f"  [rate-limit] {agent_id} retry {attempt+1}/{max_retries-1} in {wait}s...")
-                await asyncio.sleep(wait)
-            else:
-                raise
-        except anthropic.APIStatusError as e:
-            if e.status_code == 529 and attempt < max_retries - 1:
-                wait = 2 ** attempt  # 1s, 2s, 4s, 8s, 16s
-                print(f"  [overloaded] {agent_id} retry {attempt+1}/{max_retries-1} in {wait}s...")
-                await asyncio.sleep(wait)
-            else:
-                raise
-
-
-def _print_prompt(agent_id: str, system: str, user: str, model: str) -> None:
-    """Print agent prompt to terminal (used when SHOW_PROMPTS is True)."""
-    try:
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.text import Text
-        c = Console()
-        sys_preview = system[:600] + ("..." if len(system) > 600 else "")
-        usr_preview = user[:1200] + ("..." if len(user) > 1200 else "")
-        c.print(Panel(
-            Text(sys_preview, style="dim"),
-            title=f"[bold magenta]{agent_id} -- system prompt[/bold magenta]  [dim]{model}[/dim]",
-            border_style="magenta",
-        ))
-        c.print(Panel(
-            Text(usr_preview),
-            title=f"[bold magenta]{agent_id} -- user message[/bold magenta]",
-            border_style="magenta",
-        ))
-    except ImportError:
-        print(f"\n=== {agent_id} ({model}) ===")
-        print(f"SYSTEM: {system[:400]}")
-        print(f"USER:   {user[:800]}")
+    return await _core_call_agent(
+        agent_id,
+        user_message,
+        system_prompt=system_prompt,
+        model=model,
+        max_tokens=max_tokens,
+        max_retries=max_retries,
+    )
 
 
 # ---------------------------------------------------------------------------
