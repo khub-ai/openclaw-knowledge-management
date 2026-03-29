@@ -14,6 +14,12 @@ Current focus:
   observe state changes, and build an action trace that may reveal how the game
   works.
 
+
+- `playlog_viewer.py`
+  A Tkinter-based viewer for logged play sessions. It renders each saved frame,
+  shows the recorded decision note and change summary on the side, and supports
+  both autoplay and manual frame stepping with the space bar.
+
 ## Goal
 
 The goal is not to provide a guaranteed LS20 solver. The goal is to create a
@@ -62,3 +68,23 @@ observed.
   play.
 - If the installed ARC SDK differs slightly from the version assumed here, some
   field names may need adjustment.
+
+## Playlog Viewer
+
+To replay a logged play session visually:
+
+```bash
+conda run -n arc python playlog_viewer.py
+conda run -n arc python playlog_viewer.py --playlog-dir playlogs\20260329-043019
+```
+
+Controls:
+
+- `Space` or `Right Arrow`: next frame
+- `Left Arrow`: previous frame
+- `P`: play / pause autoplay
+- `Home` / `End`: jump to first / last frame
+
+The viewer loads the latest playlog folder by default and shows the player's
+recorded decision note, diff summary, and basic state metadata beside the game
+frame.
