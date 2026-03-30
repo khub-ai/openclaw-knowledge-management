@@ -1,0 +1,13 @@
+{
+  "name": "kf-session-viewer",
+  "version": "0.1.0",
+  "description": "Browser-based Knowledge Fabric session viewer with renderer adapters and reusable session schema",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs --port 4180"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

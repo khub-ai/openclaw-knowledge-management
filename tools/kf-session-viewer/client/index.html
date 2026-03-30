@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KF Session Viewer</title>
+    <link rel="stylesheet" href="./viewer.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>KF Session Viewer</h1>
+          <p>Reusable browser viewer for Knowledge Fabric sessions</p>
+        </div>
+        <div class="loaders">
+          <label class="file-picker">
+            <span>Load Session JSON</span>
+            <input id="fileInput" type="file" accept=".json,application/json" />
+          </label>
+          <label>
+            <span>Sample</span>
+            <select id="sampleSelect">
+              <option value="">Loading samples...</option>
+            </select>
+          </label>
+          <button id="loadSampleBtn">Load Sample</button>
+        </div>
+      </header>
+
+      <main class="main-layout">
+        <section class="viewer-panel panel">
+          <div class="toolbar">
+            <button id="prevBtn">Prev</button>
+            <button id="nextBtn">Next</button>
+            <button id="playBtn">Play</button>
+            <label class="toggle"><input id="diffToggle" type="checkbox" checked /> Diff Overlay</label>
+            <label class="zoom">
+              <span>Zoom</span>
+              <input id="zoomRange" type="range" min="2" max="18" value="8" />
+            </label>
+            <span id="statusText" class="status-text">No session loaded</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="artifactCanvas"></canvas>
+          </div>
+        </section>
+
+        <aside class="side-panel panel">
+          <section class="meta-block">
+            <h2 id="sessionTitle">Session</h2>
+            <p id="sessionSubtitle" class="muted">Load a sample or JSON file to begin.</p>
+            <div class="meta-grid">
+              <div class="label">Renderer</div><div id="rendererValue">-</div>
+              <div class="label">Step</div><div id="stepValue">-</div>
+              <div class="label">Action</div><div id="actionValue">-</div>
+              <div class="label">Status</div><div id="stateValue">-</div>
+              <div class="label">Levels</div><div id="levelsValue">-</div>
+              <div class="label">Components</div><div id="componentsValue">-</div>
+              <div class="label">Source</div><div id="sourceValue">-</div>
+            </div>
+          </section>
+
+          <section class="meta-block">
+            <h3>Notes</h3>
+            <div id="notesValue" class="note-box">-</div>
+          </section>
+
+          <section class="meta-block">
+            <h3>State Snapshot</h3>
+            <pre id="stateSnapshotValue" class="mono-box">-</pre>
+          </section>
+
+          <section class="meta-block">
+            <div class="section-head">
+              <h3>KF Entities</h3>
+              <span id="entityCountsValue" class="muted">rules 0 · tools 0 · states 0 · goals 0</span>
+            </div>
+
+            <div class="entity-group">
+              <div class="entity-title">Rules</div>
+              <div id="rulesList" class="entity-list empty">No rules in this session step</div>
+            </div>
+
+            <div class="entity-group">
+              <div class="entity-title">Tools</div>
+              <div id="toolsList" class="entity-list empty">No tools in this session step</div>
+            </div>
+
+            <div class="entity-group">
+              <div class="entity-title">States</div>
+              <div id="statesList" class="entity-list empty">No interpreted states in this session step</div>
+            </div>
+
+            <div class="entity-group">
+              <div class="entity-title">Goals</div>
+              <div id="goalsList" class="entity-list empty">No goals in this session step</div>
+            </div>
+          </section>
+
+          <section class="meta-block">
+            <h3>Change Summary</h3>
+            <pre id="changeTypesValue" class="mono-box">-</pre>
+          </section>
+
+          <section class="meta-block">
+            <h3>Metadata</h3>
+            <pre id="metadataValue" class="mono-box">-</pre>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>
