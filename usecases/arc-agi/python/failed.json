@@ -1,0 +1,46 @@
+{
+  "summary": {
+    "total_failed": 2,
+    "updated": "2026-03-30T12:45:16Z"
+  },
+  "tasks": [
+    {
+      "v2_index": 10,
+      "task_id": "0a2355a6",
+      "correct": false,
+      "converged": false,
+      "rounds": null,
+      "cost_usd": 0.851289,
+      "duration_ms": 461200,
+      "model": "claude-sonnet-4-6",
+      "matched_rules": [],
+      "tools_generated": [
+        "recolor_by_size_rank_tied",
+        "recolor_by_component_size",
+        "color_by_shape_type"
+      ],
+      "source": "results_file",
+      "notes": ""
+    },
+    {
+      "v2_index": 20,
+      "task_id": "1190bc91",
+      "correct": false,
+      "converged": false,
+      "rounds": null,
+      "cost_usd": 0.913263,
+      "duration_ms": 585372,
+      "model": "claude-sonnet-4-6",
+      "matched_rules": [],
+      "tools_generated": [
+        "diagonal_sequence_radiation",
+        "diagonal_radiation",
+        "diagonal_radiation_nearest",
+        "diagonal_radiation_fixed",
+        "diagonal_radiation_v2"
+      ],
+      "source": "results_file",
+      "notes": ""
+    }
+  ]
+}

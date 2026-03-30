@@ -637,7 +637,7 @@ async def run_tool_generator(tool_spec: dict, task: dict | None = None) -> tuple
     raw = response.content[0].text if response.content else ""
     if response.usage:
         u = response.usage
-        _cost_tracker.add(
+        get_cost_tracker().add(
             u.input_tokens, u.output_tokens,
             cache_creation=getattr(u, "cache_creation_input_tokens", 0) or 0,
             cache_read=getattr(u, "cache_read_input_tokens", 0) or 0,
@@ -737,7 +737,7 @@ async def run_tool_generator_fix(
     raw = response.content[0].text if response.content else ""
     if response.usage:
         u = response.usage
-        _cost_tracker.add(
+        get_cost_tracker().add(
             u.input_tokens, u.output_tokens,
             cache_creation=getattr(u, "cache_creation_input_tokens", 0) or 0,
             cache_read=getattr(u, "cache_read_input_tokens", 0) or 0,
