@@ -26,6 +26,13 @@ Thumbs.db
 !.claude/CLAUDE.md
 
 .private/
+
+# Python cache directories
+__pycache__/
+
+# Local ARC-AGI ensemble workspace
+arc-agi-ensemble/
+
 # Generated ARC-AGI-3 run artifacts
 tests/arc-agi-3/logs/
 tests/arc-agi-3/playlogs/

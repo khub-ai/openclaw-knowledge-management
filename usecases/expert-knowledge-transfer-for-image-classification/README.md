@@ -153,6 +153,43 @@ The experiment should be designed to produce a specific before/after story:
 
 **What KF claims**: The gap between "domain expert sees the mistake" and "the AI system stops making the mistake" can be closed with natural language, without ML expertise, without labeled training data at scale, and without model retraining.
 
+### Why this matters to VLM vendors
+
+For a VLM vendor, or for a product team wrapping a VLM, the core value is not just better benchmark accuracy. The value is a new post-deployment improvement loop. Instead of waiting for the next model release or running expensive customer-specific fine-tuning, the vendor can ship a system that improves through external knowledge patches authored and verified by domain experts.
+
+This matters because it offers:
+
+- **Faster correction of real-world failure modes**: when users discover a recurring mistake, the system can be patched immediately rather than queued for retraining.
+- **Enterprise customization without model forks**: different customers can maintain different domain patches without requiring separate fine-tuned models.
+- **A more auditable product surface**: patches are explicit, reviewable, and shareable in a way that model weights are not.
+- **Compounding product value over time**: every validated patch can improve the deployed system incrementally instead of being lost in ad hoc prompt edits or support tickets.
+- **Portability across underlying models**: if the vendor changes the base VLM, the knowledge layer can remain usable instead of being recreated from scratch.
+
+For vendors, the strategic claim is simple: **KF can turn model improvement from a slow model-release cycle into a fast knowledge-release cycle.**
+
+### Commercial paths that do not require deep embedding
+
+KF should not be positioned only as a feature that a VLM vendor must deeply embed into its stack. There are several ways to commercialize or deploy it with much lighter integration:
+
+- **Sidecar patching service**: KF sits between the application and the VLM, injecting validated rules at inference time.
+- **Patch authoring and evaluation studio**: customers use KF to discover, test, and export reusable patches even if the runtime application remains unchanged.
+- **Managed patch library**: domain-specific patch packs can be distributed for common verticals such as medical imaging, manufacturing QA, document compliance, or field inspection.
+- **Enterprise gateway or proxy**: organizations route model calls through a KF layer that applies approved patches, audit policy, and logging without requiring the original vendor to change its model.
+- **Consulting-to-product path**: start by solving high-value customer failure cases manually with KF, then productize the most repeatable workflows and patch formats.
+
+### Product and go-to-market to-do list
+
+- Define the smallest viable integration: prompt injection, sidecar service, proxy, or SDK.
+- Build a patch lifecycle story: authoring, verification, approval, versioning, rollback, and sharing.
+- Show measurable ROI on one or two high-value failure modes where fine-tuning is too slow or too expensive.
+- Develop a vendor-facing demo showing the same patch working across more than one underlying VLM.
+- Develop a customer-facing demo showing a domain expert correcting a real mistake interactively in minutes.
+- Clarify governance: who is allowed to author patches, approve them, deploy them, and audit their effects.
+- Decide what the sellable unit is: platform, hosted service, patch packs, tooling, or consulting-backed deployments.
+- Identify verticals where explicit expert rules are both common and commercially valuable.
+- Position KF against prompt engineering, RAG, and fine-tuning with a simple comparison table.
+- Prove that patches improve the `model + KF` system reliably without creating unacceptable regressions elsewhere.
+
 ---
 
 ## 6. Implementation Decisions
