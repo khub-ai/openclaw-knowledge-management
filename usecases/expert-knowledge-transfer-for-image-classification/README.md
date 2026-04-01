@@ -226,6 +226,16 @@ The aggregate number understates the real lesson. The pair-level results split i
 
 **Experiment 2 (2026-04-01): KF ensemble pipeline via Claude Sonnet 4.6 (`python/` implementation)**
 
+> **Scope and limitations of this result**
+>
+> This is an encouraging pilot showing structured evidence observation is likely the right KF direction — not a mature benchmark claim. Three caveats apply:
+>
+> 1. **Online adaptation, not a frozen benchmark.** Post-task rule learning was active during this run. The knowledge base grew from 112 to 139 rules across the 12 test images, with new rules extracted from labeled ground truth after each image. Later test images may have benefited from rules derived from earlier labeled test outcomes. For a clean held-out evaluation, run with `--mode test` (disables post-task learning); this pilot did not do that.
+>
+> 2. **Confounded comparison.** Experiment 1 used GPT-4o with a single-pass prompt-injection design. Experiment 2 uses Claude Sonnet 4.6 with a multi-round pipeline plus a VERIFIER stage plus few-shot reference images. The reported gains cannot yet be attributed cleanly to KF architecture alone — they reflect a mix of model, decomposition, and few-shot grounding. Same-model baselines (Claude zero-shot, Claude few-shot) are needed for a fair architectural comparison.
+>
+> 3. **Small sample.** 12 total test images across 2 pairs is enough to justify "encouraging pilot" but not enough to generalize to CUB-200 as a whole.
+
 This experiment implements the full 4-round KF ensemble pipeline described in §7.4. Instead of injecting rules as plain text, the pipeline forces an explicit structured observation step: the model first records which visual features it can see and at what confidence, then applies the rules to those observations to reach a decision. This separates perception from classification.
 
 First-pass results (3 images per species per pair, 6 images per pair):
@@ -235,9 +245,11 @@ First-pass results (3 images per species per pair, 6 images per pair):
 | American Crow vs Fish Crow | **83.3%** (5/6) | 68% | 68% | 68%* |
 | Brewer Sparrow vs Clay-colored Sparrow | **100.0%** (6/6) | 82% | 95% | see note* |
 
-The Brewer / Clay-colored result is the most notable: the pair that was the hardest exploratory stress test in Experiment 1 scored 6/6 correct in the new pipeline. The feature observation layer made the decisive difference — the OBSERVER reliably separated the two species on malar stripe definition, auricular patch outlining, median crown stripe presence, and lateral crown stripe contrast, even from CUB photographs taken at variable angles and distances.
+Note: the Experiment 1 figures use GPT-4o; Experiment 2 uses Claude Sonnet 4.6. The numbers are not directly comparable without same-model baselines.
 
-The crow pair improved from zero-shot parity (68%) to 83%. The one error was a Fish Crow image where the OBSERVER reported "large and robust bill, domed crown, heavy-bodied" — all American Crow features — consistent with a borderline or atypically proportioned individual.
+The Brewer / Clay-colored result is the most notable: the pair that was the hardest exploratory stress test in Experiment 1 scored 6/6 in this pilot. The feature observation layer appears to have been the decisive factor — the OBSERVER consistently separated the two species on malar stripe definition, auricular patch outlining, median crown stripe presence, and lateral crown stripe contrast. This is promising but statistically fragile at n=6.
+
+The crow pair improved from zero-shot parity (68%) to 83% in this pilot. The one error was a Fish Crow image where the OBSERVER reported "large and robust bill, domed crown, heavy-bodied" — features that favor American Crow — leading to an incorrect decision. Whether this reflects a genuinely atypical individual, a difficult viewing angle, or a pipeline limitation is not confirmed.
 
 For the full technical architecture and per-round explanation, see [§7.4](#74-kf-ensemble-pipeline-architecture-and-results-2026-04-01).
 
@@ -907,11 +919,11 @@ Average cost per image: ~$0.061. Average duration per image: ~57s.
 | American Crow vs Fish Crow | 68% | 68% | 68% | **83.3%** |
 | Brewer Sparrow vs Clay-colored Sparrow | 82% | 95% | see note | **100.0%** |
 
-The crow pair moved from zero-shot parity to +15pp. The sparrow pair, which was the hardest exploratory stress test in Experiment 1, was solved 6/6 in the new pipeline.
+The crow pair moved from zero-shot parity to +15pp in this pilot. The sparrow pair, which was the hardest exploratory stress test in Experiment 1, scored 6/6. Both results are encouraging but should be confirmed on the full test sets before drawing strong conclusions.
 
 **The one error (crow image 01646):**
 
-The OBSERVER recorded "large and robust bill, domed crown, heavy-bodied" — all American Crow features — for an image whose ground truth is Fish Crow. The MEDIATOR correctly applied the rules and decided American Crow. The VERIFIER found the decision consistent with reference images. The error is attributable to an atypical individual or an image taken at an angle that exaggerated bulk. This is a genuine ambiguous case at the perception layer, not a rule or pipeline failure.
+The OBSERVER recorded "large and robust bill, domed crown, heavy-bodied" — features favoring American Crow — for an image whose ground truth is Fish Crow. The MEDIATOR correctly applied the rules to those observations and decided American Crow. The VERIFIER found the decision consistent with reference images. The pipeline behaved correctly given what the OBSERVER reported; the root cause is that the OBSERVER's feature report did not match the ground-truth label. Whether this reflects a genuinely atypical or ambiguously proportioned individual, a difficult viewing angle, or a systematic OBSERVER limitation is not confirmed from a single image.
 
 **Feature patterns driving the sparrow result:**
 
@@ -983,7 +995,22 @@ python harness.py --prune
 
 ---
 
-### 7.4.7 Key design decisions and why they matter
+### 7.4.7 What is needed before a benchmark claim
+
+The pilot result is encouraging. To make it a rigorous benchmark claim, the following are needed:
+
+| Gap | What to do |
+|---|---|
+| Online adaptation during test | Re-run with `--mode test` (disables post-task rule learning) so the knowledge base is frozen before evaluation begins |
+| Model+pipeline confound | Add Claude zero-shot and Claude few-shot baselines using the same model, so the KF architecture contribution can be separated from the model upgrade |
+| Small sample | Run the full test set for both pairs (~25–30 images per species, ~50–60 per pair) before drawing conclusions |
+| Two-pair scope | Expand to more of the 15 confusable pairs to test generalization |
+
+Until those runs are done, Experiment 2 should be read as: *structured evidence observation is a promising direction for KF image classification, and the pilot numbers justify investing in a rigorous follow-up*.
+
+---
+
+### 7.4.8 Key design decisions and why they matter
 
 | Decision | What it does | Why it matters |
 |---|---|---|
