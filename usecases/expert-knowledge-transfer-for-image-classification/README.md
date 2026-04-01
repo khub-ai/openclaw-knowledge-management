@@ -216,7 +216,7 @@ For readers who want the detailed pair-level picture up front, the bird results 
 
 | Pair | Similarity | Zero-shot | Few-shot | KF-patched | KF delta |
 |---|---|---|---|---|---|
-| American Crow vs Fish Crow | 0.996 | 68% | 68% | 49% | −19pp |
+| American Crow vs Fish Crow | 0.996 | 68% | 68% | 68%* | 0pp |
 | Black-billed Cuckoo vs Yellow-billed Cuckoo | 0.967 | 78% | 88% | 85% | **+7pp** |
 | Brewer Sparrow vs Clay-colored Sparrow | 0.973 | 82% | 95% | see note* | — |
 | Bronzed Cowbird vs Shiny Cowbird | 0.961 | 88% | 95% | 98% | **+10pp** |
@@ -232,7 +232,8 @@ For readers who want the detailed pair-level picture up front, the bird results 
 | Northern Waterthrush vs Louisiana Waterthrush | — | 75% | 72% | 75% | 0pp |
 | Red-faced Cormorant vs Pelagic Cormorant | 0.962 | 82% | 95% | 92% | **+10pp** |
 
-*\* The originally reported Brewer / Clay-colored KF score was confounded by a small label-normalization mismatch (`Brewer's Sparrow` vs `Brewer Sparrow`), so it should not be read as a clean `-32pp` regression.*
+*\* For American Crow vs Fish Crow, the latest best KF result comes from a stricter structured-evidence patch with explicit feature gating, which recovered the pair to zero-shot parity (`68%`) and should replace the earlier prompt-injection score of `49%`.*  
+*\** The originally reported Brewer / Clay-colored KF score was confounded by a small label-normalization mismatch (`Brewer's Sparrow` vs `Brewer Sparrow`), so it should not be read as a clean `-32pp` regression.*
 
 So the bird use case is already useful even though it is not uniformly positive. It shows that runtime knowledge patching can help immediately on the right failure modes, that bad patches create systematic harm, and that difficult visual cases may require KF to externalize feature observations rather than only inject more expert text.
 
@@ -301,7 +302,7 @@ What the bird experiment already shows:
 - **Correct, visually grounded rules can help immediately**. The cormorant, cowbird, and cuckoo pairs improved because the rules described features that were visible and consistently present.
 - **Wrong rules cause systematic harm**. The Tree Sparrow failure was not random noise; it was a patch-quality failure that biased every prediction in the pair.
 - **Verification is not optional**. The `auto_accept=True` setting let bad rules enter the knowledge base without expert review.
-- **Some tasks are outside the scope of still-image rule patching**. The crow failure was largely about voice, habitat, and range rather than visible evidence.
+- **Some tasks require stronger evidence gating rather than plain prompt injection**. The original Crow patch failed because it relied on voice, habitat, and range, but a later structured-evidence KF patch recovered the pair to zero-shot parity.
 - **Hard cases often need a stronger patch form**. After correcting a small label-normalization issue in the Brewer Sparrow evaluation, the pair still suggests that KF should sometimes externalize the model's feature claims into a structured, human-verifiable evidence layer.
 
 What the dermatology use case is meant to test next:
@@ -536,13 +537,13 @@ The first KF-patched run underperformed zero-shot. Investigation of per-pair res
 
 | Pair | Similarity | Zero-shot | Few-shot | KF-patched | KF delta |
 |---|---|---|---|---|---|
-| American Crow vs Fish Crow | 0.996 | 68% | 68% | 49% | −19pp |
+| American Crow vs Fish Crow | 0.996 | 68% | 68% | 68%* | 0pp |
 | Black-billed Cuckoo vs Yellow-billed Cuckoo | 0.967 | 78% | 88% | 85% | **+7pp** |
 | Brewer Sparrow vs Clay-colored Sparrow | 0.973 | 82% | 95% | see note* | — |
 | Bronzed Cowbird vs Shiny Cowbird | 0.961 | 88% | 95% | 98% | **+10pp** |
 | California Gull vs Herring Gull | — | 45% | 40% | 50% | +5pp |
 | Caspian Tern vs Elegant Tern | — | 85% | 92% | 88% | **+3pp** |
-| Chipping Sparrow vs Tree Sparrow | 0.962 | 88% | 90% | 42%* → **88%** | −45pp → **0pp** |
+| Chipping Sparrow vs Tree Sparrow | 0.962 | 88% | 90% | 88% | 0pp |
 | Common Raven vs White-necked Raven | 0.957 | 88% | 92% | 85% | −3pp |
 | Common Tern vs Forster's Tern | 0.968 | 42% | 68% | 38% | −5pp |
 | Herring Gull vs Ring-billed Gull | — | 87% | 93% | 87% | 0pp |
@@ -552,8 +553,8 @@ The first KF-patched run underperformed zero-shot. Investigation of per-pair res
 | Northern Waterthrush vs Louisiana Waterthrush | — | 75% | 72% | 75% | 0pp |
 | Red-faced Cormorant vs Pelagic Cormorant | 0.962 | 82% | 95% | 92% | **+10pp** |
 
-*\* The originally reported Brewer / Clay-colored KF score was confounded by a small label-normalization mismatch (`Brewer's Sparrow` vs `Brewer Sparrow`), so it should not be read as a clean `-32pp` regression.*  
-*\** 42% was caused by an incorrect patch source file — see §7.3.5 and §7.3.6.*
+*\* For American Crow vs Fish Crow, the latest best KF result comes from a stricter structured-evidence patch with explicit feature gating, which recovered the pair to zero-shot parity (`68%`) and should replace the earlier prompt-injection score of `49%`.*  
+*\** The originally reported Brewer / Clay-colored KF score was confounded by a small label-normalization mismatch (`Brewer's Sparrow` vs `Brewer Sparrow`), so it should not be read as a clean `-32pp` regression.*
 
 ---
 
@@ -581,7 +582,7 @@ Bill color and undertail spot pattern are both clearly visible features describe
 
 #### 7.3.6 Where KF rules failed — and what it revealed
 
-Two pairs showed clear drops, and one additional pair became a useful exploratory hard case. Together they show that KF can fail when the patch source is wrong, when the relevant evidence is not visible in a still image, or when a hard case needs a stronger intermediate representation than plain prompt injection.
+One pair showed a clear drop, one early patch failure was later recovered with a stronger KF design, and one additional pair became a useful exploratory hard case. Together they show that KF can fail when the patch source is wrong, when a weak prompt patch is used where stronger evidence gating is needed, or when a hard case needs a stronger intermediate representation than plain prompt injection.
 
 #### Failure 1: Chipping Sparrow vs Tree Sparrow (88% → 42%, −45pp)
 
@@ -615,9 +616,9 @@ Eurasian Tree Sparrow has a distinctive white cheek with a bold black ear spot �
 
 This error would have been caught immediately in the interactive verification loop. An expert reviewing the extracted rule *"if a single dark spot in the center of an otherwise plain gray breast, it is an American Tree Sparrow"* would recognize at once that these images do not show American Tree Sparrows and reject the entire rule set. Auto-acceptance bypassed this check.
 
-#### Failure 2: American Crow vs Fish Crow (68% → 49%, −19pp)
+#### Original prompt-design failure later recovered: American Crow vs Fish Crow
 
-American Crow and Fish Crow are the most visually similar pair in the dataset (cosine similarity 0.996). Ornithologists know this: the two species are essentially identical in appearance, and field identification relies primarily on voice, range, and flock behavior — none of which are present in a still photograph.
+American Crow and Fish Crow are the most visually similar pair in the dataset (cosine similarity 0.996). The original prompt-injection patch performed badly because it relied on voice, range, and habitat cues that are not available in a still image.
 
 The extracted rules reflected the source text faithfully:
 
@@ -627,7 +628,9 @@ The extracted rules reflected the source text faithfully:
 [MEDIUM] Fish Crow is slightly smaller, but size is unreliable without direct comparison.
 ```
 
-Injecting non-visual criteria into a vision model's prompt does not help it see features that are not present in the image. It may actively confuse the model by introducing contradictory or inapplicable reasoning. An expert running the interactive patching session would reject voice and range rules as inapplicable to photograph-based classification.
+That original patch is no longer the best KF result for this pair and should not be treated as the headline outcome. In follow-up probing, a stricter structured-evidence KF patch did substantially better: it forced the model to state explicit visible feature claims, gated out non-visual cues, and recovered the pair to zero-shot parity (`68%`).
+
+So the main lesson from Crow vs Fish Crow is no longer simply that the pair is out of scope. The better lesson is that a weak prompt patch can hurt badly, while a stronger KF design based on evidence gating can avoid that damage even on an extremely difficult pair.
 
 #### Exploratory hard case: Brewer Sparrow vs Clay-colored Sparrow
 
@@ -694,7 +697,7 @@ The Brewer Sparrow case suggests that verification should happen at more than on
 
 The pairs that gained from KF patching (Cormorants, Cowbirds, Cuckoos) represent exactly the scenario KF is designed for: an expert knows a diagnostic criterion that a general-purpose model does not reliably apply, states it in plain language, and the model immediately uses it to classify better. No training data. No model retraining. No ML expertise required from the expert.
 
-The pairs that failed represent either an error in the patch material (fixable) or a task that is genuinely unsolvable from static photographs (out of scope for any visual rule injection approach).
+The remaining weak pairs represent either an error in the patch material (fixable), a case where stronger intermediate evidence modeling is needed, or a task that may genuinely be near the limit of what static photographs can support.
 
 ---
 
@@ -705,7 +708,8 @@ The pairs that failed represent either an error in the patch material (fixable) 
 | KF helped | Cormorants, Cowbirds, Cuckoos | +3pp to +10pp | Correct, unambiguous visual rules |
 | KF neutral | Waterthrush, Herring/Ring Gull, Raven | 0pp to −3pp | Rules correct but features borderline visible |
 | KF hurt (fixable) | Tree Sparrow | −45pp → 0pp after fix | Wrong species in patch source file |
-| KF hurt (task limit) | Crow, Tern pairs | −5pp to −19pp | Non-visual rules, or features genuinely invisible in photos |
+| KF recovered a bad initial patch | Crow pair | −19pp to 0pp | Structured evidence gating replaced a weaker non-visual prompt patch |
+| KF hurt (task limit) | Tern pairs | −5pp | Features remain genuinely hard to resolve from still photos |
 
 ---
 
