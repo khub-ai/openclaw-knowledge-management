@@ -30,6 +30,16 @@ Think of it as the Excel moment for expert knowledge. Analysts did not build fin
 
 → *[Detailed enterprise and investment case](docs/enterprise-vision.md)* · *[Security threat model](docs/security.md)*
 
+## Developer documentation
+
+| Document | What it covers |
+|---|---|
+| [docs/ensemble-pipeline.md](docs/ensemble-pipeline.md) | **Start here for development.** 4-round ensemble pipeline, core class APIs (RuleEngine, ToolRegistry, StateManager, GoalManager, call_agent), domain specializations (ARC-AGI-2, ARC-AGI-3, UC200 image classification), extension guide |
+| [docs/architecture.md](docs/architecture.md) | Knowledge artifact schema, storage, tiered retrieval, and OpenClaw plugin integration |
+| [docs/design-decisions.md](docs/design-decisions.md) | How KF differs from other agent memory systems (Letta, platform memory, fine-tuning) |
+| [docs/glossary.md](docs/glossary.md) | Canonical definitions for all KF terms |
+| [docs/roadmap.md](docs/roadmap.md) | Planned benchmarks and future use cases |
+
 ## Why this exists
 
 If you use an AI agent daily you have likely found yourself re-explaining your preferences, correcting the same mistakes, or re-teaching your workflow every session. The knowledge the agent should have accumulated is simply not there — because most agents today do not have a durable, user-owned place to put it.

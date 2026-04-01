@@ -2,6 +2,8 @@
 
 This document describes the system architecture: how [knowledge artifacts](glossary.md#knowledge-artifact) are structured, how they are stored and indexed, how the tiered trigger cascade retrieves them efficiently, and how the system integrates with OpenClaw's plugin SDK.
 
+> **Developer note:** If you are looking for the ensemble pipeline used by the ARC-AGI and image-classification use cases, see [ensemble-pipeline.md](ensemble-pipeline.md) instead. That document covers the 4-round solving pipeline, RuleEngine/ToolRegistry APIs, domain specializations, and the extension guide for adding new domains.
+
 ## Design principles
 
 1. **The core of an artifact is always `kind` + `content` + `confidence`.** All other fields are optional enrichment metadata. An artifact without tags, trigger conditions, or graph relationships still works — it can be stored, retrieved (by content search), applied, and revised. Enrichments make retrieval faster and triggering smarter, but they are not structural requirements.
