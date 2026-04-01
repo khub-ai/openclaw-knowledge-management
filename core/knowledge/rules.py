@@ -924,7 +924,8 @@ class RuleEngine:
                         r = self.add_rule(cond, ract, source="mediator",
                                            source_task=task_id, tags=tags,
                                            rule_type=rule_type)
-                    created.append(r)
+                    if r is not None:
+                        created.append(r)
             except (json.JSONDecodeError, Exception):
                 continue
         return created
