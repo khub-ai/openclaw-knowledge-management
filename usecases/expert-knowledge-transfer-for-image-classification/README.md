@@ -187,10 +187,9 @@ The implemented bird experiment is designed to produce a specific before/after s
 >
 > The same substitution applies to the upcoming dermatology test. Because no live clinician is available to run an interactive patching session, expert knowledge will be pre-encoded from ISIC 2018 Task 2 lesion-attribute annotations, dermoscopy references, and diagnostic teaching materials, then imported in batch. Both tests are deliberately designed to show that even a simulated expert session — documentation-sourced, batch-imported, without live review — already improves on zero-shot and few-shot baselines on targeted confusable pairs. The interactive dialogic workflow is expected to perform better still, because it allows the expert to catch annotation errors and adapt the knowledge base from feedback rather than auditing it in hindsight.
 
-The detailed protocol and full pair-by-pair analysis remain later in this README:
-
-- Bird implementation details: [Section 7.1](#71-bird-experiment-implementation-decisions)
-- Bird results and failure analysis: [Section 7.3](#73-bird-experiment-results)
+The developer-facing protocol, implementation notes, and detailed evaluation
+mechanics for the bird case now live in
+[DESIGN.md](DESIGN.md#2-bird-experiments-cub-200-2011).
 
 ### 3.3 Bird experiment setup at a glance
 
@@ -236,7 +235,12 @@ The aggregate number understates the real lesson. The pair-level results split i
 >
 > 3. **Small sample.** 12 total test images across 2 pairs is enough to justify "encouraging pilot" but not enough to generalize to CUB-200 as a whole.
 
-This experiment implements the full 4-round KF ensemble pipeline described in §7.4. Instead of injecting rules as plain text, the pipeline forces an explicit structured observation step: the model first records which visual features it can see and at what confidence, then applies the rules to those observations to reach a decision. This separates perception from classification.
+This experiment implements the full 4-round KF ensemble pipeline described in
+[DESIGN.md](DESIGN.md#23-experiment-2-kf-ensemble-pipeline). Instead of
+injecting rules as plain text, the pipeline forces an explicit structured
+observation step: the model first records which visual features it can see and
+at what confidence, then applies the rules to those observations to reach a
+decision. This separates perception from classification.
 
 First-pass results (3 images per species per pair, 6 images per pair):
 
@@ -251,7 +255,8 @@ The Brewer / Clay-colored result is the most notable: the pair that was the hard
 
 The crow pair improved from zero-shot parity (68%) to 83% in this pilot. The one error was a Fish Crow image where the OBSERVER reported "large and robust bill, domed crown, heavy-bodied" — features that favor American Crow — leading to an incorrect decision. Whether this reflects a genuinely atypical individual, a difficult viewing angle, or a pipeline limitation is not confirmed.
 
-For the full technical architecture and per-round explanation, see [§7.4](#74-kf-ensemble-pipeline-architecture-and-results-2026-04-01).
+For the full technical architecture and per-round explanation, see
+[DESIGN.md](DESIGN.md#23-experiment-2-kf-ensemble-pipeline).
 
 For readers who want the detailed pair-level picture from Experiment 1 up front:
 
@@ -278,7 +283,8 @@ For readers who want the detailed pair-level picture from Experiment 1 up front:
 
 So the bird use case is already useful even though it is not uniformly positive. It shows that runtime knowledge patching can help immediately on the right failure modes, that bad patches create systematic harm, and that difficult visual cases may require KF to externalize feature observations rather than only inject more expert text.
 
-For the full protocol, pair-by-pair breakdown, and failure analysis, see the detailed sections later in this README.
+For the full protocol, pair-by-pair breakdown, and failure analysis, see
+[DESIGN.md](DESIGN.md#2-bird-experiments-cub-200-2011).
 
 Prefer to skip the upcoming dermatology section? Jump to [Cross-Use-Case Takeaways](#5-cross-use-case-takeaways).
 
@@ -286,7 +292,7 @@ Prefer to skip the upcoming dermatology section? Jump to [Cross-Use-Case Takeawa
 
 ## 4. Sub-Use-Case B: Dermatology
 
-> **Status**: Implemented and first-pass pilot tested (2026-04-02). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Pilot results: **9/18 overall (50%)** across three confusable pairs — melanoma vs nevus (66.7%), BCC vs benign keratosis (50%), actinic keratosis vs benign keratosis (33.3%). For the full architecture, results, and failure analysis see [§7.5](#75-kf-ensemble-pipeline-dermatology-pilot-results-2026-04-02).
+> **Status**: Implemented and first-pass pilot tested (2026-04-02). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Pilot results: **9/18 overall (50%)** across three confusable pairs — melanoma vs nevus (66.7%), BCC vs benign keratosis (50%), actinic keratosis vs benign keratosis (33.3%). For the full architecture, results, and failure analysis see [DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
 
 Dermatology is the strongest medical analogue to the bird use case. Like bird identification, it depends on subtle visual distinctions that experts can often explain in words: pigment network, asymmetry, border irregularity, color variation, streaks, dots, globules, regression structures, ulceration, and other dermoscopic criteria. It is therefore a strong fit for KF's runtime patching model.
 
@@ -308,28 +314,17 @@ Strictly speaking, **HAM10000 is the foundational dataset, not the Kaggle compet
 - **In this test (batch simulation)**: because no live clinician is available to run an interactive session, expert knowledge will be pre-encoded from ISIC 2018 Task 2 lesion-attribute annotations (the medical equivalent of CUB-200's 312 binary attributes) and dermoscopy reference materials, then imported in batch — the same substitution used in the bird experiment. This tests whether even a documentation-sourced, batch-imported knowledge base improves on zero-shot and few-shot baselines on targeted confusable lesion pairs.
 - **What this adds**: if the bird use case shows that KF can capture field-guide expertise, the dermatology use case shows that the same mechanism can transfer clinically meaningful visual expertise into a deployable image-classification system — and that the batch simulation result is a conservative lower bound on what an interactive expert session would achieve.
 
-### 4.1 Planned dermatology experiment design
+At a high level, the dermatology track is deliberately parallel to the bird
+experiment rather than a separate thesis. It uses HAM10000 / ISIC-style lesion
+classification and attribute grounding to test whether dermatologist-authored
+visual criteria can be turned into explicit, reusable runtime patches. The
+intended claim is narrow: that `model + KF` can improve targeted lesion
+confusions over simpler post-deployment alternatives without retraining, not
+that it replaces a full clinical or supervised benchmark workflow.
 
-The dermatology track should be deliberately parallel to the bird experiment rather than framed as a separate thesis.
-
-- **Primary dataset**: ISIC 2019 lesion classification, with HAM10000 as the conceptual bridge and source of diagnostically meaningful class structure.
-- **Attribute grounding**: ISIC 2018 lesion-attribute annotations, used as the medical analogue of CUB's bird attributes.
-- **Target confusions**: melanoma vs nevus, basal cell carcinoma vs benign keratosis, and actinic keratosis vs squamous cell carcinoma.
-- **Patch source material**: dermoscopy references, diagnostic atlases, teaching cases, and consensus-style visual criteria.
-- **Comparison conditions**: zero-shot, few-shot, retrieved reference text, KF-patched, and KF-patched plus few-shot.
-
-What would count as a strong result is also parallel to the bird story, but narrower than a medical leaderboard claim:
-
-- a dermatologist can express useful lesion-discrimination rules in natural language
-- KF can turn those rules into explicit, reviewable, reusable patches
-- the `model + KF` system improves targeted lesion confusions without retraining the base model
-- KF beats simpler post-deployment alternatives such as zero-shot prompting, few-shot prompting, and raw retrieved reference text on those targeted failure modes
-
-This should be framed as a demonstration of post-training behavior correction for image classification, not as a clinical deployment claim.
-
-The more detailed planned setup remains later in this README:
-
-- Planned dermatology implementation details: [Section 7.2](#72-dermatology-implementation-plan-upcoming)
+The more detailed experimental setup, implementation notes, and pilot analysis
+for dermatology now live in
+[DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
 
 ---
 
@@ -401,757 +396,28 @@ KF should not be positioned only as a feature that a VLM vendor must deeply embe
 
 ---
 
-## 7. Detailed Evaluation Mechanics
+## 7. Developer Notes
 
-This section holds the more detailed protocol, implementation notes, and result breakdowns that support the shorter bird and dermatology case-study sections above.
+This README is intentionally user-facing.
 
-### The patch authoring session (simulated)
+The developer-oriented material for both the bird / CUB-200 and dermatology /
+HAM10000 tracks now lives in
+[DESIGN.md](DESIGN.md):
 
-In the intended KF workflow, the patch authoring session is interactive. The expert works with KF in natural language: KF proposes rule candidates extracted from what the expert writes or says, the expert reviews each candidate and confirms, rejects, or revises it, and the verified rules are stored. The expert's corrections feed back into what KF proposes next. This is dialogic — the knowledge base is jointly constructed in a live session, not assembled from pre-existing documents.
+- experiment framing and protocol
+- simulated patch-authoring workflow
+- baseline conditions and metrics
+- bird Experiment 1 and Experiment 2 implementation details
+- dermatology pilot setup, failure analysis, and next-step gaps
+- repository layout and developer quick-start commands
 
-Both experiments in this README simulate that session because no live domain expert was available. For the bird sub-use-case, expert knowledge was pre-encoded from Sibley's Guide, Kaufman's Field Guide, eBird/allaboutbirds.org species accounts, and the CUB-200-2011 dataset's 312 binary attribute annotations into per-pair Markdown files in `teaching_sessions/`, then extracted by GPT-4-turbo with auto-acceptance into `knowledge_base/*.json`. For the upcoming dermatology sub-use-case, the same batch approach will be used with ISIC 2018 Task 2 lesion-attribute annotations and dermoscopy reference materials as the source.
+Useful entry points:
 
-For each hard or confusable classification problem, the simulated session constructs a KF patching session using language sourced from expert materials. In the bird sub-use-case this comes from field guides and eBird accounts; in dermatology it would come from dermoscopy references, atlases, and diagnostic teaching material:
-
-```
-EXPERT PATCH INPUT (example):
-
-"A Hairy Woodpecker looks very similar to a Downy Woodpecker, but can be
-distinguished by the following features:
-
-1. Bill length: The Hairy's bill is approximately as long as its head is deep.
-   The Downy's bill is noticeably shorter — roughly half the head depth.
-
-2. Body size: The Hairy is larger overall, roughly the size of a Robin.
-   The Downy is sparrow-sized.
-
-3. Outer tail feathers: The Hairy has clean white outer tail feathers with
-   no spots or bars. The Downy typically shows black spots on those feathers.
-
-4. When in doubt: If you cannot judge bill length, look for the clean tail
-   feathers on the Hairy."
-```
-
-KF's role: extract from this text the structured, verifiable rules that distinguish the candidate classes; generate executable classification guidance; store both in the knowledge base with provenance linking back to the source.
-
-### Conditions
-
-| Condition | Description |
-|---|---|
-| **Baseline: zero-shot** | Frontier vision-language model (e.g., GPT-4V or Claude with vision), no fine-tuning, no KF |
-| **Baseline: few-shot** | Same model with 3–5 labeled example images per species, no NL explanation |
-| **Baseline: retrieved reference text** | Same model with raw field-guide or medical reference passages inserted into the prompt, but without KF rule extraction or verification |
-| **KF: NL patch only** | KF patching session using field-guide text, no additional labeled images |
-| **KF: NL patch + few-shot** | KF patching session + 3–5 labeled examples |
-| **Reference: supervised SOTA** | HERBS or equivalent — requires full labeled training set |
-
-### Primary metric
-
-**Accuracy on confusable-pair test set**: Construct a held-out test set restricted to the ~30 most visually similar species pairs. Report per-pair and aggregate accuracy across conditions.
-
-This metric is more diagnostic than overall accuracy because:
-- Overall accuracy is dominated by easy cases (eagle vs. hummingbird) where all conditions perform well
-- Confusable pairs expose what discriminative knowledge actually contributes
-- The strongest claim is narrower and more realistic: **KF should beat simpler post-deployment alternatives on targeted hard cases**, while requiring much less time, cost, and retraining effort than a full supervised pipeline
-
-**Secondary metrics**:
-- Accuracy on full CUB-200 test set
-- Number of patch authoring sessions required to reach each accuracy level
-- Knowledge base reuse rate: how many times is a given rule applied across different test images
-
-### 7.1 Bird Experiment Implementation Decisions
-
-1. **Vision model**: GPT-4V. KF injects extracted rules into the system prompt or structured reasoning chain at inference time; no fine-tuning occurs. API key stored at the standard location on P drive.
-
-2. **Patch source format**: Patch input is sourced from textually documented expert opinion — field guides (Sibley, Kaufman), eBird/All About Birds species accounts, and ornithological literature. These sources contain precisely the discriminative NL reasoning needed ("bill length relative to head depth", "clean vs. spotted outer tail feathers"). Visual nuance that cannot be verbalized is out of scope for this experiment; the thesis is that documented textual expertise is sufficient.
-
-3. **Verification mechanism**: An expert is assumed to be available during the patching and verification loop — the same SOLVER → SUPERVISOR → HUMAN escalation pattern used in the ARC-AGI-2 use case. When KF extracts a rule and is uncertain, it surfaces the rule to the expert for confirmation or correction before storing it. This makes verification interactive rather than purely automated.
-
-4. **Benchmark framing**: Report on both — the full CUB-200 test set for direct leaderboard comparison, and a curated confusable-pair subset for the narrative. The confusable-pair subset is the primary story; the full-set score provides credibility.
+- [Bird experiments](DESIGN.md#2-bird-experiments-cub-200-2011)
+- [Dermatology experiments](DESIGN.md#3-dermatology-experiments-ham10000--isic)
+- [Repository layout and developer quick start](DESIGN.md#4-repository-layout-and-developer-quick-start)
 
 ---
-
-### 7.2 Dermatology Implementation Plan (upcoming)
-
-> **Placeholder for the next implemented sub-use-case**
-> This section is intentionally included now so the README clearly shows that
-> dermatology is planned as the second worked example, but the experiment itself
-> is still upcoming.
->
-> The completed version of this section should eventually include:
-> - the exact lesion confusions selected for testing
-> - representative lesion images and expert annotations
-> - the source material used to author patches
-> - the baseline, few-shot, retrieved-text, and KF-patched runs
-> - qualitative failure analysis and measured results
-
-The dermatology sub-use-case should be implemented as a deliberately parallel experiment rather than as a separate thesis. The point is to show that KF's mechanism transfers from natural-history expertise to clinically meaningful visual expertise.
-
-#### 7.2.1 Proposed benchmark setup
-
-- **Primary dataset**: ISIC 2019 lesion classification, with HAM10000-style class structure as the conceptual bridge.
-- **Attribute grounding**: ISIC 2018 lesion-attribute annotations, used as the medical equivalent of CUB's bird attributes.
-- **Target confusions**: melanoma vs nevus, basal cell carcinoma vs benign keratosis, actinic keratosis vs squamous cell carcinoma.
-- **Patch source material**: dermoscopy references, diagnostic atlases, teaching cases, and consensus-style visual criteria.
-
-#### 7.2.2 Experimental conditions
-
-Use the same comparison pattern as the bird experiment:
-
-- **Zero-shot**: frontier VLM, no KF patch.
-- **Few-shot**: same VLM with a small number of labeled lesion examples.
-- **Retrieved reference text**: same VLM with dermatology reference passages inserted directly into the prompt, but without KF extraction, validation, or patch structuring.
-- **KF-patched**: same VLM with runtime knowledge patches derived from dermatologist-authored criteria.
-- **KF-patched + few-shot**: combine explicit rules with a few labeled examples.
-
-#### 7.2.3 What would count as a strong result
-
-A convincing result would not require beating a fully supervised medical leaderboard. It would require showing that:
-
-- A dermatologist can express useful lesion-discrimination rules in natural language.
-- KF can turn those rules into explicit, reviewable, reusable patches.
-- The `model + KF` system improves on targeted lesion confusions without retraining the base model.
-- KF outperforms simpler post-deployment alternatives such as zero-shot prompting, few-shot prompting, and raw retrieved reference text on those targeted failure modes.
-- The same patch remains portable across more than one underlying VLM or deployment context.
-
-#### 7.2.4 Safety and scope boundary
-
-This should be framed as a demonstration of **post-training behavior correction for image classification**, not as a clinical deployment claim. The value of the medical example is to show that KF can absorb specialist visual knowledge in a high-stakes domain while keeping the knowledge layer explicit, auditable, and separable from model weights.
-
----
-
-### 7.3 Bird Experiment Results
-
-#### 7.3.1 Setup
-
-**Model**: GPT-4o (vision)
-**Dataset**: CUB-200-2011, standard train/test split
-**Pairs tested**: 15 confusable species pairs selected by cosine similarity of 312-dim attribute vectors
-**Test images**: 20 per class per condition (40 images per pair), drawn from the held-out test split
-**Knowledge base**: 118 rules extracted from field-guide text via GPT-4-turbo, covering all 15 pairs
-**Results file**: `results/results_20260329T104850.json` (run date: 2026-03-29)
-
-**Three conditions were evaluated:**
-
-| Condition | What the model receives |
-|---|---|
-| **Zero-shot** | Test image + species names only. No examples, no rules. |
-| **Few-shot** | Test image + 3 labeled training images per class (6 total). No rules. |
-| **KF-patched** | Test image + species names + verified expert rules injected as text into the system prompt. No training images. |
-
-The KF-patched condition is the core claim: *can natural-language rules provided by a domain expert improve classification on targeted hard cases, and do so more effectively than zero-shot, few-shot, or raw retrieved reference text, without retraining the base model?*
-
----
-
-#### 7.3.2 How the rules are applied
-
-For each pair, the knowledge base holds rules like these (Red-faced Cormorant vs Pelagic Cormorant):
-
-```
-Expert identification rules (verified):
-  1. [HIGH] If bare red skin extends across the forehead and around the eye, it is a Red-faced Cormorant.
-  2. [HIGH] If bare skin is restricted to a small patch at the bill base only, it is a Pelagic Cormorant.
-  3. [HIGH] If the bill is pale yellowish or greyish, it is a Red-faced Cormorant.
-  4. [HIGH] If the bill is dark throughout, lean toward Pelagic Cormorant.
-  5. [MEDIUM] If the bird appears exceptionally slender with a very thin neck, it is a Pelagic Cormorant.
-  6. [MEDIUM] If white flank patches are visible on a dark cormorant, it is a Pelagic Cormorant.
-  7. [LOW] If the iridescence appears brilliant green-purple, lean toward Pelagic Cormorant.
-```
-
-These rules are prepended to the system prompt for every test image in that pair. The model reads the rules, examines the image, and decides which apply. No fine-tuning occurs — the model weights are unchanged.
-
----
-
-#### 7.3.3 Overall results
-
-| Condition | Correct | Total | Accuracy | vs. Zero-shot |
-|---|---|---|---|---|
-| Zero-shot | 468 | 600 | **78.0%** | — |
-| Few-shot | 497 | 600 | **82.8%** | +4.8pp |
-| KF-patched (first run) | 434 | 599 | **72.5%** | −5.5pp |
-| KF-patched (after fix — see §7.3.6) | 452 | 599 | **75.5%** | −2.5pp |
-
-The first KF-patched run underperformed zero-shot. Investigation of per-pair results identified the cause — described in §7.3.5 and §7.3.6.
-
----
-
-#### 7.3.4 Per-pair breakdown
-
-| Pair | Similarity | Zero-shot | Few-shot | KF-patched | KF delta |
-|---|---|---|---|---|---|
-| American Crow vs Fish Crow | 0.996 | 68% | 68% | 68%* | 0pp |
-| Black-billed Cuckoo vs Yellow-billed Cuckoo | 0.967 | 78% | 88% | 85% | **+7pp** |
-| Brewer Sparrow vs Clay-colored Sparrow | 0.973 | 82% | 95% | see note* | — |
-| Bronzed Cowbird vs Shiny Cowbird | 0.961 | 88% | 95% | 98% | **+10pp** |
-| California Gull vs Herring Gull | — | 45% | 40% | 50% | +5pp |
-| Caspian Tern vs Elegant Tern | — | 85% | 92% | 88% | **+3pp** |
-| Chipping Sparrow vs Tree Sparrow | 0.962 | 88% | 90% | 88% | 0pp |
-| Common Raven vs White-necked Raven | 0.957 | 88% | 92% | 85% | −3pp |
-| Common Tern vs Forster's Tern | 0.968 | 42% | 68% | 38% | −5pp |
-| Herring Gull vs Ring-billed Gull | — | 87% | 93% | 87% | 0pp |
-| Indigo Bunting vs Blue Grosbeak | — | 90% | 95% | 88% | −3pp |
-| Least Flycatcher vs Western Wood-Pewee | — | 72% | 78% | 70% | −3pp |
-| Loggerhead Shrike vs Great Grey Shrike | 0.978 | 80% | 55% | 72% | −8pp |
-| Northern Waterthrush vs Louisiana Waterthrush | — | 75% | 72% | 75% | 0pp |
-| Red-faced Cormorant vs Pelagic Cormorant | 0.962 | 82% | 95% | 92% | **+10pp** |
-
-*\* For American Crow vs Fish Crow, the latest best KF result comes from a stricter structured-evidence patch with explicit feature gating, which recovered the pair to zero-shot parity (`68%`) and should replace the earlier prompt-injection score of `49%`.*  
-*\** The originally reported Brewer / Clay-colored KF score was confounded by a small label-normalization mismatch (`Brewer's Sparrow` vs `Brewer Sparrow`), so it should not be read as a clean `-32pp` regression.*
-
----
-
-#### 7.3.5 Where KF rules helped
-
-Three pairs showed consistent gains from KF rules. In each case the rules describe visual features that are unambiguous, consistently present across images, and not already well-known to a frontier model.
-
-**Red-faced Cormorant vs Pelagic Cormorant: 82% → 92% (+10pp)**
-
-The diagnostic feature — the extent of bare red facial skin — is highly visible in photographs but requires knowing exactly where to look. The zero-shot model knows both species exist; the KF rule tells it precisely what to measure:
-
-> *"If bare red skin extends across the forehead and around the eye, it is a Red-faced Cormorant. If bare skin is restricted to a small patch at the bill base only, it is a Pelagic Cormorant."*
-
-This is the kind of criterion a birder learns from a field guide and applies immediately. GPT-4o applied it correctly in 37/40 images (92%), up from 33/40 (82%) zero-shot.
-
-**Bronzed Cowbird vs Shiny Cowbird: 88% → 98% (+10pp)**
-
-Plumage tone differences (bronzy-brown vs. glossy blue-black body; buff vs. grayish female) are subtle but visible. Rules gave the model explicit vocabulary for what to look for, reducing ambiguity on borderline images. 39/40 correct.
-
-**Black-billed Cuckoo vs Yellow-billed Cuckoo: 78% → 85% (+7pp)**
-
-Bill color and undertail spot pattern are both clearly visible features described precisely in the patch material. The model used them to resolve images where overall body shape was ambiguous.
-
----
-
-#### 7.3.6 Where KF rules failed — and what it revealed
-
-One pair showed a clear drop, one early patch failure was later recovered with a stronger KF design, and one additional pair became a useful exploratory hard case. Together they show that KF can fail when the patch source is wrong, when a weak prompt patch is used where stronger evidence gating is needed, or when a hard case needs a stronger intermediate representation than plain prompt injection.
-
-#### Failure 1: Chipping Sparrow vs Tree Sparrow (88% → 42%, −45pp)
-
-This was the largest failure and the most instructive.
-
-CUB-200-2011 class 130 is labeled "Tree_Sparrow." When the patch source file was written, the author assumed this referred to the **American Tree Sparrow** (*Spizelloides arborea*) — the species any North American birder would think of. But CUB-200-2011 class 130 contains photos of the **Eurasian Tree Sparrow** (*Passer montanus*) — a completely different bird that happens to share part of the common name.
-
-The rules extracted into the knowledge base described American Tree Sparrow:
-
-```
-[HIGH] If a single dark spot is evident in the center of an otherwise plain gray breast,
-       the bird is an American Tree Sparrow.
-[HIGH] If the lower mandible is bright yellow, the bird is an American Tree Sparrow.
-[HIGH] If the eye stripe is rufous-brown or chestnut, the bird is an American Tree Sparrow.
-```
-
-Eurasian Tree Sparrows have none of these features. The model examined each image, found no central breast spot, no yellow lower mandible, no rufous eye stripe — and concluded it must be a Chipping Sparrow. Every time. Accuracy crashed to 42% (essentially the Chipping Sparrow class rate), down from 88% zero-shot.
-
-**The fix:** The patch source file was rewritten to describe the correct species — Eurasian Tree Sparrow — using its actual diagnostic features:
-
-```
-[HIGH] If a black spot is visible on a white cheek, it is a Tree Sparrow.
-[HIGH] If a black throat bib is present, it is a Tree Sparrow.
-[HIGH] If a bold white eyebrow is present above a black eyeline reaching the bill base,
-       it is a Chipping Sparrow.
-[HIGH] If the nape is chestnut and continuous with the crown, it is a Tree Sparrow.
-[HIGH] If the nape is clear gray contrasting with a rufous crown, it is a Chipping Sparrow.
-```
-
-Eurasian Tree Sparrow has a distinctive white cheek with a bold black ear spot — visible in almost any photograph, present year-round in all individuals. After the fix, accuracy recovered to **88% (35/40)**, matching zero-shot exactly. The pair went from the worst KF result to a neutral one with a single corrected patch source file.
-
-This error would have been caught immediately in the interactive verification loop. An expert reviewing the extracted rule *"if a single dark spot in the center of an otherwise plain gray breast, it is an American Tree Sparrow"* would recognize at once that these images do not show American Tree Sparrows and reject the entire rule set. Auto-acceptance bypassed this check.
-
-#### Original prompt-design failure later recovered: American Crow vs Fish Crow
-
-American Crow and Fish Crow are the most visually similar pair in the dataset (cosine similarity 0.996). The original prompt-injection patch performed badly because it relied on voice, range, and habitat cues that are not available in a still image.
-
-The extracted rules reflected the source text faithfully:
-
-```
-[HIGH] Fish Crow gives a nasal 'uh-uh' call; American Crow gives a deeper 'caw'.
-[MEDIUM] Fish Crow tends to be found in coastal or riverine habitats.
-[MEDIUM] Fish Crow is slightly smaller, but size is unreliable without direct comparison.
-```
-
-That original patch is no longer the best KF result for this pair and should not be treated as the headline outcome. In follow-up probing, a stricter structured-evidence KF patch did substantially better: it forced the model to state explicit visible feature claims, gated out non-visual cues, and recovered the pair to zero-shot parity (`68%`).
-
-So the main lesson from Crow vs Fish Crow is no longer simply that the pair is out of scope. The better lesson is that a weak prompt patch can hurt badly, while a stronger KF design based on evidence gating can avoid that damage even on an extremely difficult pair.
-
-#### Exploratory hard case: Brewer Sparrow vs Clay-colored Sparrow
-
-This pair involves fine-grained sparrow differences — subtle face pattern contrasts, malar stripe definition, supercilium contrast — that are genuinely difficult to assess in CUB photographs taken at variable angles, distances, and lighting. The pair was originally reported as a severe KF regression, but part of that score came from a small label-normalization mismatch between `Brewer's Sparrow` and `Brewer Sparrow`. After correcting for that issue in the interpretation, this should be read as a difficult and informative stress test, not as a clean headline failure.
-
-Even after setting aside the label-normalization issue, the pair is still useful because the rules describe real features that are often not clearly visible or measurable in the available images. When rules point at features the model cannot reliably see, injected guidance creates noise rather than signal.
-
-In follow-up probing, this turned out to be a particularly informative stress test for KF rather than just a negative result. GPT-4o remained stubbornly wrong on some Brewer Sparrow images even after being given shorter, cleaner expert annotations. A plain prompt patch was not enough. But a more structured patching strategy helped: first crop the bird more tightly, then require the model to emit an explicit feature record, then make the final decision from those feature claims rather than from a single end-to-end classification pass.
-
-That observation suggests an important refinement to the KF story. In hard visual cases, the most useful patch is often **not** "more expert text in the prompt." The more useful patch is an explicit intermediate artifact that says what the model believes it can actually see:
-
-```json
-{
-  "bold_dark_malar": "no",
-  "pale_submoustachial": "uncertain",
-  "clean_gray_nape_collar": "no",
-  "pale_median_crown_stripe": "yes",
-  "thin_white_eyering": "yes",
-  "face_contrast": "low",
-  "overall_impression": "plain_drab",
-  "notes": "Plain gray-brown face, no bold dark malar, no clean gray collar, thin eyering visible."
-}
-```
-
-Once the problem is represented this way, an expert can inspect the failure at the level of observable evidence rather than only at the final label. If the model claims there is a clean gray nape collar when none is visible, that claim can be corrected directly. The final decision can then be made from the corrected feature set using explicit rules. In internal follow-up tests, this human-verifiable feature layer produced the correct Brewer Sparrow decision on stubborn failure cases while also preserving the correct Clay-colored Sparrow decision on a control image.
-
-This is important for KF because it shows a stronger form of runtime patching. KF does not have to rely only on "tell the model the right answer in better words." It can externalize the decision into:
-
-- a **feature-observation layer** that is human-readable and reviewable
-- a **decision layer** that maps those observations to the class label
-
-That design is closely related to the motivation behind concept bottleneck models, but adapted to a runtime, natural-language, non-fine-tuned setting: the expert can patch the system by correcting explicit feature claims, not by retraining the model weights.
-
-#### What this pair suggests about the next KF iteration
-
-The Brewer / Clay-colored case points toward a stronger next version of KF for image classification:
-
-- use KF to generate **structured observation forms**, not just final classification rules
-- require the model to state which diagnostic visual features are actually visible
-- let the human expert verify or revise those feature claims when the case is important
-- make the final class decision from the verified feature layer
-
-This is a more compelling form of post-training correction because the expert is no longer patching only the final verdict. The expert is patching the system's explicit representation of visual evidence. That makes the correction more inspectable, more reusable, and potentially more stable across different underlying VLMs.
-
----
-
-#### 7.3.7 What this experiment demonstrates
-
-**1. Correct, visually-grounded KF rules reliably improve accuracy.**
-
-For the three pairs where rules described unambiguous visual features visible in photographs (Cormorants, Cowbirds, Cuckoos), KF-patched outperformed zero-shot by 3–10 percentage points in every case. The mechanism is straightforward: natural-language rules give the model precise vocabulary for features it could perceive but not reliably attend to without guidance.
-
-**2. Wrong rules cause systematic, not random, harm.**
-
-The Tree Sparrow failure was not noise — it was a consistent directional error across all 40 images. Bad rules don't add variance; they add bias. This makes the verification step critical: a single undetected error in the knowledge base corrupts every classification for that pair.
-
-**3. The verification loop is not optional.**
-
-The experiment used `auto_accept=True` — every extracted rule was stored without human review. This is equivalent to a domain expert handing over a document and walking away before checking whether the AI extracted the right patch. In the intended workflow, the expert reviews each extracted rule and rejects anything that is wrong, non-visual, or inapplicable. The Tree Sparrow error would have been caught in under a minute of review.
-
-The Brewer Sparrow case suggests that verification should happen at more than one layer. It is not enough to verify the extracted rule text once. In difficult image tasks, KF should also make the model's intermediate feature claims explicit and verifiable. That lets the expert inspect whether the model actually saw the claimed malar stripe, eyering, or nape collar, rather than only judging the final label after the fact.
-
-**4. The Excel moment thesis holds where it should.**
-
-The pairs that gained from KF patching (Cormorants, Cowbirds, Cuckoos) represent exactly the scenario KF is designed for: an expert knows a diagnostic criterion that a general-purpose model does not reliably apply, states it in plain language, and the model immediately uses it to classify better. No training data. No model retraining. No ML expertise required from the expert.
-
-The remaining weak pairs represent either an error in the patch material (fixable), a case where stronger intermediate evidence modeling is needed, or a task that may genuinely be near the limit of what static photographs can support.
-
----
-
-#### 7.3.8 Summary table
-
-| Category | Pairs | KF-patched result | Explanation |
-|---|---|---|---|
-| KF helped | Cormorants, Cowbirds, Cuckoos | +3pp to +10pp | Correct, unambiguous visual rules |
-| KF neutral | Waterthrush, Herring/Ring Gull, Raven | 0pp to −3pp | Rules correct but features borderline visible |
-| KF hurt (fixable) | Tree Sparrow | −45pp → 0pp after fix | Wrong species in patch source file |
-| KF recovered a bad initial patch | Crow pair | −19pp to 0pp | Structured evidence gating replaced a weaker non-visual prompt patch |
-| KF hurt (task limit) | Tern pairs | −5pp | Features remain genuinely hard to resolve from still photos |
-
----
-
-## 7.4 KF Ensemble Pipeline — Architecture and Results (2026-04-01)
-
-This section documents the second implementation of the bird classification experiment. It replaces the single-pass prompt injection design (`src/`) with the full 4-round KF ensemble pipeline (`python/`). A developer who wants to understand why the new design works — and what each round contributes — should read this section.
-
----
-
-### 7.4.1 What the old design got wrong
-
-The Experiment 1 (`src/`) approach had a fundamental structural problem. Rules were injected as text into the system prompt and the model was then asked to both perceive the image and make a final classification decision in a single pass:
-
-```
-[rules + image] → model → label
-```
-
-This forces the model to do two things simultaneously: observe specific visual features and apply discrimination logic. When the features are subtle (Brewer vs Clay-colored Sparrow face patterns), or when the rules reference non-visual cues (crow vocalizations, habitat), the single-pass model tends to fall back on holistic recognition — the same behavior that caused the zero-shot failures in the first place. Injected rules are read but not necessarily grounded in what the model can actually see.
-
-The Experiment 1 results confirmed this: KF helped when rules pointed at unambiguous visible features (cormorant facial skin, cuckoo bill color), but made things worse when features were subtle or when bad rules entered the knowledge base.
-
----
-
-### 7.4.2 The new design: perception before classification
-
-The KF ensemble pipeline separates what the model sees from what it concludes:
-
-```
-image → OBSERVER → feature_record → MEDIATOR + rules → label
-                                          ↑
-                                    VERIFIER checks
-                                    against few-shot
-```
-
-This is the same conceptual shift as a concept bottleneck model — force an explicit intermediate representation of visual evidence — but implemented in a runtime, natural-language, non-fine-tuned setting. The expert can patch the system by correcting the feature observation schema or the decision rules, without touching model weights.
-
----
-
-### 7.4.3 Round-by-round breakdown
-
-**Round 0 — Rule retrieval (RuleEngine)**
-
-The `RuleEngine` retrieves active rules namespaced to `bird-uc200` that are relevant to the current pair. With 112 migrated rules across 15 pairs, this does a two-stage retrieval: a cheap category-filter call, then a full match call on the filtered subset. Only rules for the current pair fire. Rules carry per-namespace fire/success/failure statistics that accumulate across runs and drive the auto-deprecation logic.
-
-Why it matters: rules are not broadcast to every image. They are retrieved with the same retrieval discipline used in the ARC-AGI-2 use case. A rule about Caspian Tern bill shape never contaminates a crow classification.
-
-**Round 0.5 — Feature observation schema (ToolRegistry)**
-
-Before the image is presented to the model, a structured observation form is retrieved from — or generated and stored into — the `ToolRegistry` as a `tool_type="schema"` entry namespaced to `bird-uc200`. The schema for `american_crow_vs_fish_crow` contains questions like:
-
-```json
-{
-  "name": "bill_length_and_depth",
-  "question": "How does the bill's depth compare to its length?",
-  "options": [
-    "deep and stout — bill depth is substantial relative to bill length",
-    "shallower and more slender — bill appears narrow and elongated",
-    "uncertain/not visible"
-  ]
-}
-```
-
-The schema is designed by the schema generator using the matched rules as guidance, then cached after the first image so every subsequent image in the pair uses the same form. A consistent form means the OBSERVER's outputs are comparable across images and the MEDIATOR can reason against a stable feature vocabulary.
-
-Why it matters: an unconstrained "describe this bird" prompt produces idiosyncratic natural-language answers that are hard to match against rules. A structured form with defined options produces outputs that map directly to rule conditions. This is the mechanism that makes rules actionable rather than decorative.
-
-**Round 1 — OBSERVER (VLM with vision)**
-
-The OBSERVER is called with a list of Anthropic content blocks: the test image plus the schema text. It fills in every field in the schema and assigns a confidence score (0.0–1.0) to each observation. The OBSERVER is explicitly instructed:
-
-- Report only what is visible in the image
-- Do not infer species identity
-- Set confidence to 0.0 for features that are unclear, obscured, or ambiguous
-
-The output is a structured feature record:
-
-```json
-{
-  "features": {
-    "bill_length_and_depth": {"value": "deep and stout", "confidence": 0.75},
-    "head_shape_and_forehead": {"value": "steeply rising, rounded", "confidence": 0.80},
-    "overall_body_bulk": {"value": "robust and heavy-bodied", "confidence": 0.70}
-  },
-  "notes": "Strong bill, domed crown, full chest."
-}
-```
-
-Why it matters: the feature record is the unit of expert review. An expert reviewing a wrong decision can inspect exactly what the model claimed to see. If the model says `bill_length_and_depth: "deep and stout"` for a Fish Crow, the expert can correct that specific claim. The final decision updates automatically from the corrected record without rewriting any prompt.
-
-**Round 2 — MEDIATOR (classification)**
-
-The MEDIATOR receives the feature record and the matched rules. It applies rules only to features with confidence ≥ 0.5, skipping low-confidence observations. This confidence gate prevents the model from reasoning from features it cannot reliably see.
-
-The MEDIATOR returns a structured decision:
-
-```json
-{
-  "label": "American Crow",
-  "confidence": 0.78,
-  "reasoning": "bill_length_and_depth deep+stout → r_006 (American Crow). head_shape_and_forehead domed → r_005 (American Crow). Two high-confidence indicators align.",
-  "applied_rules": ["r_005", "r_006"]
-}
-```
-
-If evidence is insufficient (all high-confidence features are neutral or absent), the MEDIATOR returns `"uncertain"` rather than guessing.
-
-Why it matters: the MEDIATOR produces an auditable evidence chain, not just a label. Every rule application is traceable. A developer debugging a wrong decision can see exactly which rules fired and which features triggered them.
-
-**Round 3 — VERIFIER (consistency check)**
-
-The VERIFIER receives the test image, the proposed label, the feature record, and a set of few-shot labeled reference images (3 per species by default, drawn from the training split). It checks whether the proposed label is visually consistent with the reference images — not reclassifying from scratch, only checking coherence.
-
-If the VERIFIER rejects the decision, it returns a `revision_signal` ("the proposed Fish Crow lacks the slender bill seen in reference images") and the MEDIATOR is called again with that feedback. The loop runs up to `MAX_REVISIONS` times (default: 1).
-
-Why it matters: few-shot images and expert rules address orthogonal failure modes. Few-shot images ground the VERIFIER in what members of each species actually look like. Expert rules guide the OBSERVER's attention to discriminative features. Combining them catches cases where the MEDIATOR's rule application was technically valid but visually implausible.
-
-**Post-task — Rule extractor**
-
-After the correct label is known, a rule extractor agent reviews the feature record, the decision, and the outcome and proposes new visual rules in the `rule_updates` JSON format consumed by `parse_mediator_rule_updates()`. These rules accumulate in `rules.json` across runs. Over 12 images, 27 new rules were added (r_113 through r_139), growing the knowledge base from 112 to 139 rules.
-
----
-
-### 7.4.4 Observability filter
-
-All rules — both migrated from `knowledge_base/` and extracted by the post-task agent — pass through `add_rule(observability_filter=True)`. This calls `is_visually_observable(text)` in `core/knowledge/rules.py`, which rejects any rule mentioning vocalizations, calls, songs, habitat, range, season, migration, behavior, flocking, or size relative to another bird.
-
-Of the 118 rules in the original knowledge base, 6 were blocked at migration time:
-- 3 crow rules (nasal call, "caw" call, comparative size in mixed flocks)
-- 2 flycatcher rules (diagnostic calls)
-- 1 cormorant rule (white flank patches visible only in breeding season)
-
-This is the mechanism that prevented the Experiment 1 crow failure — where non-visual rules (vocalization, habitat, range) were injected into the prompt and made things worse — from recurring in Experiment 2.
-
----
-
-### 7.4.5 First-pass results (2026-04-01)
-
-**Experiment setup:**
-- Model: `claude-sonnet-4-6`
-- Dataset: CUB-200-2011, standard test split
-- Pairs tested: American Crow vs Fish Crow, Brewer Sparrow vs Clay-colored Sparrow
-- Test images: 3 per species per pair (6 per pair, 12 total) — first-pass sample
-- Few-shot images: 3 per species per pair, drawn from training split
-- Rules: 112 migrated from `knowledge_base/`, growing to 139 after post-task extraction
-- Results file: `python/results_test.json` (run date: 2026-04-01)
-
-**Results:**
-
-| Pair | Correct | Total | Accuracy | Cost | Avg API calls/image |
-|---|---|---|---|---|---|
-| American Crow vs Fish Crow | 5 | 6 | **83.3%** | $0.34 | 6.2 |
-| Brewer Sparrow vs Clay-colored Sparrow | 6 | 6 | **100.0%** | $0.39 | 6.2 |
-| **Combined** | **11** | **12** | **91.7%** | **$0.73** | **6.2** |
-
-Average cost per image: ~$0.061. Average duration per image: ~57s.
-
-**Comparison to Experiment 1:**
-
-| Pair | Zero-shot (Exp 1) | Few-shot (Exp 1) | KF-patched (Exp 1) | KF Ensemble (Exp 2) |
-|---|---|---|---|---|
-| American Crow vs Fish Crow | 68% | 68% | 68% | **83.3%** |
-| Brewer Sparrow vs Clay-colored Sparrow | 82% | 95% | see note | **100.0%** |
-
-The crow pair moved from zero-shot parity to +15pp in this pilot. The sparrow pair, which was the hardest exploratory stress test in Experiment 1, scored 6/6. Both results are encouraging but should be confirmed on the full test sets before drawing strong conclusions.
-
-**The one error (crow image 01646):**
-
-The OBSERVER recorded "large and robust bill, domed crown, heavy-bodied" — features favoring American Crow — for an image whose ground truth is Fish Crow. The MEDIATOR correctly applied the rules to those observations and decided American Crow. The VERIFIER found the decision consistent with reference images. The pipeline behaved correctly given what the OBSERVER reported; the root cause is that the OBSERVER's feature report did not match the ground-truth label. Whether this reflects a genuinely atypical or ambiguously proportioned individual, a difficult viewing angle, or a systematic OBSERVER limitation is not confirmed from a single image.
-
-**Feature patterns driving the sparrow result:**
-
-The OBSERVER reliably separated the two sparrow species on four fields:
-
-| Feature | Clay-colored Sparrow | Brewer Sparrow |
-|---|---|---|
-| `malar_stripe_contrast` | bold, well-defined | faint, indistinct |
-| `auricular_patch_outline` | sharply outlined with dark border | blended, diffuse |
-| `median_crown_stripe` | distinct pale/whitish stripe present | absent or indistinct |
-| `lateral_crown_stripe_contrast` | bold, dark contrasting stripes | fine, low-contrast streaking |
-
-These four fields alone were sufficient for confident MEDIATOR decisions in all 6 images. This demonstrates the core benefit of the structured observation form: the schema focused the OBSERVER's attention on the exact features the expert rules reference, instead of leaving the model to describe the bird in its own words.
-
----
-
-### 7.4.6 Repository layout for the new implementation
-
-```
-python/                    KF ensemble pipeline — new implementation
-  harness.py               CLI runner (equivalent to arc-agi/python/harness.py)
-  ensemble.py              4-round orchestrator: match → observe → classify → verify
-  agents.py                Agent runners: OBSERVER, MEDIATOR, VERIFIER, rule extractor
-  dataset.py               Standalone CUB-200-2011 loader (no hardcoded paths)
-  rules.py                 Shim: sets DEFAULT_PATH → python/rules.json, re-exports RuleEngine
-  tools.py                 Shim: sets DEFAULT_PATH → python/tools.json, re-exports ToolRegistry
-  migrate_rules.py         One-time migration: knowledge_base/*.json → RuleEngine
-  rules.json               Persisted rule knowledge base (gitignored — local workspace)
-  tools.json               Persisted feature schemas (gitignored — local workspace)
-
-src/                       Original single-pass implementation — do not modify
-  baseline.py              GPT-4o zero-shot / few-shot baseline
-  kf_teacher.py            Rule extraction via GPT-4 (single-pass injection design)
-  dataset.py               CUB dataset loader (used by src/ only)
-  confusable_pairs.py      15-pair definitions (imported read-only by python/harness.py)
-  config.py                Paths and API key config for src/
-  evaluator.py             Evaluation utilities for src/
-```
-
-**Quick-start for a developer:**
-
-```bash
-cd usecases/expert-knowledge-transfer-for-image-classification/python
-
-# 1. Import the 112 expert rules from knowledge_base/ (run once; ~2 seconds)
-python migrate_rules.py
-
-# 2. Preview what will be imported without saving
-python migrate_rules.py --dry-run
-
-# 3. Run a single pair (all test images)
-python harness.py --pair american_crow_vs_fish_crow
-
-# 4. Run two pairs and resume if interrupted
-python harness.py --pair american_crow_vs_fish_crow --output results.json
-python harness.py --pair brewer_sparrow_vs_clay_colored_sparrow --output results.json --resume
-
-# 5. Run all 15 pairs
-python harness.py --all --output results_full.json
-
-# 6. Read-only evaluation (no rule learning)
-python harness.py --all --mode test --output results_test.json
-
-# 7. Prune stale or low-performing rules
-python harness.py --prune
-```
-
-**Python environment:** `C:/Users/kaihu/AppData/Local/pypoetry/Cache/virtualenvs/01os-TLh4bqwo-py3.10/Scripts/python.exe`
-
----
-
-### 7.4.7 What is needed before a benchmark claim
-
-The pilot result is encouraging. To make it a rigorous benchmark claim, the following are needed:
-
-| Gap | What to do |
-|---|---|
-| Online adaptation during test | Re-run with `--mode test` (disables post-task rule learning) so the knowledge base is frozen before evaluation begins |
-| Model+pipeline confound | Add Claude zero-shot and Claude few-shot baselines using the same model, so the KF architecture contribution can be separated from the model upgrade |
-| Small sample | Run the full test set for both pairs (~25–30 images per species, ~50–60 per pair) before drawing conclusions |
-| Two-pair scope | Expand to more of the 15 confusable pairs to test generalization |
-
-Until those runs are done, Experiment 2 should be read as: *structured evidence observation is a promising direction for KF image classification, and the pilot numbers justify investing in a rigorous follow-up*.
-
----
-
-### 7.4.8 Key design decisions and why they matter
-
-| Decision | What it does | Why it matters |
-|---|---|---|
-| Structured feature schema (ToolRegistry `tool_type="schema"`) | OBSERVER fills a fixed form with defined options instead of free-text describing the bird | Makes rule application deterministic; expert can correct specific feature claims not just labels |
-| Confidence gating (`conf >= 0.5`) | MEDIATOR ignores low-confidence observations | Prevents the model from reasoning from features it cannot reliably see; reduces noise from occluded or ambiguous images |
-| Observability filter (`add_rule(observability_filter=True)`) | Rejects rules mentioning vocalizations, habitat, range, season, behavior | Prevents Experiment 1 crow failure from recurring; keeps knowledge base grounded in what a static image can show |
-| Schema cached in ToolRegistry | Schema generated once per pair, reused across all images | Consistent field vocabulary across images; MEDIATOR reasoning is comparable run-to-run |
-| Namespace isolation (`dataset_tag="bird-uc200"`) | Rules and schemas are tagged and filtered by namespace | Crow rules never contaminate sparrow classifications; knowledge bases for different use cases remain independent |
-| Few-shot in VERIFIER not in MEDIATOR | Labeled images ground the consistency check, not the classification decision | Addresses orthogonal failure modes: rules guide attention, images catch visually implausible decisions |
-| Rule accumulation across runs | Post-task extractor adds new rules; migrated rules accumulate fire/success/failure stats | Knowledge base improves with use; low-performing rules are auto-deprecated by `auto_deprecate()` |
-
----
-
-## 7.5 KF Ensemble Pipeline — Dermatology Pilot Results (2026-04-02)
-
-This section documents the first implemented run of the dermatology sub-use-case, parallel in structure to the bird §7.4. The pipeline is a direct port of the bird KF ensemble with dermoscopy-adapted system prompts, a HAM10000 dataset loader, and a dermatology knowledge base.
-
----
-
-### 7.5.1 Setup
-
-**Model**: `claude-sonnet-4-6`
-**Dataset**: HAM10000 (10,015 dermoscopy images, 7 diagnostic categories)
-**Pairs tested**: 3 confusable pairs selected from medically established confusion cases
-**Test images**: 3 per class per pair (6 per pair, 18 total) — first-pass pilot
-**Mode**: `--mode test` (rules frozen at 36; no post-task learning; clean held-out evaluation)
-**Few-shot images**: 3 per class per pair, drawn from train split
-**Rules**: 36 migrated from `dermatology/knowledge_base/`, 0 blocked by observability filter
-**Results file**: `dermatology/python/results_pilot.json` (run date: 2026-04-02)
-
-The train/test split is an 80/20 split on unique `lesion_id`s per diagnosis class, seeded deterministically. Test set uses one image per lesion. Unlike the bird experiment, this run used `--mode test` from the start — there is no online adaptation confound.
-
----
-
-### 7.5.2 Pilot results
-
-| Pair | Correct | Total | Accuracy | Cost | Avg API calls/image |
-|---|---|---|---|---|---|
-| Melanoma vs Melanocytic Nevus | 4 | 6 | **66.7%** | $0.44 | 6.3 |
-| Basal Cell Carcinoma vs Benign Keratosis | 3 | 6 | **50.0%** | $0.47 | 6.3 |
-| Actinic Keratosis vs Benign Keratosis | 2 | 6 | **33.3%** | $0.46 | 6.3 |
-| **Combined** | **9** | **18** | **50.0%** | **$1.37** | **6.3** |
-
-Average cost per image: ~$0.076. Average duration per image: ~58s.
-
-These are encouraging in parts and instructive in others. The melanoma pair behaved much like the bird pairs that worked best in Experiment 1 — rules are symmetrical, pointing positively to both diagnoses. The BCC and AK pairs exposed a systematic gap that the bird experiment did not have.
-
----
-
-### 7.5.3 Two systematic failure modes
-
-**Failure mode 1: "uncertain" from absence-only evidence (4 of 9 failures)**
-
-The knowledge base rules are all of the form "IF [specific marker present] THEN [diagnosis]". When the OBSERVER reports that all BCC-specific markers are absent (no arborizing vessels, no ovoid nests, no leaf-like areas) and all BK-specific markers are also absent (no milia-like cysts, no comedo openings, no cerebriform pattern), the MEDIATOR has no rule to fire — it correctly reports "uncertain" but this counts as wrong.
-
-This is a knowledge base design gap, not a pipeline failure. A complete knowledge base needs two types of rules:
-- **Presence rules**: "IF arborizing vessels present THEN Basal Cell Carcinoma"
-- **Composite-absence rules**: "IF no BCC-specific structures are visible, the default should be Benign Keratosis when BK-compatible texture is present"
-
-The bird knowledge base implicitly had this because the pairs had overlapping feature vocabularies (both species described in terms of the same visible structures). The dermatology pairs as currently written do not.
-
-**Failure mode 2: `bkl` class heterogeneity**
-
-HAM10000's `bkl` label covers both seborrheic keratosis (SK) and lichenoid keratosis (LPLK). SK has clear dermoscopic markers (milia-like cysts, comedo-like openings, cerebriform pattern). LPLK does not — it often shows regression structures, blue-gray peppering, and an irregular pigment network that closely resembles melanoma or AK. The three `bkl` test images in the AK/BK pair included at least one LPLK, which the OBSERVER correctly described as having regression-like structures, leading the MEDIATOR to choose AK over BK. The ground-truth label is technically correct (it is benign keratosis) but the dermoscopic appearance is genuinely ambiguous.
-
----
-
-### 7.5.4 What worked
-
-**VERIFIER correction**: In 2 of 18 cases the VERIFIER disagreed with the MEDIATOR (round 3 `consistent=False`) and triggered a revision. Both revisions resulted in useful changes — one corrected a wrong Melanoma prediction to Melanocytic Nevus. The VERIFIER's few-shot reference images provided visual grounding that the rule-only MEDIATOR lacked.
-
-**Melanoma pair feature separation**: The OBSERVER reliably identified dermoscopic features that distinguish melanoma from nevus across all 6 images:
-
-| Feature | Melanoma images | Melanocytic Nevus images |
-|---|---|---|
-| Symmetry | asymmetric in 1–2 axes | symmetric |
-| Border | irregular/notched | regular/smooth |
-| Color variation | 3–4+ colors | 1–2 colors |
-| Pigment network | atypical/irregular | typical or absent |
-| Special structures | blue-white veil or regression | none visible |
-
-These four to five fields provided confident MEDIATOR decisions in 5 of 6 cases. The one miss was a nevus that the OBSERVER described as having atypical-appearing features (possibly a dysplastic nevus), leading to a melanoma decision at conf=0.68 that the VERIFIER did not override.
-
-**Pipeline transfer**: The full 4-round structure — rule retrieval, schema generation, OBSERVER, MEDIATOR, VERIFIER — ran correctly on dermoscopy images with no code changes to the pipeline itself. Only system prompt vocabulary changed from ornithology to dermatology. This validates the domain-agnostic design of the KF ensemble pipeline.
-
----
-
-### 7.5.5 What is needed next
-
-| Gap | What to do |
-|---|---|
-| Absence-based rules | Add composite-absence rules: "IF no BCC markers present AND pearly texture absent THEN Benign Keratosis" |
-| `bkl` heterogeneity | Optionally split `bkl` into SK and LPLK sub-types, or add rules distinguishing them from AK/BCC respectively |
-| Same-model baselines | Run Claude zero-shot and Claude few-shot on the same 18 images to isolate the KF architecture contribution |
-| Full test sets | Run all test lesions per pair (~66 BCC, ~146 BK, ~123 mel, ~1081 nv, ~46 akiec) |
-| Rule retrieval audit | With 36 rules and two-stage retrieval threshold=30, only 2–5 rules matched per image — investigate whether all pair-specific rules are being retrieved |
-
----
-
-### 7.5.6 Repository layout for the dermatology implementation
-
-```
-dermatology/                   Dermatology sub-use-case (parallel to bird)
-  knowledge_base/
-    melanoma_vs_melanocytic_nevus.json         13 dermoscopy rules
-    basal_cell_carcinoma_vs_benign_keratosis.json  12 dermoscopy rules
-    actinic_keratosis_vs_benign_keratosis.json     11 dermoscopy rules
-  python/
-    harness.py           CLI runner for HAM10000
-    ensemble.py          4-round orchestrator (DATASET_TAG="derm-ham10000")
-    agents.py            Dermoscopy-adapted agent runners
-    dataset.py           HAM10000 loader with 80/20 lesion-id split
-    rules.py             Shim → dermatology/python/rules.json
-    tools.py             Shim → dermatology/python/tools.json
-    migrate_rules.py     One-time migration: knowledge_base/*.json → RuleEngine
-    rules.json           Persisted rule knowledge base (gitignored)
-    tools.json           Persisted feature schemas (gitignored)
-```
-
-**Quick-start for a developer:**
-
-```bash
-cd usecases/expert-knowledge-transfer-for-image-classification/dermatology/python
-
-# 1. Import the 36 expert rules from knowledge_base/
-python migrate_rules.py
-
-# 2. Run a single pair frozen (no rule learning) — recommended for first evaluation
-python harness.py --pair melanoma_vs_melanocytic_nevus --mode test
-
-# 3. Run all 3 pairs with online learning enabled
-python harness.py --all --output results.json
-
-# 4. Resume an interrupted run
-python harness.py --pair basal_cell_carcinoma_vs_benign_keratosis --output results.json --resume
-
-# 5. Pilot (3 images/class, frozen rules) — matches the first-pass run above
-python harness.py --all --max-per-class 3 --mode test --output results_pilot.json
-```
-
-**Data directory default**: `C:\_backup\ml\data\DermaMNIST_HAM10000`
-Override with `--data-dir`.
-
----
-
 ## 8. References
 
 - CUB-200-2011 dataset: [Caltech Perona Lab](https://www.vision.caltech.edu/datasets/cub_200_2011/)
