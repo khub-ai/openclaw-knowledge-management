@@ -1,0 +1,12 @@
+rules.json
+tools.json
+rules.json.tmp
+tools.json.tmp
+rules.json.lock
+tools.json.lock
+results*.json
+results*.tmp
+failed*.json
+__pycache__/
+*.pyc
+*.pyo

@@ -1,0 +1,115 @@
+{
+  "pair": "Actinic Keratosis vs Benign Keratosis",
+  "rules": [
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If a strawberry pattern is visible (red pseudonetwork around open follicular openings surrounded by white halos), it is Actinic Keratosis.",
+      "feature": "strawberry_pattern",
+      "favors": "Actinic Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If rosette structures are present (white four-leaf clover-like or four-dot structures visible within follicular openings), it is Actinic Keratosis.",
+      "feature": "rosette_pattern",
+      "favors": "Actinic Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If dotted or glomerular vessels are arranged in a regular or cluster pattern over a pink/erythematous background, it favors Actinic Keratosis.",
+      "feature": "vascular_structures",
+      "favors": "Actinic Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If the background color is pink or erythematous (red) without the brownish-yellow pigmentation typical of seborrheic keratosis, it favors Actinic Keratosis.",
+      "feature": "background_color",
+      "favors": "Actinic Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If surface scale or keratin deposits are visible as white or yellowish scaling over a pink base, it favors Actinic Keratosis.",
+      "feature": "surface_scale",
+      "favors": "Actinic Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If follicular openings are clearly visible and prominent without milia-like cysts filling them, it favors Actinic Keratosis.",
+      "feature": "follicular_pattern",
+      "favors": "Actinic Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If milia-like cysts are present (multiple white or yellowish round, well-defined dots scattered throughout), it is Benign Keratosis.",
+      "feature": "milia_like_cysts",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If comedo-like openings (dark, plugged pore-like structures) are visible, it is Benign Keratosis.",
+      "feature": "comedo_like_openings",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If a cerebriform (brain-like) pattern of gyri and sulci is present, it is Benign Keratosis.",
+      "feature": "cerebriform_pattern",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If the lesion has a brownish-yellow or tan color with a 'stuck-on' warty texture and thick ridges, it is Benign Keratosis (seborrheic keratosis).",
+      "feature": "surface_texture",
+      "favors": "Benign Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Actinic Keratosis vs Benign Keratosis",
+      "rule": "If hairpin vessels with white halos are present (U-shaped or looped vessels each surrounded by a white halo), it is Benign Keratosis.",
+      "feature": "vascular_structures",
+      "favors": "Benign Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    }
+  ]
+}

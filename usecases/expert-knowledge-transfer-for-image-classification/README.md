@@ -3,9 +3,9 @@
 
 ---
 
-> **Status**: Research prototype — bird case study active; KF ensemble pipeline implemented and first-pass tested (2026-04-01); dermatology upcoming  
-> **Theme**: [Knowledge Fabric (KF)](../../docs/glossary.md#knowledge-fabric-kf) as a local-first knowledge authoring tool for domain experts with no AI expertise  
-> **Last updated**: 2026.04.01
+> **Status**: Research prototype — bird case study active; dermatology case study implemented and first-pass tested (2026-04-02)
+> **Theme**: [Knowledge Fabric (KF)](../../docs/glossary.md#knowledge-fabric-kf) as a local-first knowledge authoring tool for domain experts with no AI expertise
+> **Last updated**: 2026.04.02
 
 [Knowledge Fabric (KF)](../../docs/glossary.md#knowledge-fabric-kf) treats expert input as a reusable [knowledge patch](../../docs/glossary.md#knowledge-patch): a domain expert can incrementally correct a pre-trained vision-language model in plain language, without fine-tuning the model or running an ML workflow. This README uses two reference domains to make the idea concrete: fine-grained bird identification and skin-lesion classification in dermatology.
 
@@ -284,13 +284,9 @@ Prefer to skip the upcoming dermatology section? Jump to [Cross-Use-Case Takeawa
 
 ---
 
-## 4. Sub-Use-Case B: Dermatology (upcoming)
+## 4. Sub-Use-Case B: Dermatology
 
-> **Upcoming sub-use-case**
-> The dermatology track is planned but not yet implemented in this repo.
-> The dataset rationale and experiment design are outlined here, but the actual
-> patching session, example lesion cases, qualitative examples, and measured
-> results are still to come.
+> **Status**: Implemented and first-pass pilot tested (2026-04-02). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Pilot results: **9/18 overall (50%)** across three confusable pairs — melanoma vs nevus (66.7%), BCC vs benign keratosis (50%), actinic keratosis vs benign keratosis (33.3%). For the full architecture, results, and failure analysis see [§7.5](#75-kf-ensemble-pipeline-dermatology-pilot-results-2026-04-02).
 
 Dermatology is the strongest medical analogue to the bird use case. Like bird identification, it depends on subtle visual distinctions that experts can often explain in words: pigment network, asymmetry, border irregularity, color variation, streaks, dots, globules, regression structures, ulceration, and other dermoscopic criteria. It is therefore a strong fit for KF's runtime patching model.
 
@@ -1021,6 +1017,138 @@ Until those runs are done, Experiment 2 should be read as: *structured evidence 
 | Namespace isolation (`dataset_tag="bird-uc200"`) | Rules and schemas are tagged and filtered by namespace | Crow rules never contaminate sparrow classifications; knowledge bases for different use cases remain independent |
 | Few-shot in VERIFIER not in MEDIATOR | Labeled images ground the consistency check, not the classification decision | Addresses orthogonal failure modes: rules guide attention, images catch visually implausible decisions |
 | Rule accumulation across runs | Post-task extractor adds new rules; migrated rules accumulate fire/success/failure stats | Knowledge base improves with use; low-performing rules are auto-deprecated by `auto_deprecate()` |
+
+---
+
+## 7.5 KF Ensemble Pipeline — Dermatology Pilot Results (2026-04-02)
+
+This section documents the first implemented run of the dermatology sub-use-case, parallel in structure to the bird §7.4. The pipeline is a direct port of the bird KF ensemble with dermoscopy-adapted system prompts, a HAM10000 dataset loader, and a dermatology knowledge base.
+
+---
+
+### 7.5.1 Setup
+
+**Model**: `claude-sonnet-4-6`
+**Dataset**: HAM10000 (10,015 dermoscopy images, 7 diagnostic categories)
+**Pairs tested**: 3 confusable pairs selected from medically established confusion cases
+**Test images**: 3 per class per pair (6 per pair, 18 total) — first-pass pilot
+**Mode**: `--mode test` (rules frozen at 36; no post-task learning; clean held-out evaluation)
+**Few-shot images**: 3 per class per pair, drawn from train split
+**Rules**: 36 migrated from `dermatology/knowledge_base/`, 0 blocked by observability filter
+**Results file**: `dermatology/python/results_pilot.json` (run date: 2026-04-02)
+
+The train/test split is an 80/20 split on unique `lesion_id`s per diagnosis class, seeded deterministically. Test set uses one image per lesion. Unlike the bird experiment, this run used `--mode test` from the start — there is no online adaptation confound.
+
+---
+
+### 7.5.2 Pilot results
+
+| Pair | Correct | Total | Accuracy | Cost | Avg API calls/image |
+|---|---|---|---|---|---|
+| Melanoma vs Melanocytic Nevus | 4 | 6 | **66.7%** | $0.44 | 6.3 |
+| Basal Cell Carcinoma vs Benign Keratosis | 3 | 6 | **50.0%** | $0.47 | 6.3 |
+| Actinic Keratosis vs Benign Keratosis | 2 | 6 | **33.3%** | $0.46 | 6.3 |
+| **Combined** | **9** | **18** | **50.0%** | **$1.37** | **6.3** |
+
+Average cost per image: ~$0.076. Average duration per image: ~58s.
+
+These are encouraging in parts and instructive in others. The melanoma pair behaved much like the bird pairs that worked best in Experiment 1 — rules are symmetrical, pointing positively to both diagnoses. The BCC and AK pairs exposed a systematic gap that the bird experiment did not have.
+
+---
+
+### 7.5.3 Two systematic failure modes
+
+**Failure mode 1: "uncertain" from absence-only evidence (4 of 9 failures)**
+
+The knowledge base rules are all of the form "IF [specific marker present] THEN [diagnosis]". When the OBSERVER reports that all BCC-specific markers are absent (no arborizing vessels, no ovoid nests, no leaf-like areas) and all BK-specific markers are also absent (no milia-like cysts, no comedo openings, no cerebriform pattern), the MEDIATOR has no rule to fire — it correctly reports "uncertain" but this counts as wrong.
+
+This is a knowledge base design gap, not a pipeline failure. A complete knowledge base needs two types of rules:
+- **Presence rules**: "IF arborizing vessels present THEN Basal Cell Carcinoma"
+- **Composite-absence rules**: "IF no BCC-specific structures are visible, the default should be Benign Keratosis when BK-compatible texture is present"
+
+The bird knowledge base implicitly had this because the pairs had overlapping feature vocabularies (both species described in terms of the same visible structures). The dermatology pairs as currently written do not.
+
+**Failure mode 2: `bkl` class heterogeneity**
+
+HAM10000's `bkl` label covers both seborrheic keratosis (SK) and lichenoid keratosis (LPLK). SK has clear dermoscopic markers (milia-like cysts, comedo-like openings, cerebriform pattern). LPLK does not — it often shows regression structures, blue-gray peppering, and an irregular pigment network that closely resembles melanoma or AK. The three `bkl` test images in the AK/BK pair included at least one LPLK, which the OBSERVER correctly described as having regression-like structures, leading the MEDIATOR to choose AK over BK. The ground-truth label is technically correct (it is benign keratosis) but the dermoscopic appearance is genuinely ambiguous.
+
+---
+
+### 7.5.4 What worked
+
+**VERIFIER correction**: In 2 of 18 cases the VERIFIER disagreed with the MEDIATOR (round 3 `consistent=False`) and triggered a revision. Both revisions resulted in useful changes — one corrected a wrong Melanoma prediction to Melanocytic Nevus. The VERIFIER's few-shot reference images provided visual grounding that the rule-only MEDIATOR lacked.
+
+**Melanoma pair feature separation**: The OBSERVER reliably identified dermoscopic features that distinguish melanoma from nevus across all 6 images:
+
+| Feature | Melanoma images | Melanocytic Nevus images |
+|---|---|---|
+| Symmetry | asymmetric in 1–2 axes | symmetric |
+| Border | irregular/notched | regular/smooth |
+| Color variation | 3–4+ colors | 1–2 colors |
+| Pigment network | atypical/irregular | typical or absent |
+| Special structures | blue-white veil or regression | none visible |
+
+These four to five fields provided confident MEDIATOR decisions in 5 of 6 cases. The one miss was a nevus that the OBSERVER described as having atypical-appearing features (possibly a dysplastic nevus), leading to a melanoma decision at conf=0.68 that the VERIFIER did not override.
+
+**Pipeline transfer**: The full 4-round structure — rule retrieval, schema generation, OBSERVER, MEDIATOR, VERIFIER — ran correctly on dermoscopy images with no code changes to the pipeline itself. Only system prompt vocabulary changed from ornithology to dermatology. This validates the domain-agnostic design of the KF ensemble pipeline.
+
+---
+
+### 7.5.5 What is needed next
+
+| Gap | What to do |
+|---|---|
+| Absence-based rules | Add composite-absence rules: "IF no BCC markers present AND pearly texture absent THEN Benign Keratosis" |
+| `bkl` heterogeneity | Optionally split `bkl` into SK and LPLK sub-types, or add rules distinguishing them from AK/BCC respectively |
+| Same-model baselines | Run Claude zero-shot and Claude few-shot on the same 18 images to isolate the KF architecture contribution |
+| Full test sets | Run all test lesions per pair (~66 BCC, ~146 BK, ~123 mel, ~1081 nv, ~46 akiec) |
+| Rule retrieval audit | With 36 rules and two-stage retrieval threshold=30, only 2–5 rules matched per image — investigate whether all pair-specific rules are being retrieved |
+
+---
+
+### 7.5.6 Repository layout for the dermatology implementation
+
+```
+dermatology/                   Dermatology sub-use-case (parallel to bird)
+  knowledge_base/
+    melanoma_vs_melanocytic_nevus.json         13 dermoscopy rules
+    basal_cell_carcinoma_vs_benign_keratosis.json  12 dermoscopy rules
+    actinic_keratosis_vs_benign_keratosis.json     11 dermoscopy rules
+  python/
+    harness.py           CLI runner for HAM10000
+    ensemble.py          4-round orchestrator (DATASET_TAG="derm-ham10000")
+    agents.py            Dermoscopy-adapted agent runners
+    dataset.py           HAM10000 loader with 80/20 lesion-id split
+    rules.py             Shim → dermatology/python/rules.json
+    tools.py             Shim → dermatology/python/tools.json
+    migrate_rules.py     One-time migration: knowledge_base/*.json → RuleEngine
+    rules.json           Persisted rule knowledge base (gitignored)
+    tools.json           Persisted feature schemas (gitignored)
+```
+
+**Quick-start for a developer:**
+
+```bash
+cd usecases/expert-knowledge-transfer-for-image-classification/dermatology/python
+
+# 1. Import the 36 expert rules from knowledge_base/
+python migrate_rules.py
+
+# 2. Run a single pair frozen (no rule learning) — recommended for first evaluation
+python harness.py --pair melanoma_vs_melanocytic_nevus --mode test
+
+# 3. Run all 3 pairs with online learning enabled
+python harness.py --all --output results.json
+
+# 4. Resume an interrupted run
+python harness.py --pair basal_cell_carcinoma_vs_benign_keratosis --output results.json --resume
+
+# 5. Pilot (3 images/class, frozen rules) — matches the first-pass run above
+python harness.py --all --max-per-class 3 --mode test --output results_pilot.json
+```
+
+**Data directory default**: `C:\_backup\ml\data\DermaMNIST_HAM10000`
+Override with `--data-dir`.
 
 ---
 

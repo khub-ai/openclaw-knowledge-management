@@ -1,0 +1,135 @@
+{
+  "pair": "Melanoma vs Melanocytic Nevus",
+  "rules": [
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the lesion shows marked asymmetry in both shape and color distribution across two axes, it favors Melanoma.",
+      "feature": "asymmetry",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the border is irregular, notched, or has an abrupt cutoff with sharp angular indentations, it favors Melanoma.",
+      "feature": "border",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the lesion contains three or more distinct colors (e.g., tan, brown, dark brown, black, red, blue, white) in an irregular distribution, it favors Melanoma.",
+      "feature": "color_variation",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If a blue-white veil is present (a structureless blue-white area overlying a raised or irregular portion of the lesion), it favors Melanoma.",
+      "feature": "blue_white_veil",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If regression structures are present — white scar-like areas or blue-gray peppering (multiple small blue-gray dots or granules) — it favors Melanoma.",
+      "feature": "regression_structures",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the pigment network is atypical — with irregular, thickened, or abruptly ending meshwork, or branched streaks radiating from the border — it favors Melanoma.",
+      "feature": "pigment_network",
+      "favors": "Melanoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If dots and globules are distributed asymmetrically, especially clustered at the periphery or in an irregular pattern, it favors Melanoma.",
+      "feature": "dots_globules",
+      "favors": "Melanoma",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If irregular vascular structures are visible — such as dotted vessels in an asymmetric pattern, milky-red areas, or polymorphous vessels — it favors Melanoma.",
+      "feature": "vascular_structures",
+      "favors": "Melanoma",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the lesion is symmetric in both shape and color distribution, with smooth radial gradients, it favors Melanocytic Nevus.",
+      "feature": "symmetry",
+      "favors": "Melanocytic Nevus",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the border is regular and smooth, with a gradual transition from center to periphery, it favors Melanocytic Nevus.",
+      "feature": "border",
+      "favors": "Melanocytic Nevus",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the color is uniform or shows only one to two shades of brown with even distribution, it favors Melanocytic Nevus.",
+      "feature": "color_variation",
+      "favors": "Melanocytic Nevus",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If the pigment network is typical — a regular meshwork of thin lines that fades smoothly at the periphery — it favors Melanocytic Nevus.",
+      "feature": "pigment_network",
+      "favors": "Melanocytic Nevus",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Melanoma vs Melanocytic Nevus",
+      "rule": "If globules are present in a symmetric, central, or even distribution without peripheral clustering, it favors Melanocytic Nevus.",
+      "feature": "dots_globules",
+      "favors": "Melanocytic Nevus",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    }
+  ]
+}

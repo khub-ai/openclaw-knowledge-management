@@ -1,0 +1,125 @@
+{
+  "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+  "rules": [
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If arborizing (tree-like) vessels are visible — large, irregularly branching vessels — it is Basal Cell Carcinoma.",
+      "feature": "vascular_structures",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If blue-gray ovoid nests are visible (large, well-defined, blue-gray oval or round structures distinct from the background), it is Basal Cell Carcinoma.",
+      "feature": "ovoid_nests",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If leaf-like areas are present (discrete brown, gray, or gray-green leaf or petal-shaped structures at the periphery), it is Basal Cell Carcinoma.",
+      "feature": "leaf_like_areas",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If spoke-wheel structures are present (well-defined radial projections meeting at a darker central hub), it is Basal Cell Carcinoma.",
+      "feature": "spoke_wheel",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If the surface appears pearly or translucent with a rolled, shiny border, it favors Basal Cell Carcinoma.",
+      "feature": "surface_texture",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If ulceration (a well-defined central erosion or crusted area) is present without preceding trauma, it favors Basal Cell Carcinoma.",
+      "feature": "ulceration",
+      "favors": "Basal Cell Carcinoma",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If milia-like cysts are present (multiple white or yellowish round, well-defined dots scattered throughout the lesion), it is Benign Keratosis (seborrheic keratosis).",
+      "feature": "milia_like_cysts",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If comedo-like openings are present (dark brown to black, round or irregular plugged follicular openings resembling blackheads), it is Benign Keratosis.",
+      "feature": "comedo_like_openings",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If a cerebriform or brain-like pattern is visible (gyri and sulci pattern, thick ridges and fissures resembling the surface of a brain), it is Benign Keratosis.",
+      "feature": "cerebriform_pattern",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If fissures and ridges form a 'fat finger' or 'sulci and gyri' pattern (thick, parallel ridges separated by deep grooves), it is Benign Keratosis.",
+      "feature": "fissures_ridges",
+      "favors": "Benign Keratosis",
+      "confidence": "high",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If the border has a moth-eaten or sharply demarcated edge (concave indentations giving a 'bitten-off' appearance), it favors Benign Keratosis.",
+      "feature": "border",
+      "favors": "Benign Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    },
+    {
+      "pair": "Basal Cell Carcinoma vs Benign Keratosis",
+      "rule": "If hairpin vessels with a surrounding white halo are present, it favors Benign Keratosis (seborrheic keratosis).",
+      "feature": "vascular_structures",
+      "favors": "Benign Keratosis",
+      "confidence": "medium",
+      "source": "dermatology/knowledge_base/dermoscopy_criteria.md",
+      "verified_by": "auto",
+      "created_at": "2026-04-01T00:00:00+00:00"
+    }
+  ]
+}
