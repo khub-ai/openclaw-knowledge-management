@@ -179,7 +179,7 @@ class ObjectDiff:
 
 def detect_objects(
     frame: list,
-    background_threshold: float = 0.25,
+    background_threshold: float = 0.40,
 ) -> list[ObjectRecord]:
     """
     Find all connected components (4-connectivity) in a 2-D color grid.
@@ -191,7 +191,8 @@ def detect_objects(
     background_threshold : float
         Objects whose size exceeds this fraction of total cells are marked
         as background (large uniform regions like the game floor).
-        Default 0.25 = 25%.
+        Default 0.40 = 40%.  Raised from 0.25 so that mid-size structural
+        regions (play arenas, platforms) are not silently excluded.
 
     Returns
     -------
@@ -521,8 +522,14 @@ def summarize_current_objects(frame: list, concept_bindings: dict | None = None)
         if o.color in wall_colors:
             concept = "wall?"
         else:
-            concept = bindings.get(o.color)
-        name = f"{concept}({color_name(o.color)})" if concept else color_name(o.color)
+            raw = bindings.get(o.color)
+            if isinstance(raw, dict):
+                role = raw.get("role", "")
+                conf = raw.get("confidence", 0.0)
+                concept = f"{role}({conf:.0%})" if role else None
+            else:
+                concept = raw  # plain string or None
+        name = f"{concept}:{color_name(o.color)}" if concept else color_name(o.color)
         lines.append(
             f"  {name}: size={o.size} centroid={_fmt_pt(o.centroid)} "
             f"{o.width}w x {o.height}h {o.orientation}"
@@ -742,3 +749,187 @@ def infer_typical_direction(action_effects: dict, action_name: str) -> Optional[
 
 def _fmt_pt(pt: tuple) -> str:
     return f"({pt[0]:.0f},{pt[1]:.0f})"
+
+
+# ---------------------------------------------------------------------------
+# Structural analysis — containment, spatial relations, landmark context
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ContainmentRelation:
+    """One object whose bounding box is fully enclosed within another's."""
+    container: ObjectRecord   # outer object (e.g. a bordered box)
+    content:   ObjectRecord   # inner object (e.g. a pattern inside the box)
+
+
+@dataclass
+class SpatialRelation:
+    """A directional or alignment relationship between two objects."""
+    obj_a:    ObjectRecord
+    obj_b:    ObjectRecord
+    relation: str    # "above", "below", "left", "right"
+    col_aligned: bool   # centroids within COL_ALIGN_TOL columns
+    row_aligned: bool   # centroids within ROW_ALIGN_TOL rows
+    distance: float
+
+
+_COL_ALIGN_TOL = 4   # columns — centroids this close share a column
+_ROW_ALIGN_TOL = 4   # rows
+
+
+def detect_containment(objects: list[ObjectRecord]) -> list[ContainmentRelation]:
+    """Return all (container, content) pairs where content.bbox ⊆ container.bbox.
+
+    Only considers foreground objects (is_background=False).
+    Different colors only — an object cannot contain a same-color piece.
+    """
+    fg = [o for o in objects if not o.is_background]
+    relations: list[ContainmentRelation] = []
+    for i, inner in enumerate(fg):
+        for j, outer in enumerate(fg):
+            if i == j or inner.color == outer.color:
+                continue
+            b_in  = inner.bbox
+            b_out = outer.bbox
+            if (b_out["r_min"] <= b_in["r_min"]
+                    and b_out["r_max"] >= b_in["r_max"]
+                    and b_out["c_min"] <= b_in["c_min"]
+                    and b_out["c_max"] >= b_in["c_max"]
+                    and outer.size > inner.size):
+                relations.append(ContainmentRelation(container=outer, content=inner))
+    return relations
+
+
+def detect_spatial_relations(
+    objects: list[ObjectRecord],
+    max_distance: float = 40.0,
+) -> list[SpatialRelation]:
+    """Return pairwise directional relationships for all foreground object pairs
+    within max_distance of each other (centroid-to-centroid).
+
+    Each pair (A, B) appears once with A above/left of B.
+    """
+    fg = [o for o in objects if not o.is_background]
+    relations: list[SpatialRelation] = []
+    for i in range(len(fg)):
+        for j in range(i + 1, len(fg)):
+            a, b = fg[i], fg[j]
+            dr = b.centroid[0] - a.centroid[0]   # positive = b is below a
+            dc = b.centroid[1] - a.centroid[1]   # positive = b is right of a
+            dist = math.hypot(dr, dc)
+            if dist > max_distance:
+                continue
+            # Primary direction: describes where A is relative to B.
+            # dr > 0 means b is lower (higher row) → a is above b.
+            # dc > 0 means b is to the right → a is to the left of b.
+            rel = ("above" if dr > 0 else "below") if abs(dr) >= abs(dc) \
+                else ("left" if dc > 0 else "right")
+            col_aligned = abs(dc) <= _COL_ALIGN_TOL
+            row_aligned = abs(dr) <= _ROW_ALIGN_TOL
+            relations.append(SpatialRelation(
+                obj_a=a, obj_b=b,
+                relation=rel,
+                col_aligned=col_aligned,
+                row_aligned=row_aligned,
+                distance=round(dist, 1),
+            ))
+    return relations
+
+
+def format_structural_context(
+    frame: list,
+    concept_bindings: dict | None = None,
+    known_dynamic_colors: set[int] | None = None,
+) -> str:
+    """Produce a human-readable structural context string for the OBSERVER prompt.
+
+    Highlights:
+    - Container/content pairs (bordered boxes with patterns inside)
+    - Column and row alignments between objects (especially player ↔ goal)
+    - Objects whose color has been seen moving (dynamic) vs never moved (static)
+
+    Parameters
+    ----------
+    frame : list[list[int]]
+        Current frame.
+    concept_bindings : dict, optional
+        {color_int: role | {"role":..., ...}} for labeling objects by role.
+    known_dynamic_colors : set[int], optional
+        Colors observed moving in previous steps — used to flag static objects
+        that are therefore structural (landmarks, targets, walls).
+    """
+    objects = detect_objects(frame)
+    containment = detect_containment(objects)
+    spatial = detect_spatial_relations(objects)
+    bindings = concept_bindings or {}
+    dynamic = known_dynamic_colors or set()
+
+    def _role(color: int) -> str:
+        raw = bindings.get(color)
+        if isinstance(raw, dict):
+            return raw.get("role", "")
+        return raw or ""
+
+    def _label(o: ObjectRecord) -> str:
+        role = _role(o.color)
+        name = f"{color_name(o.color)}"
+        if role:
+            name = f"{role}({name})"
+        nature = "dynamic" if o.color in dynamic else "static"
+        return f"{name} size={o.size} {o.width}w×{o.height}h @{_fmt_pt(o.centroid)} [{nature}]"
+
+    lines: list[str] = []
+
+    # --- Containers ---
+    if containment:
+        lines.append("Containers (bordered regions enclosing other objects):")
+        # Group by container
+        by_container: dict[int, list[ContainmentRelation]] = {}
+        for rel in containment:
+            key = id(rel.container)
+            by_container.setdefault(key, []).append(rel)
+        for rels in by_container.values():
+            c = rels[0].container
+            lines.append(f"  BOX  {_label(c)}")
+            for rel in rels:
+                lines.append(f"    └─ {_label(rel.content)}")
+
+    # --- Column/row alignments (most useful for navigation) ---
+    # Skip container↔content pairs — already shown in Containers section.
+    container_content_pairs: set[frozenset] = {
+        frozenset({id(r.container), id(r.content)}) for r in containment
+    }
+    align_lines: list[str] = []
+    for rel in spatial:
+        if not (rel.col_aligned or rel.row_aligned):
+            continue
+        if frozenset({id(rel.obj_a), id(rel.obj_b)}) in container_content_pairs:
+            continue
+        kind = []
+        if rel.col_aligned:
+            kind.append("same-col")
+        if rel.row_aligned:
+            kind.append("same-row")
+        align_lines.append(
+            f"  {_label(rel.obj_a)}  {rel.relation}  {_label(rel.obj_b)}"
+            f"  [{', '.join(kind)}, dist={rel.distance}]"
+        )
+    if align_lines:
+        lines.append("Spatial alignments:")
+        lines.extend(align_lines)
+
+    # --- Uncontained static foreground objects not yet role-bound ---
+    contained_ids = {id(r.content) for r in containment}
+    contained_ids |= {id(r.container) for r in containment}
+    orphan_static = [
+        o for o in objects
+        if not o.is_background
+        and o.color not in dynamic
+        and id(o) not in contained_ids
+    ]
+    if orphan_static:
+        lines.append("Other static foreground objects (not yet role-bound):")
+        for o in orphan_static:
+            lines.append(f"  {_label(o)}")
+
+    return "\n".join(lines) if lines else "  (no structural context detected)"

@@ -105,8 +105,8 @@ def parse_args() -> argparse.Namespace:
                    help="ARC-AGI-3 environment ID (default: ls20)")
     p.add_argument("--episodes", type=int, default=3,
                    help="Number of episodes to run (default: 3)")
-    p.add_argument("--max-steps",  dest="max_steps",  type=int, default=10,
-                   help="Max env.step() calls per episode (default: 10)")
+    p.add_argument("--max-steps",  dest="max_steps",  type=int, default=5,
+                   help="Max env.step() calls per episode (default: 5)")
     p.add_argument("--max-cycles", dest="max_cycles", type=int, default=MAX_CYCLES,
                    help=f"Max OBSERVER-MEDIATOR cycles per episode (default: {MAX_CYCLES})")
     p.add_argument("--output",   default=DEFAULT_OUTPUT,

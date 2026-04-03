@@ -43,6 +43,7 @@ from object_tracker import (
     diff_objects, format_object_diff, summarize_current_objects,
     detect_wall_contacts, infer_typical_direction,
     compute_trend_predictions, detect_objects, color_name,
+    detect_containment,
 )
 from agents import (
     run_observer,
@@ -54,6 +55,7 @@ from agents import (
     frame_to_str,
     format_action_space,
 )
+from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +583,12 @@ async def run_episode(
 
     ep_log = EpisodeLogger(ep_log_path)
 
+    # Co-occurrence registry — persists across episodes in co_occurrences.json
+    # next to rules.json so evidence accumulates over the full run.
+    _co_path = Path(rule_engine.path).parent / "co_occurrences.json" \
+        if rule_engine.path else None
+    co_registry = CoOccurrenceRegistry(path=_co_path)
+
     obs = env.reset()
     step_count      = 0
     cycle_count     = 0
@@ -588,6 +596,9 @@ async def run_episode(
     all_matched_ids: list[str] = []
     last_matched:   list       = []
     prev_frame:     list       = []
+    # Colors observed moving at least once — used by structural context to
+    # distinguish dynamic objects (player, cursor) from static landmarks.
+    known_dynamic_colors: set[int] = set()
 
     # Running OBSERVER/MEDIATOR outputs for playlog (reset each cycle)
     _obs_text_current   = ""
@@ -668,20 +679,81 @@ async def run_episode(
             action_effects=state_manager._data.get("action_effects"),
             concept_bindings=concept_bindings,
             steps_remaining=max_steps - step_count,
+            known_dynamic_colors=known_dynamic_colors,
             verbose=verbose,
         )
         _obs_text_current = obs_text
         ep_log.observer_output(obs_text)
 
-        # Merge any new concept bindings the OBSERVER proposed
+        # Merge any new concept bindings the OBSERVER proposed.
+        # For integer (color) keys, accumulate confidence and observation count
+        # rather than overwriting, so repeated observations strengthen bindings.
         new_bindings = parse_concept_bindings(obs_text)
         if new_bindings:
             existing = state_manager._data.get("concept_bindings") or {}
-            merged = {**existing, **new_bindings}
-            if merged != existing:
+            merged = dict(existing)
+            changed = False
+            for k, v in new_bindings.items():
+                if not isinstance(k, int):
+                    # Pass-through (e.g. wall_colors)
+                    if merged.get(k) != v:
+                        merged[k] = v
+                        changed = True
+                    continue
+                # Build the incoming binding as a normalised dict
+                if isinstance(v, dict):
+                    new_conf = v.get("confidence", 0.6)
+                    new_role = str(v.get("role", ""))
+                else:
+                    new_conf = 0.6
+                    new_role = str(v)
+
+                if k not in merged:
+                    merged[k] = {
+                        "role":           new_role,
+                        "confidence":     round(new_conf, 3),
+                        # level_obs: observations in the current level/episode
+                        # total_obs: lifetime observations across all levels/games
+                        "level_obs":      1,
+                        "total_obs":      1,
+                    }
+                    changed = True
+                else:
+                    prev = merged[k]
+                    # Upgrade plain string bindings to rich dict on first merge
+                    if isinstance(prev, str):
+                        prev = {"role": prev, "confidence": 0.5,
+                                "level_obs": 1, "total_obs": 1}
+                    # Keep backward compat with old dicts that used "observations"
+                    if "observations" in prev and "total_obs" not in prev:
+                        prev["total_obs"] = prev.pop("observations")
+                        prev.setdefault("level_obs", prev["total_obs"])
+                    level_obs  = prev.get("level_obs", 1)
+                    total_obs  = prev.get("total_obs", 1)
+                    # Weighted running average on total observations —
+                    # more observations → slower drift, i.e. harder to un-bind
+                    blended = (prev["confidence"] * total_obs + new_conf) / (total_obs + 1)
+                    updated = {
+                        "role":       new_role,
+                        "confidence": round(min(blended, 1.0), 3),
+                        "level_obs":  level_obs + 1,
+                        "total_obs":  total_obs + 1,
+                    }
+                    if updated != prev:
+                        merged[k] = updated
+                        changed = True
+            if changed:
                 state_manager._data["concept_bindings"] = merged
-                log(f"  [concepts] bindings updated: {merged}")
-                ep_log._write(f"  [CONCEPTS] bindings: {merged}")
+                # Log only color-keyed bindings in a readable form
+                summary = {
+                    f"color{k}": (
+                        f"{v['role']}({v['confidence']:.0%}, {v.get('total_obs', '?')}obs)"
+                        if isinstance(v, dict) else v
+                    )
+                    for k, v in merged.items() if isinstance(k, int)
+                }
+                log(f"  [CONCEPTS] {summary}")
+                ep_log._write(f"  [CONCEPTS] {summary}")
 
         # ------------------------------------------------------------------
         # Round 2: MEDIATOR
@@ -792,7 +864,8 @@ async def run_episode(
                 log(f"    Unknown action '{action_name}', skipping")
                 continue
 
-            frame_before = obs_frame(obs)
+            frame_before  = obs_frame(obs)
+            levels_before = obs_levels_completed(obs)
             obs = env.step(action_obj, data=data)
             step_count    += 1
             _plan_step_idx += 1
@@ -853,6 +926,20 @@ async def run_episode(
             obj_diff = diff_objects(frame_before, curr_frame)
             obj_summary = format_object_diff(obj_diff)
 
+            # Track which colors have ever moved (used by structural context)
+            known_dynamic_colors.update(
+                m.obj.color for m in obj_diff.moved if not m.obj.is_background
+            )
+
+            # --- Co-occurrence observation -----------------------------------
+            concept_bindings_now = state_manager._data.get("concept_bindings") or {}
+            co_events = events_from_step(
+                obj_diff, concept_bindings_now,
+                levels_delta=levels_after - levels_before,
+            )
+            if co_events:
+                co_registry.observe_step(co_events)
+
             # --- Wall detection: if an object that normally moves didn't ----
             effects_now = state_manager._data.get("action_effects") or {}
             typical_dir = infer_typical_direction(effects_now, action_name)
@@ -889,7 +976,30 @@ async def run_episode(
                         # completely different color to "wall".
                         bindings = state_manager._data.get("concept_bindings") or {}
                         known_walls: set = set(bindings.get("wall_colors", []))
-                        new_walls = set(wall_colors.keys()) - known_walls
+                        # Exclude colors already bound to a non-wall role (e.g.
+                        # player_piece, step_counter) — those are game actors,
+                        # not walls.  Also exclude every color that has moved at
+                        # any point this episode (moving objects can't be walls).
+                        non_wall_concepts: set = {
+                            k for k, v in bindings.items()
+                            if isinstance(k, int) and v != "wall"
+                        }
+                        ever_moved: set = {
+                            mv.get("color")
+                            for _act, act_data in effects_now.items()
+                            for obs in act_data.get("object_observations", [])
+                            for mv in obs.get("moved", [])
+                        }
+                        # Containers hold other objects inside them (e.g. goal
+                        # boxes) — never label a container color as a wall.
+                        container_colors: set = {
+                            rel.container.color
+                            for rel in detect_containment(
+                                detect_objects(frame_before)
+                            )
+                        }
+                        excluded = non_wall_concepts | ever_moved | container_colors | {0}
+                        new_walls = set(wall_colors.keys()) - known_walls - excluded
                         if new_walls:
                             known_walls.update(new_walls)
                             bindings["wall_colors"] = sorted(known_walls)
@@ -943,6 +1053,12 @@ async def run_episode(
             if levels_after > levels_before:
                 log(f"  [ACTOR] Level advanced: {levels_before} -> {levels_after}")
                 ep_log.level_advance(levels_before, levels_after)
+                # Reset per-level observation counts in concept bindings so
+                # short-term (level) and long-term (lifetime) stats stay distinct
+                bindings_now = state_manager._data.get("concept_bindings") or {}
+                for ck, cv in bindings_now.items():
+                    if isinstance(ck, int) and isinstance(cv, dict):
+                        cv["level_obs"] = 0
                 _update_level_goals(
                     goal_manager, env_id, levels_after, top_goal_id
                 )
@@ -1010,6 +1126,51 @@ async def run_episode(
             rid, "candidate", "deprecated",
             r.get("deprecated_reason", "") if r else "",
         )
+
+    # -- Co-occurrence promotion: emit candidate rules for strong pairs -------
+    # min_count=3 so at least 3 steps of evidence before declaring a pattern.
+    # min_consistency=0.80 means the pair must co-occur in 80 % of steps where
+    # the subject changed.  These are loose thresholds because candidate rules
+    # still require independent confirmation before becoming active.
+    ns_tag = rule_engine.dataset_tag or "arc-agi-3"
+    co_new = co_registry.promote_to_rules(
+        rule_engine,
+        min_count=3,
+        min_consistency=0.80,
+        ns_tag=ns_tag,
+        source_task=f"ep{episode_num:02d}",
+    )
+    if co_new:
+        ids = [r["id"] for r in co_new]
+        log(f"  [CO-OCC] {len(co_new)} new co-occurrence rule(s): {ids}")
+        for r in co_new:
+            ep_log._write(
+                f"  [CO-OCC] {r['id']} (candidate)\n"
+                f"    IF:   {r['condition']}\n"
+                f"    THEN: {r['action']}"
+            )
+
+    # -- Concept binding confidence summary -----------------------------------
+    bindings = state_manager._data.get("concept_bindings") or {}
+    conf_lines = []
+    for k, v in sorted(
+        ((k, v) for k, v in bindings.items() if isinstance(k, int)),
+        key=lambda x: x[0],
+    ):
+        if isinstance(v, dict):
+            conf_lines.append(
+                f"    color{k} → {v.get('role','?')} "
+                f"(confidence={v.get('confidence',0):.0%}  "
+                f"this-level={v.get('level_obs', v.get('observations',0))}obs  "
+                f"lifetime={v.get('total_obs', v.get('observations',0))}obs)"
+            )
+        else:
+            conf_lines.append(f"    color{k} → {v} (confidence=unknown)")
+    if conf_lines:
+        log("  [CONCEPTS] bindings at episode end:")
+        for line in conf_lines:
+            log(line)
+        ep_log._write("  [CONCEPTS] bindings at episode end:\n" + "\n".join(conf_lines))
 
     ep_log.episode_end(
         state=final_state,

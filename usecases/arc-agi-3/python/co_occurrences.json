@@ -1,0 +1,2928 @@
+{
+  "records": {
+    "color9|row|-1|color11|col|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|row|-1|color12|row|-1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|row|-1|color11|size|-1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|row|-1|color11|width|-1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|col|+1|color9|row|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|col|+1|color12|row|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|col|+1|color11|size|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color11|col|+1|color11|width|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color12|row|-1|color9|row|-1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|row|-1|color11|col|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|row|-1|color11|size|-1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|row|-1|color11|width|-1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|size|-1|color9|row|-1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|size|-1|color11|col|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color11|size|-1|color12|row|-1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|size|-1|color11|width|-1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color11|width|-1|color9|row|-1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|width|-1|color11|col|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color11|width|-1|color12|row|-1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|width|-1|color11|size|-1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 10,
+      "subject_fires": 10
+    },
+    "color3|col|+1|color9|row|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|col|+1|color11|col|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|col|+1|color12|row|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|col|+1|color3|size|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|col|+1|color3|width|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|col|+1|color11|size|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|col|+1|color11|width|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color9|row|+1|color3|col|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color11|col|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color12|row|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color3|size|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color3|width|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color11|size|-1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|row|+1|color11|width|-1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|col|+1|color3|col|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|col|+1|color9|row|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|col|+1|color12|row|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|col|+1|color3|size|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|col|+1|color3|width|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color12|row|+1|color3|col|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color9|row|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color11|col|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color3|size|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color3|width|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color11|size|-1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|row|+1|color11|width|-1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|size|+1|color3|col|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|size|+1|color9|row|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|size|+1|color11|col|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|size|+1|color12|row|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|size|+1|color3|width|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|size|+1|color11|size|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|size|+1|color11|width|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|width|+1|color3|col|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|width|+1|color9|row|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|width|+1|color11|col|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|width|+1|color12|row|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|width|+1|color3|size|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|width|+1|color11|size|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|width|+1|color11|width|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|size|-1|color3|col|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|size|-1|color9|row|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|size|-1|color12|row|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|size|-1|color3|size|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|size|-1|color3|width|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|width|-1|color3|col|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|width|-1|color9|row|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|width|-1|color12|row|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|width|-1|color3|size|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color11|width|-1|color3|width|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 8,
+      "subject_fires": 8
+    },
+    "color3|col|+1|color9|col|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|col|+1|color12|col|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color3|col|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color11|col|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color12|col|-1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color3|size|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color3|width|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color11|size|-1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color9|col|-1|color11|width|-1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|col|+1|color9|col|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|col|+1|color12|col|-1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color3|col|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color9|col|-1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color11|col|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color3|size|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color3|width|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color11|size|-1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color12|col|-1|color11|width|-1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": -1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|size|+1|color9|col|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|size|+1|color12|col|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|width|+1|color9|col|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|width|+1|color12|col|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|size|-1|color9|col|-1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|size|-1|color12|col|-1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -2.0,
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|width|-1|color9|col|-1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color11|width|-1|color12|col|-1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": -1,
+      "subject_deltas": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        -5.0,
+        -5.0,
+        -5.0
+      ],
+      "count": 3,
+      "subject_fires": 3
+    },
+    "color3|col|+1|color9|col|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|col|+1|color12|col|+1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color3|col|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color11|col|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color12|col|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color3|size|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color3|width|+1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color11|size|-1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color9|col|+1|color11|width|-1": {
+      "subject": "color9",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|col|+1|color9|col|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|col|+1|color12|col|+1": {
+      "subject": "color11",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        0.5,
+        0.5
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color3|col|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color9|col|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color11|col|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        0.5,
+        0.5
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color3|size|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        2.0,
+        2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color3|width|+1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        1.0,
+        1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color11|size|-1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "size",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color12|col|+1|color11|width|-1": {
+      "subject": "color12",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color11",
+      "object_attr": "width",
+      "object_sign": -1,
+      "subject_deltas": [
+        5.0,
+        5.0
+      ],
+      "object_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|size|+1|color9|col|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|size|+1|color12|col|+1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        2.0,
+        2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|width|+1|color9|col|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|width|+1|color12|col|+1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        1.0,
+        1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|size|-1|color9|col|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|size|-1|color12|col|+1": {
+      "subject": "color11",
+      "subject_attr": "size",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -2.0,
+        -2.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|width|-1|color9|col|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color9",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color11|width|-1|color12|col|+1": {
+      "subject": "color11",
+      "subject_attr": "width",
+      "subject_sign": -1,
+      "object": "color12",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -1.0,
+        -1.0
+      ],
+      "object_deltas": [
+        5.0,
+        5.0
+      ],
+      "count": 2,
+      "subject_fires": 2
+    },
+    "color3|col|+1|color9|row|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color3|col|+1|color12|row|-1": {
+      "subject": "color3",
+      "subject_attr": "col",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        0.5
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color9|row|-1|color3|col|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        0.5
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color9|row|-1|color3|size|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        2.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color9|row|-1|color3|width|+1": {
+      "subject": "color9",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        1.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color12|row|-1|color3|col|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "col",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        0.5
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color12|row|-1|color3|size|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "size",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        2.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color12|row|-1|color3|width|+1": {
+      "subject": "color12",
+      "subject_attr": "row",
+      "subject_sign": -1,
+      "object": "color3",
+      "object_attr": "width",
+      "object_sign": 1,
+      "subject_deltas": [
+        -5.0
+      ],
+      "object_deltas": [
+        1.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color3|size|+1|color9|row|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color3|size|+1|color12|row|-1": {
+      "subject": "color3",
+      "subject_attr": "size",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        2.0
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color3|width|+1|color9|row|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color9",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    },
+    "color3|width|+1|color12|row|-1": {
+      "subject": "color3",
+      "subject_attr": "width",
+      "subject_sign": 1,
+      "object": "color12",
+      "object_attr": "row",
+      "object_sign": -1,
+      "subject_deltas": [
+        1.0
+      ],
+      "object_deltas": [
+        -5.0
+      ],
+      "count": 1,
+      "subject_fires": 1
+    }
+  },
+  "promoted_keys": [
+    "color11|col|+1|color11|size|-1",
+    "color11|col|+1|color11|width|-1",
+    "color11|col|+1|color12|col|-1",
+    "color11|col|+1|color12|row|-1",
+    "color11|col|+1|color3|col|+1",
+    "color11|col|+1|color3|size|+1",
+    "color11|col|+1|color3|width|+1",
+    "color11|col|+1|color9|col|-1",
+    "color11|col|+1|color9|row|-1",
+    "color11|size|-1|color11|col|+1",
+    "color11|size|-1|color11|width|-1",
+    "color11|size|-1|color12|col|-1",
+    "color11|size|-1|color12|row|-1",
+    "color11|size|-1|color3|col|+1",
+    "color11|size|-1|color3|size|+1",
+    "color11|size|-1|color3|width|+1",
+    "color11|size|-1|color9|col|-1",
+    "color11|size|-1|color9|row|-1",
+    "color11|width|-1|color11|col|+1",
+    "color11|width|-1|color11|size|-1",
+    "color11|width|-1|color12|col|-1",
+    "color11|width|-1|color12|row|-1",
+    "color11|width|-1|color3|col|+1",
+    "color11|width|-1|color3|size|+1",
+    "color11|width|-1|color3|width|+1",
+    "color11|width|-1|color9|col|-1",
+    "color11|width|-1|color9|row|-1",
+    "color12|col|-1|color11|col|+1",
+    "color12|col|-1|color11|size|-1",
+    "color12|col|-1|color11|width|-1",
+    "color12|col|-1|color3|col|+1",
+    "color12|col|-1|color3|size|+1",
+    "color12|col|-1|color3|width|+1",
+    "color12|col|-1|color9|col|-1",
+    "color12|row|-1|color11|col|+1",
+    "color12|row|-1|color11|size|-1",
+    "color12|row|-1|color11|width|-1",
+    "color12|row|-1|color9|row|-1",
+    "color3|col|+1|color11|col|+1",
+    "color3|col|+1|color11|size|-1",
+    "color3|col|+1|color11|width|-1",
+    "color3|col|+1|color12|col|-1",
+    "color3|col|+1|color3|size|+1",
+    "color3|col|+1|color3|width|+1",
+    "color3|col|+1|color9|col|-1",
+    "color3|size|+1|color11|col|+1",
+    "color3|size|+1|color11|size|-1",
+    "color3|size|+1|color11|width|-1",
+    "color3|size|+1|color12|col|-1",
+    "color3|size|+1|color3|col|+1",
+    "color3|size|+1|color3|width|+1",
+    "color3|size|+1|color9|col|-1",
+    "color3|width|+1|color11|col|+1",
+    "color3|width|+1|color11|size|-1",
+    "color3|width|+1|color11|width|-1",
+    "color3|width|+1|color12|col|-1",
+    "color3|width|+1|color3|col|+1",
+    "color3|width|+1|color3|size|+1",
+    "color3|width|+1|color9|col|-1",
+    "color9|col|-1|color11|col|+1",
+    "color9|col|-1|color11|size|-1",
+    "color9|col|-1|color11|width|-1",
+    "color9|col|-1|color12|col|-1",
+    "color9|col|-1|color3|col|+1",
+    "color9|col|-1|color3|size|+1",
+    "color9|col|-1|color3|width|+1",
+    "color9|row|-1|color11|col|+1",
+    "color9|row|-1|color11|size|-1",
+    "color9|row|-1|color11|width|-1",
+    "color9|row|-1|color12|row|-1"
+  ]
+}

@@ -62,8 +62,8 @@ Respond with a single JSON block (inside ```json fences):
     "[GUESS] color11 (k) horizontal strip at rows 61-62 — shrinking each step: possibly a step counter"
   ],
   "concept_bindings": {
-    "12": "player_piece",
-    "11": "step_counter"
+    "12": {"role": "player_piece",  "confidence": "high",   "label": "[CONFIRMED]"},
+    "11": {"role": "step_counter",  "confidence": "medium", "label": "[GUESS]"}
   },
   "hypothesized_goal": "[GUESS] Move the player_piece to align with the reference pattern in the upper-right box",
   "promising_regions": [
@@ -77,7 +77,7 @@ Respond with a single JSON block (inside ```json fences):
 **Labeling rules:**
 - Prefix observations and hypotheses with `[CONFIRMED]` only when directly supported by the action effects table or prior rules.
 - Prefix with `[GUESS]` when inferring from visual structure alone.
-- In `concept_bindings`, map color values (as strings) to role names you believe apply. These names travel across episodes and games — use generic names like `player_piece`, `step_counter`, `goal_region`, `reference_pattern`, `wall` rather than game-specific ones. Omit a color if you are uncertain.
+- In `concept_bindings`, map color values (as strings) to objects with `role`, `confidence` ("high"/"medium"/"low"), and `label` ("[CONFIRMED]" or "[GUESS]"). Use generic role names: `player_piece`, `step_counter`, `goal_region`, `reference_pattern`, `wall`. Omit a color if you are truly uncertain — a wrong binding is worse than no binding. The confidence value accumulates across observations, so be honest: "high" is only for behaviorally verified roles.
 - Always include trend predictions from the "Trend predictions" section in your reasoning if they indicate urgency (e.g., step counter near depletion).
 
 **Be concise and specific.** Focus on actionable visual features. Do not describe the entire grid cell by cell — highlight what is distinctive.

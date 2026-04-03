@@ -36,6 +36,8 @@ from object_tracker import (
     summarize_action_effects,
     summarize_current_objects,
     compute_trend_predictions,
+    format_structural_context,
+    color_name,
 )
 
 # ---------------------------------------------------------------------------
@@ -216,13 +218,24 @@ def _format_action_effects(action_effects: dict) -> str:
     return summarize_action_effects(action_effects)
 
 
-def parse_concept_bindings(observer_text: str) -> dict[int, str]:
+_CONFIDENCE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
+
+
+def parse_concept_bindings(observer_text: str) -> dict[int | str, Any]:
     """
     Extract concept_bindings from OBSERVER JSON output.
-    Expected format: {"concept_bindings": {"11": "step_counter", "12": "player_piece"}}
-    Returns {color_int: concept_name}.
+
+    Accepts two input formats:
+      Simple:   {"concept_bindings": {"12": "player_piece"}}
+      Rich:     {"concept_bindings": {"12": {"role": "player_piece",
+                                             "confidence": "high",
+                                             "label": "[GUESS]"}}}
+
+    Returns a dict where integer keys → binding dicts with fields:
+      role (str), confidence (float 0–1), observations (int, starts at 1).
+    Non-integer keys (e.g. "wall_colors") are passed through unchanged.
     """
-    bindings: dict[int, str] = {}
+    bindings: dict[int | str, Any] = {}
     for block in re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", observer_text or ""):
         try:
             obj = json.loads(block)
@@ -231,10 +244,35 @@ def parse_concept_bindings(observer_text: str) -> dict[int, str]:
         raw = obj.get("concept_bindings", {})
         if isinstance(raw, dict):
             for k, v in raw.items():
+                # Pass-through non-color keys (e.g. wall_colors list)
                 try:
-                    bindings[int(k)] = str(v)
+                    color_int = int(k)
                 except (ValueError, TypeError):
-                    pass
+                    bindings[k] = v
+                    continue
+                # Normalise value to rich format
+                if isinstance(v, dict):
+                    role = str(v.get("role", v.get("name", "")))
+                    conf_raw = v.get("confidence", "medium")
+                    label    = str(v.get("label", ""))
+                else:
+                    role     = str(v)
+                    conf_raw = "medium"
+                    label    = ""
+                # [CONFIRMED] label boosts confidence; [GUESS] lowers it
+                if "[CONFIRMED]" in label.upper():
+                    conf_raw = "high"
+                elif "[GUESS]" in label.upper():
+                    conf_raw = "low"
+                conf_float = _CONFIDENCE_MAP.get(
+                    str(conf_raw).lower(),
+                    float(conf_raw) if str(conf_raw).replace(".", "").isdigit() else 0.6,
+                )
+                bindings[color_int] = {
+                    "role":         role,
+                    "confidence":   conf_float,
+                    "observations": 1,
+                }
         break
     return bindings
 
@@ -247,6 +285,7 @@ async def run_observer(
     action_effects: Optional[dict] = None,
     concept_bindings: Optional[dict] = None,
     steps_remaining: int = 0,
+    known_dynamic_colors: Optional[set] = None,
     verbose: bool = True,
 ) -> tuple[str, int]:
     """
@@ -265,6 +304,11 @@ async def run_observer(
     history_str = format_action_history(action_history)
     effects_str = _format_action_effects(action_effects or {})
     objects_str = summarize_current_objects(frame, concept_bindings)
+    structural_str = format_structural_context(
+        frame,
+        concept_bindings=concept_bindings,
+        known_dynamic_colors=known_dynamic_colors,
+    )
     predictions = compute_trend_predictions(action_effects or {}, steps_remaining)
     predictions_str = (
         "\n".join(f"  {p}" for p in predictions)
@@ -304,6 +348,8 @@ async def run_observer(
         f"{grid_str}\n\n"
         f"## Current objects (non-background)\n\n"
         f"{objects_str}\n\n"
+        f"## Structural context (containment & spatial alignment — zero-cost)\n\n"
+        f"{structural_str}\n\n"
         f"## Known concept bindings\n\n"
         f"{concepts_str}\n\n"
         f"## Trend predictions (zero-cost projections)\n\n"
