@@ -836,17 +836,439 @@ def detect_spatial_relations(
     return relations
 
 
+def auto_detect_concepts(
+    action_effects: dict,
+    objects: list[ObjectRecord],
+    concept_bindings: dict,
+) -> dict[int, dict]:
+    """Zero-cost heuristic concept detection that runs after every step.
+
+    Scans action_effects for behavioral signatures and returns suggested
+    concept_bindings updates — structured identically to OBSERVER output so
+    they flow through the same merge path.
+
+    Rules (all produce [GUESS] unless otherwise noted):
+    - step_counter  : bar-shaped object (aspect ≥ 3 or ≤ 0.33) whose size
+                      decreases by a consistent non-zero delta on every
+                      observed action.  Confidence:
+                        1 observation  → 0.35  (one shrink seen)
+                        2 observations, consistent delta → 0.60
+                        3+ observations, consistent delta → 0.85
+
+    New signatures can be added here as new games are explored.
+    Already-bound roles with confidence ≥ 0.7 are not downgraded.
+    """
+    obj_by_color: dict[int, ObjectRecord] = {o.color: o for o in objects}
+    suggestions: dict[int, dict] = {}
+
+    # --- Collect per-color size-change deltas across all actions/observations ---
+    deltas_by_color: dict[int, list[int]] = {}
+    for effects in action_effects.values():
+        for obs in effects.get("object_observations", []):
+            for ac in obs.get("attribute_changes", []):
+                if "size" not in ac.get("changed", []):
+                    continue
+                color = ac.get("color")
+                before = ac.get("before", {}).get("size")
+                after  = ac.get("after",  {}).get("size")
+                if color is None or before is None or after is None:
+                    continue
+                deltas_by_color.setdefault(color, []).append(after - before)
+
+    # --- Step-counter signature ---
+    for color, deltas in deltas_by_color.items():
+        obj = obj_by_color.get(color)
+        if obj is None:
+            continue
+
+        # Don't downgrade a role already bound with high confidence.
+        existing = concept_bindings.get(color)
+        if isinstance(existing, dict):
+            if existing.get("role") not in (None, "step_counter"):
+                continue          # already bound to something else
+            if existing.get("confidence", 0) >= 0.7 and existing.get("role") == "step_counter":
+                continue          # already confirmed, nothing to add
+
+        # All observed deltas must be negative (strictly shrinking every action).
+        if not deltas or not all(d < 0 for d in deltas):
+            continue
+
+        # Consistency: all deltas equal (constant depletion rate).
+        consistent = len(set(deltas)) == 1
+        n = len(deltas)
+
+        if n == 1:
+            conf = 0.35
+        elif consistent:
+            conf = 0.85 if n >= 3 else 0.60
+        else:
+            conf = 0.40   # shrinking but variable rate — weaker guess
+
+        # Bar-shaped objects are the canonical step-counter form; penalise others.
+        ar = obj.aspect_ratio
+        if not (ar >= 3.0 or ar <= 0.33):
+            conf *= 0.5   # not bar-shaped — still possible but less likely
+
+        if conf < 0.25:
+            continue
+
+        suggestions[color] = {
+            "role":          "step_counter",
+            "confidence":    round(conf, 2),
+            "observations":  n,
+            "auto_detected": True,
+        }
+
+    return suggestions
+
+
+def detect_contacts(
+    player_colors: set[int],
+    objects: list[ObjectRecord],
+    margin: int = 5,
+) -> dict[int, int]:
+    """Return {color: min_gap} for non-player foreground objects within *margin* cells.
+
+    min_gap is the minimum axis-aligned bounding-box distance in cells:
+      0  — bboxes share at least one cell (player is physically on top of the object)
+      1  — bboxes are adjacent (touching edges, no shared cells — side-by-side)
+      N  — bboxes are N cells apart (near-contact, proximity trigger)
+
+    Callers choose their own threshold:
+      on_top_of = {c for c, g in contacts.items() if g == 0}
+      touching  = {c for c, g in contacts.items() if g <= 1}
+      nearby    = {c for c, g in contacts.items() if g <= 5}
+      all_seen  = set(contacts)          # everything within margin
+
+    margin=5 keeps one action-step worth of proximity in view.
+    """
+    player_objs = [o for o in objects if o.color in player_colors]
+    target_objs = [o for o in objects
+                   if o.color not in player_colors and not o.is_background]
+    result: dict[int, int] = {}
+    for po in player_objs:
+        pb = po.bbox
+        for to in target_objs:
+            tb = to.bbox
+            # Gap on each axis: 0 means bboxes share cells (actual overlap),
+            # 1 means adjacent (touching edges but no shared cells).
+            row_gap = max(0, max(pb["r_min"], tb["r_min"]) - min(pb["r_max"], tb["r_max"]))
+            col_gap = max(0, max(pb["c_min"], tb["c_min"]) - min(pb["c_max"], tb["c_max"]))
+            gap = max(row_gap, col_gap)   # Chebyshev-style: worst-axis gap
+            if gap <= margin:
+                prev = result.get(to.color)
+                if prev is None or gap < prev:
+                    result[to.color] = gap
+    return result
+
+
+def infer_action_directions(
+    action_effects: dict,
+) -> dict[str, tuple[int, int]]:
+    """Derive (dr, dc) per action from accumulated action_effects observations.
+
+    Scans all object_observations for non-background moved objects and returns
+    the most commonly observed non-zero (dr, dc) per action name.
+
+    Returns {} for actions with no non-stationary observations yet.
+    """
+    result: dict[str, tuple[int, int]] = {}
+    for action_name, effects in action_effects.items():
+        dr_votes: dict[int, int] = {}
+        dc_votes: dict[int, int] = {}
+        for obs in effects.get("object_observations", []):
+            for mv in obs.get("moved", []):
+                if mv.get("is_background"):
+                    continue
+                dr = mv.get("delta_r", 0)
+                dc = mv.get("delta_c", 0)
+                if dr != 0 or dc != 0:
+                    dr_votes[dr] = dr_votes.get(dr, 0) + 1
+                    dc_votes[dc] = dc_votes.get(dc, 0) + 1
+        if dr_votes or dc_votes:
+            best_dr = max(dr_votes, key=lambda k: dr_votes[k]) if dr_votes else 0
+            best_dc = max(dc_votes, key=lambda k: dc_votes[k]) if dc_votes else 0
+            best_dr = int(round(best_dr))
+            best_dc = int(round(best_dc))
+            if best_dr != 0 or best_dc != 0:
+                result[action_name] = (best_dr, best_dc)
+    return result
+
+
+def detect_arena_delta(
+    frame_before: list,
+    frame_after: list,
+    player_colors: set[int],
+    min_size_change: int = 3,
+) -> dict:
+    """Compare two frames — ignoring player-colored pixels — to identify world-state changes.
+
+    Filters out the player object so that only changes in the environment
+    (not the player's own movement) are reported.  Useful for inferring causal
+    effects of contact events: "what changed in the world when the player
+    touched this object?"
+
+    Parameters
+    ----------
+    frame_before, frame_after : list[list[int]]
+        Frames immediately before and after the action that caused contact.
+    player_colors : set[int]
+        Colors belonging to the player (excluded from comparison).
+    min_size_change : int
+        Minimum absolute pixel-count change to report a size change (noise filter).
+
+    Returns
+    -------
+    dict with keys:
+        "appeared"     : list of {color, size, centroid, bbox} — new non-player objects
+        "disappeared"  : list of {color, size, centroid, bbox} — objects that vanished
+        "changed_size" : list of {color, before_size, after_size, delta} — resized objects
+        "any_change"   : bool — True if any of the above lists is non-empty
+    """
+    def _non_player_objs(frame: list) -> dict[int, "ObjectRecord"]:
+        return {
+            o.color: o
+            for o in detect_objects(frame)
+            if o.color not in player_colors and not o.is_background
+        }
+
+    before_objs = _non_player_objs(frame_before)
+    after_objs  = _non_player_objs(frame_after)
+    all_colors  = set(before_objs) | set(after_objs)
+
+    appeared:     list[dict] = []
+    disappeared:  list[dict] = []
+    changed_size: list[dict] = []
+
+    for color in all_colors:
+        bef = before_objs.get(color)
+        aft = after_objs.get(color)
+        if bef is None and aft is not None:
+            appeared.append({
+                "color": color,
+                "size": aft.size,
+                "centroid": aft.centroid,
+                "bbox": {"r_min": aft.r_min, "r_max": aft.r_max,
+                         "c_min": aft.c_min, "c_max": aft.c_max},
+            })
+        elif bef is not None and aft is None:
+            disappeared.append({
+                "color": color,
+                "size": bef.size,
+                "centroid": bef.centroid,
+                "bbox": {"r_min": bef.r_min, "r_max": bef.r_max,
+                         "c_min": bef.c_min, "c_max": bef.c_max},
+            })
+        elif bef is not None and aft is not None:
+            delta = aft.size - bef.size
+            if abs(delta) >= min_size_change:
+                changed_size.append({
+                    "color": color,
+                    "before_size": bef.size,
+                    "after_size":  aft.size,
+                    "delta":       delta,
+                })
+
+    any_change = bool(appeared or disappeared or changed_size)
+    return {
+        "appeared":     appeared,
+        "disappeared":  disappeared,
+        "changed_size": changed_size,
+        "any_change":   any_change,
+    }
+
+
+def _compress_route(route: list[str]) -> str:
+    """Compress ['ACTION1','ACTION1','ACTION3'] -> '2xACTION1 + 1xACTION3'."""
+    if not route:
+        return "(no moves)"
+    parts: list[str] = []
+    cur, count = route[0], 1
+    for act in route[1:]:
+        if act == cur:
+            count += 1
+        else:
+            parts.append(f"{count}x{cur}")
+            cur, count = act, 1
+    parts.append(f"{count}x{cur}")
+    return " + ".join(parts)
+
+
+def plan_route(
+    frame: list,
+    player_objects: list[ObjectRecord],
+    target_centroid: tuple[float, float],
+    action_directions: dict[str, tuple[int, int]],
+    max_steps: int = 20,
+    target_colors: set[int] | None = None,
+) -> list[str] | None:
+    """BFS path planner in action-space.
+
+    Finds the shortest sequence of actions that moves the player so its
+    bounding box overlaps or is adjacent to the target centroid.  Returns
+    None if the target is unreachable within max_steps, or if inputs are
+    insufficient (no player, no action directions).
+
+    Parameters
+    ----------
+    frame : list[list[int]]
+        Current game frame — used to build the passability map.
+    player_objects : list[ObjectRecord]
+        All objects identified as the player (dynamic colors).
+    target_centroid : (row, col)
+        Goal centroid to reach.
+    action_directions : {action_name: (dr, dc)}
+        Confirmed movement deltas per action.  Must have at least one entry.
+    max_steps : int
+        BFS depth limit (default 20).
+    target_colors : set[int], optional
+        Colors of all exploration target objects.  Their cells are removed
+        from the blocked set so the player can navigate into them.  Pass all
+        uncontacted object colors together so co-located objects of different
+        colors (e.g., a cross made of two colors) don't block each other.
+    """
+    from collections import deque
+
+    if not player_objects or not action_directions:
+        return None
+
+    frame_h = len(frame)
+    frame_w = len(frame[0]) if frame else 0
+    if frame_h == 0 or frame_w == 0:
+        return None
+
+    player_colors = {o.color for o in player_objects}
+
+    # Passability map.  Only SMALL-TO-MEDIUM objects are treated as walls.
+    # Large non-background objects (> 10% of frame area) are arena surfaces
+    # that the player navigates ON — they must remain passable.  This avoids
+    # erroneously blocking the arena interior when it uses the same detection
+    # threshold as foreground walls but is structurally different.
+    #
+    # Rule: block a cell only if it belongs to an object that is:
+    #   - not background (is_background=False)
+    #   - not the player
+    #   - not an exploration target
+    #   - smaller than 10% of the total frame area
+    #
+    # This correctly passes arena surfaces (typically 15-30% of frame) while
+    # blocking walls and UI elements (typically 0.1-6% of frame).
+    _passable_targets = target_colors or set()
+    objects = detect_objects(frame)
+    total_cells = frame_h * frame_w
+    wall_size_limit = total_cells * 0.10   # anything larger is arena, not wall
+    blocked: set[tuple[int, int]] = set()
+    for o in objects:
+        if o.is_background or o.color in player_colors or o.color in _passable_targets:
+            continue
+        if o.size > wall_size_limit:
+            continue  # large object — treat as arena surface (passable)
+        for r in range(o.bbox["r_min"], o.bbox["r_max"] + 1):
+            for c in range(o.bbox["c_min"], o.bbox["c_max"] + 1):
+                if r < frame_h and c < frame_w and frame[r][c] == o.color:
+                    blocked.add((r, c))
+
+    tr, tc = target_centroid
+
+    def _bfs_from(candidate: "ObjectRecord") -> list[str] | None:
+        """Run BFS starting from a specific candidate player object."""
+        p_h = int(candidate.bbox["r_max"]) - int(candidate.bbox["r_min"]) + 1
+        p_w = int(candidate.bbox["c_max"]) - int(candidate.bbox["c_min"]) + 1
+        start_r = int(candidate.bbox["r_min"])
+        start_c = int(candidate.bbox["c_min"])
+
+        def centroid_of(r_min: int, c_min: int) -> tuple[float, float]:
+            return (r_min + p_h / 2, c_min + p_w / 2)
+
+        def is_valid(r_min: int, c_min: int) -> bool:
+            if r_min < 0 or c_min < 0:
+                return False
+            if r_min + p_h > frame_h or c_min + p_w > frame_w:
+                return False
+            for r in range(r_min, r_min + p_h):
+                for c in range(c_min, c_min + p_w):
+                    if (r, c) in blocked:
+                        return False
+            return True
+
+        def is_goal(r_min: int, c_min: int) -> bool:
+            # Require the player bbox to actually contain the target centroid
+            # (same semantics as detect_contacts gap=0: actual cell overlap).
+            tr_int = int(round(tr))
+            tc_int = int(round(tc))
+            return (r_min <= tr_int < r_min + p_h and
+                    c_min <= tc_int < c_min + p_w)
+
+        start = (start_r, start_c)
+        if not is_valid(start_r, start_c):
+            return None
+
+        visited: set[tuple[int, int]] = {start}
+        queue: deque = deque([(start, [])])
+
+        while queue:
+            (r, c), path = queue.popleft()
+            if len(path) >= max_steps:
+                continue
+            for action_name, (dr, dc) in action_directions.items():
+                nr, nc = r + int(dr), c + int(dc)
+                if (nr, nc) in visited:
+                    continue
+                if not is_valid(nr, nc):
+                    continue
+                new_path = path + [action_name]
+                if is_goal(nr, nc):
+                    return new_path
+                visited.add((nr, nc))
+                queue.append(((nr, nc), new_path))
+        return None
+
+    # Try each candidate player object as the starting position; return the
+    # shortest successful route.  This handles cases where the same color
+    # appears in both the UI (static) and the playing area (dynamic).
+    best_route: list[str] | None = None
+    for candidate in player_objects:
+        route = _bfs_from(candidate)
+        if route is not None:
+            if best_route is None or len(route) < len(best_route):
+                best_route = route
+
+    return best_route
+
+
+def _nav_hint(player_centroid: tuple, target_centroid: tuple) -> str:
+    """Straight-line nav hint ignoring walls (fallback when BFS unavailable)."""
+    dr = target_centroid[0] - player_centroid[0]
+    dc = target_centroid[1] - player_centroid[1]
+    parts = []
+    if abs(dr) >= 2.5:
+        n = round(abs(dr) / 5)
+        parts.append(f"{n}x{'ACTION2' if dr > 0 else 'ACTION1'}")
+    if abs(dc) >= 2.5:
+        n = round(abs(dc) / 5)
+        parts.append(f"{n}x{'ACTION4' if dc > 0 else 'ACTION3'}")
+    if not parts:
+        return "already adjacent"
+    return " + ".join(parts)
+
+
 def format_structural_context(
     frame: list,
     concept_bindings: dict | None = None,
     known_dynamic_colors: set[int] | None = None,
+    explored_colors: set[int] | None = None,
+    action_directions: dict[str, tuple[int, int]] | None = None,
+    contact_events: list[dict] | None = None,
 ) -> str:
     """Produce a human-readable structural context string for the OBSERVER prompt.
 
     Highlights:
+    - Confirmed action directions (skip re-characterization)
     - Container/content pairs (bordered boxes with patterns inside)
     - Column and row alignments between objects (especially player ↔ goal)
     - Objects whose color has been seen moving (dynamic) vs never moved (static)
+    - Contact events: causal world-state changes observed when player touched objects
+    - Exploration manifest with BFS-computed routes (or straight-line fallback)
 
     Parameters
     ----------
@@ -855,14 +1277,29 @@ def format_structural_context(
     concept_bindings : dict, optional
         {color_int: role | {"role":..., ...}} for labeling objects by role.
     known_dynamic_colors : set[int], optional
-        Colors observed moving in previous steps — used to flag static objects
-        that are therefore structural (landmarks, targets, walls).
+        Colors observed moving in previous steps.
+    explored_colors : set[int], optional
+        Colors the player has already made full contact with.
+    action_directions : dict, optional
+        {action_name: (dr, dc)} confirmed from observations.  When provided,
+        the exploration manifest shows BFS-computed exact routes instead of
+        straight-line approximations, and a directions summary is prepended
+        so the MEDIATOR does not waste steps re-characterizing actions.
+    contact_events : list[dict], optional
+        Records of world-state changes observed when the player touched specific
+        objects.  Each entry: {"touched_color": int, "step": int, "delta": dict}
+        where delta has "appeared", "disappeared", "changed_size" sub-lists.
+        Rendered as a "Contact history" section so agents can reason causally
+        about which objects unlock other objects or trigger state transitions.
     """
     objects = detect_objects(frame)
     containment = detect_containment(objects)
     spatial = detect_spatial_relations(objects)
     bindings = concept_bindings or {}
     dynamic = known_dynamic_colors or set()
+    explored = explored_colors or set()
+    directions = action_directions or {}
+    events = contact_events or []
 
     def _role(color: int) -> str:
         raw = bindings.get(color)
@@ -879,6 +1316,22 @@ def format_structural_context(
         return f"{name} size={o.size} {o.width}w×{o.height}h @{_fmt_pt(o.centroid)} [{nature}]"
 
     lines: list[str] = []
+
+    # --- Confirmed action directions (suppresses re-characterization) ---
+    if directions:
+        dir_labels = {(-1, 0): "up", (1, 0): "down", (0, -1): "left", (0, 1): "right"}
+        dir_parts = []
+        for act in sorted(directions):
+            dr, dc = directions[act]
+            # Normalise to unit direction for label
+            label = dir_labels.get((0 if dr == 0 else (-1 if dr < 0 else 1),
+                                    0 if dc == 0 else (-1 if dc < 0 else 1)), "?")
+            dist = abs(dr) if dr != 0 else abs(dc)
+            dir_parts.append(f"{act}={label}{dist}")
+        lines.append(
+            "Action directions (confirmed — do NOT waste steps re-characterizing): "
+            + "  ".join(dir_parts)
+        )
 
     # --- Containers ---
     if containment:
@@ -931,5 +1384,101 @@ def format_structural_context(
         lines.append("Other static foreground objects (not yet role-bound):")
         for o in orphan_static:
             lines.append(f"  {_label(o)}")
+
+    # --- Exploration manifest -------------------------------------------
+    # All non-background, non-player foreground objects, grouped by whether
+    # the player has already made contact with them.  Gives MEDIATOR a clear
+    # checklist: what is still unknown and how to reach it.
+    fg_non_player = [o for o in objects
+                     if not o.is_background and o.color not in dynamic]
+
+    # Determine player centroid for navigation hints
+    player_objs = [o for o in objects if o.color in dynamic]
+    if player_objs and fg_non_player:
+        # Use centroid of the largest dynamic object as the player reference
+        player_ref = max(player_objs, key=lambda o: o.size)
+        p_centroid = player_ref.centroid
+
+        untouched = [o for o in fg_non_player if o.color not in explored]
+        touched   = [o for o in fg_non_player if o.color in explored]
+
+        lines.append("")
+        lines.append(
+            f"Exploration manifest  "
+            f"({len(touched)} contacted, {len(untouched)} not yet contacted):"
+        )
+        if touched:
+            lines.append("  Contacted:")
+            for o in touched:
+                lines.append(f"    [DONE] {_label(o)}")
+        if untouched:
+            lines.append("  NOT YET CONTACTED — behavior unknown:")
+            player_objs_list = [o for o in objects if o.color in dynamic]
+            # All untouched colors are made passable together so co-located
+            # objects of different colors (e.g., a cross of two colors) don't
+            # block each other during BFS routing.
+            untouched_colors = {o.color for o in untouched}
+            for o in untouched:
+                if directions:
+                    route = plan_route(
+                        frame, player_objs_list, o.centroid, directions,
+                        max_steps=30,
+                        target_colors=untouched_colors,
+                    )
+                    if route:
+                        nav_str = f"route: {_compress_route(route)}"
+                    else:
+                        # BFS couldn't find a path — walls or arena shape block the
+                        # straight approach.  Flag for LLM-assisted route planning.
+                        nav_str = (
+                            f"nav≈{_nav_hint(p_centroid, o.centroid)} "
+                            f"[NEEDS-PLANNING: BFS found no direct route — "
+                            f"reason likely a wall or arena gap; plan a detour]"
+                        )
+                else:
+                    nav_str = f"nav≈{_nav_hint(p_centroid, o.centroid)}"
+                lines.append(f"    [TODO] {_label(o)}  {nav_str}")
+
+    # --- Contact history (causal world-state changes from touch events) ---
+    # Each entry records what changed in the environment when the player
+    # made full contact with a specific object color.  This lets agents
+    # reason: "touching colorX caused colorY to appear — I should go touch Y."
+    if events:
+        lines.append("")
+        lines.append("Contact history (world changes observed when player touched an object):")
+        for ev in events:
+            color = ev.get("touched_color")
+            step  = ev.get("step", "?")
+            delta = ev.get("delta", {})
+            effects: list[str] = []
+            for a in delta.get("appeared", []):
+                cr, cc = a["centroid"]
+                effects.append(
+                    f"color{a['color']}({color_name(a['color'])}) APPEARED "
+                    f"size={a['size']} @({cr:.0f},{cc:.0f})"
+                )
+            for d in delta.get("disappeared", []):
+                cr, cc = d["centroid"]
+                effects.append(
+                    f"color{d['color']}({color_name(d['color'])}) DISAPPEARED "
+                    f"(was size={d['size']} @({cr:.0f},{cc:.0f}))"
+                )
+            for ch in delta.get("changed_size", []):
+                sign = "+" if ch["delta"] > 0 else ""
+                effects.append(
+                    f"color{ch['color']}({color_name(ch['color'])}) size changed "
+                    f"{ch['before_size']}->{ch['after_size']} ({sign}{ch['delta']})"
+                )
+            if effects:
+                lines.append(
+                    f"  [step {step}] touching color{color}({color_name(color)}) caused:"
+                )
+                for eff in effects:
+                    lines.append(f"    → {eff}")
+            else:
+                lines.append(
+                    f"  [step {step}] touching color{color}({color_name(color)}): "
+                    f"no detected world change (may be a passive/inert object)"
+                )
 
     return "\n".join(lines) if lines else "  (no structural context detected)"

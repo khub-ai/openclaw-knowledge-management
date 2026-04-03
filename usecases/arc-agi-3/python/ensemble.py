@@ -43,7 +43,8 @@ from object_tracker import (
     diff_objects, format_object_diff, summarize_current_objects,
     detect_wall_contacts, infer_typical_direction,
     compute_trend_predictions, detect_objects, color_name,
-    detect_containment,
+    detect_containment, detect_contacts, auto_detect_concepts,
+    infer_action_directions, detect_arena_delta, format_structural_context,
 )
 from agents import (
     run_observer,
@@ -89,6 +90,7 @@ class EpisodeMetadata:
     model: str = DEFAULT_MODEL
     matched_rule_ids: list = field(default_factory=list)
     playlog_dir: str = ""
+    action_directions: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +202,9 @@ class EpisodeLogger:
         if obj_summary and obj_summary != "no object-level changes detected":
             for line in obj_summary.splitlines():
                 self._write(f"    {line.strip()}")
+
+    def concept_update(self, color: int, role: str, note: str) -> None:
+        self._write(f"  [CONCEPTS] color{color} → {role}  {note}")
 
     def level_advance(self, from_level: int, to_level: int) -> None:
         self._write(f"  [LEVEL ADVANCE] {from_level} -> {to_level}")
@@ -341,6 +346,17 @@ def _inject_initial_goals(
         parent_id=top.id,
     )
     goal_manager.activate(understand_goal.id)
+
+    explore_goal = goal_manager.push(
+        description=(
+            "Systematically contact every visible object to discover its behavior. "
+            "Navigate to each [TODO] object in the exploration manifest and observe "
+            "what happens. Prioritize uncontacted objects until all are [DONE]."
+        ),
+        priority=2,
+        parent_id=understand_goal.id,
+    )
+    goal_manager.activate(explore_goal.id)
 
     return top.id  # caller may use to create further subgoals
 
@@ -538,6 +554,7 @@ async def run_episode(
     max_cycles: int = MAX_CYCLES,
     verbose: bool = True,
     playlog_root: Optional[Path] = None,
+    known_action_directions: Optional[dict] = None,
 ) -> EpisodeMetadata:
     """
     Run one full episode of an ARC-AGI-3 environment.
@@ -599,6 +616,14 @@ async def run_episode(
     # Colors observed moving at least once — used by structural context to
     # distinguish dynamic objects (player, cursor) from static landmarks.
     known_dynamic_colors: set[int] = set()
+    # Colors the player has been adjacent to (margin=1) at least once.
+    explored_colors: set[int] = set()
+    # Confirmed (dr, dc) per action — seeded from prior episodes so cycle 1
+    # already knows directions and skips re-characterization.
+    action_directions: dict[str, tuple[int, int]] = dict(known_action_directions or {})
+    # Causal contact events: world-state changes observed when the player touched
+    # a specific object.  Format: [{"touched_color": int, "step": int, "delta": dict}]
+    contact_events: list[dict] = []
 
     # Running OBSERVER/MEDIATOR outputs for playlog (reset each cycle)
     _obs_text_current   = ""
@@ -671,6 +696,19 @@ async def run_episode(
         # ------------------------------------------------------------------
         available_actions = list(getattr(env, "action_space", []))
         concept_bindings: dict = state_manager._data.get("concept_bindings") or {}
+
+        # Pre-compute structural context (zero LLM cost) so it can be passed
+        # directly to the MEDIATOR — the OBSERVER may summarize/drop BFS routes.
+        _curr_frame = obs_frame(obs)
+        structural_str = format_structural_context(
+            _curr_frame,
+            concept_bindings=concept_bindings,
+            known_dynamic_colors=known_dynamic_colors,
+            explored_colors=explored_colors,
+            action_directions=action_directions,
+            contact_events=contact_events,
+        )
+
         obs_text, _obs_ms = await run_observer(
             obs,
             available_actions,
@@ -680,6 +718,9 @@ async def run_episode(
             concept_bindings=concept_bindings,
             steps_remaining=max_steps - step_count,
             known_dynamic_colors=known_dynamic_colors,
+            explored_colors=explored_colors,
+            action_directions=action_directions,
+            contact_events=contact_events,
             verbose=verbose,
         )
         _obs_text_current = obs_text
@@ -765,6 +806,8 @@ async def run_episode(
             action_history=action_history,
             available_actions=available_actions,
             state_section=_gs,
+            action_directions=action_directions if action_directions else None,
+            structural_context_str=structural_str,
             verbose=verbose,
         )
         _med_plan_current  = action_plan
@@ -825,7 +868,7 @@ async def run_episode(
                     log(f"  {indent}[{g.priority}] {g.description[:70]}")
             concepts = state_manager._data.get("concept_bindings") or {}
             if concepts:
-                cb_str = "  ".join(f"color{c}={n}" for c, n in sorted(concepts.items()))
+                cb_str = "  ".join(f"color{c}={n}" for c, n in sorted(concepts.items(), key=lambda x: str(x[0])))
                 log(f"  [CONCEPTS] {cb_str}")
 
         if not action_plan:
@@ -930,6 +973,99 @@ async def run_episode(
             known_dynamic_colors.update(
                 m.obj.color for m in obj_diff.moved if not m.obj.is_background
             )
+
+            # Update confirmed action directions from latest observations.
+            new_dirs = infer_action_directions(
+                state_manager._data.get("action_effects") or {}
+            )
+            action_directions.update(new_dirs)
+
+            # Track which object colors the player has contacted (adjacent to).
+            # Uses known_dynamic_colors as the player color set — after the first
+            # move, dynamic colors are the player/cursor.
+            if known_dynamic_colors:
+                contacts = detect_contacts(
+                    known_dynamic_colors, detect_objects(curr_frame)
+                )
+                # "explored" = player bbox overlaps the object (gap = 0, full contact).
+                # Near-contact (gap 1–5) is captured in contacts but does NOT mark
+                # an object explored — reserved for future proximity-trigger use cases.
+                newly_touched = {
+                    c for c, gap in contacts.items()
+                    if gap == 0 and c not in explored_colors
+                }
+                if newly_touched:
+                    # Record causal world changes for each newly touched object.
+                    # We compare the frame just before this action vs. the frame
+                    # after, filtering out the player's own pixels, to isolate
+                    # what changed in the environment due to the contact.
+                    delta = detect_arena_delta(
+                        frame_before, curr_frame, known_dynamic_colors
+                    )
+                    step_num = state_manager._data.get("total_steps_taken", 0)
+                    for touched_color in newly_touched:
+                        event = {
+                            "touched_color": touched_color,
+                            "step":          step_num,
+                            "delta":         delta,
+                        }
+                        contact_events.append(event)
+                        if delta["any_change"]:
+                            appeared_desc = ", ".join(
+                                f"color{a['color']} appeared"
+                                for a in delta["appeared"]
+                            )
+                            disappeared_desc = ", ".join(
+                                f"color{d['color']} disappeared"
+                                for d in delta["disappeared"]
+                            )
+                            changed_desc = ", ".join(
+                                f"color{ch['color']} size {ch['delta']:+d}"
+                                for ch in delta["changed_size"]
+                            )
+                            parts = [p for p in [appeared_desc, disappeared_desc, changed_desc] if p]
+                            ep_log._write(
+                                f"  [CONTACT] color{touched_color} touched at step {step_num}"
+                                f" → world changed: {'; '.join(parts)}"
+                            )
+                        else:
+                            ep_log._write(
+                                f"  [CONTACT] color{touched_color} touched at step {step_num}"
+                                f" → no world change detected"
+                            )
+                    explored_colors.update(newly_touched)
+
+            # --- Zero-cost concept auto-detection ----------------------------
+            # Run heuristic signatures over action_effects and emit guesses into
+            # concept_bindings immediately — before the next LLM cycle runs.
+            # The OBSERVER can confirm, raise confidence, or override these.
+            effects_for_detection = state_manager._data.get("action_effects") or {}
+            cb_current = state_manager._data.get("concept_bindings") or {}
+            auto_suggestions = auto_detect_concepts(
+                effects_for_detection, detect_objects(curr_frame), cb_current
+            )
+            if auto_suggestions:
+                cb_merged = dict(cb_current)
+                for color, suggestion in auto_suggestions.items():
+                    existing = cb_merged.get(color)
+                    if isinstance(existing, dict):
+                        # Blend: keep whichever confidence is higher.
+                        if suggestion["confidence"] > existing.get("confidence", 0):
+                            prev_conf = existing.get("confidence", 0)
+                            cb_merged[color] = {**existing, **suggestion}
+                            ep_log.concept_update(
+                                color, suggestion["role"],
+                                f"[GUESS] auto-detected (conf {prev_conf:.2f}→{suggestion['confidence']:.2f},"
+                                f" n={suggestion['observations']})",
+                            )
+                    else:
+                        cb_merged[color] = suggestion
+                        ep_log.concept_update(
+                            color, suggestion["role"],
+                            f"[GUESS] auto-detected (conf {suggestion['confidence']:.2f},"
+                            f" n={suggestion['observations']})",
+                        )
+                state_manager.update({"concept_bindings": cb_merged})
 
             # --- Co-occurrence observation -----------------------------------
             concept_bindings_now = state_manager._data.get("concept_bindings") or {}
@@ -1103,6 +1239,7 @@ async def run_episode(
         model                = DEFAULT_MODEL,
         matched_rule_ids     = list(dict.fromkeys(all_matched_ids)),
         playlog_dir          = str(playlog_dir) if playlog_dir else "",
+        action_directions    = dict(action_directions),
     )
 
     log(f"\nEpisode {episode_num} complete: "

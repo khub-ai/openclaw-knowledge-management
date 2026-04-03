@@ -24,18 +24,21 @@ Coordinates use (x=column, y=row), **zero-indexed from the top-left** of the fra
 
 ## Guidelines
 
-1. **Explore systematically**: if actions have not yet been characterized, try each one at least once and observe the effect. The OBSERVER's `action_characterizations` and `identified_objects` fields tell you what is already known.
-2. **React to predictions and urgency**: the OBSERVER includes a `Trend predictions` section and any `[URGENT]` goals. If a resource is depleting, a boundary is approaching, or an urgency goal exists, your plan MUST address it — adjust pacing, avoid wasting actions, or prioritize the win condition. Explicitly reference predictions in your `reasoning`.
-3. **React to wall contacts**: if the log shows a `wall_candidate` concept binding was added, or an action repeatedly fails to move the piece, you have hit a boundary. Identify what color constitutes the wall and encode it as a rule. Plan to navigate around it.
-4. **Propose exploration rules every cycle**: after each observation, propose candidate rules encoding what you learned. Prefer specific, falsifiable rules:
+1. **Follow pre-computed routes**: the structural context includes an `Exploration manifest` with either a computed `route:` (exact action sequence from BFS path planning — follow it precisely) or a `[NEEDS-PLANNING]` marker meaning the path planner could not find a direct route (wall or arena gap blocks straight approach — reason through a detour: go around the obstacle, find an indirect path, and encode your route as a subgoal). If the input begins with `## ACTION DIRECTIONS — CONFIRMED FROM PRIOR EPISODES`, those directions are final — do NOT spend any actions re-testing or re-characterizing them regardless of what rules say.
+2. **Explore systematically**: prioritize uncontacted `[TODO]` objects from the exploration manifest. If a direct route exists, execute it. If `[NEEDS-PLANNING]`, deduce the detour from the arena layout before acting.
+3. **Infer state transitions from contact history**: the structural context may include a `Contact history` section listing world-state changes that occurred when the player touched an object (e.g., "touching colorX caused colorY to APPEAR"). These are causal observations. If touching object X unlocked object Y (Y appeared), then your next goal must be to reach and touch Y — it may be the next step in a multi-stage unlock chain. Encode each causal link as a rule and push a subgoal to contact the newly appeared object. Do not treat newly appeared objects as background; treat them as high-priority [TODO] targets.
+4. **React to predictions and urgency**: the OBSERVER includes a `Trend predictions` section and any `[URGENT]` goals. If a resource is depleting, a boundary is approaching, or an urgency goal exists, your plan MUST address it — adjust pacing, avoid wasting actions, or prioritize the win condition. Explicitly reference predictions in your `reasoning`.
+5. **React to wall contacts**: if the log shows a `wall_candidate` concept binding was added, or an action repeatedly fails to move the piece, you have hit a boundary. Identify what color constitutes the wall and encode it as a rule. Plan to navigate around it.
+6. **Propose exploration rules every cycle**: after each observation, propose candidate rules encoding what you learned. Prefer specific, falsifiable rules:
    - Action effects: `"When ACTION1 is called in ls20, the player_piece moves up 5 rows"`
    - Object behaviors: `"In ls20, the step_counter shrinks by 2 each action regardless of direction"`
    - Boundary rules: `"In ls20, color4 (yellow) is the wall — player_piece cannot move into yellow cells"`
    - Level mechanics: `"In ls20 level 1, the goal appears to be navigating player_piece to the reference pattern location"`
-5. **Avoid exact repeats**: do not reproduce a sequence that already failed to advance the level. Try a variation.
-6. **Keep plans short** (3–8 actions): short plans allow faster re-observation and adaptation.
-7. **Use validated rules**: if the `Prior knowledge rules` section contains active rules about this environment, prefer action plans consistent with them.
-8. **Goal tracking**: include `goal_updates` to create subgoals for exploration tasks and to push countermeasure goals when predictions indicate urgency.
+   - Unlock chains: `"In ls20, touching colorX (the cross) causes colorY to appear — colorY must be touched next to advance"`
+7. **Avoid exact repeats**: do not reproduce a sequence that already failed to advance the level. Try a variation.
+8. **Keep plans short** (3–8 actions): short plans allow faster re-observation and adaptation.
+9. **Use validated rules**: if the `Prior knowledge rules` section contains active rules about this environment, prefer action plans consistent with them.
+10. **Goal tracking**: include `goal_updates` to create subgoals for exploration tasks and to push countermeasure goals when predictions indicate urgency.
 
 ## Output format
 

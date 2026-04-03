@@ -286,6 +286,9 @@ async def run_observer(
     concept_bindings: Optional[dict] = None,
     steps_remaining: int = 0,
     known_dynamic_colors: Optional[set] = None,
+    explored_colors: Optional[set] = None,
+    action_directions: Optional[dict] = None,
+    contact_events: Optional[list] = None,
     verbose: bool = True,
 ) -> tuple[str, int]:
     """
@@ -308,6 +311,9 @@ async def run_observer(
         frame,
         concept_bindings=concept_bindings,
         known_dynamic_colors=known_dynamic_colors,
+        explored_colors=explored_colors,
+        action_directions=action_directions,
+        contact_events=contact_events,
     )
     predictions = compute_trend_predictions(action_effects or {}, steps_remaining)
     predictions_str = (
@@ -393,6 +399,8 @@ async def run_mediator(
     action_history: Optional[list[dict]] = None,
     available_actions: Optional[list[Any]] = None,
     state_section: str = "",
+    action_directions: Optional[dict] = None,
+    structural_context_str: str = "",
     verbose: bool = True,
 ) -> tuple[list[dict], str, int]:
     """
@@ -403,7 +411,37 @@ async def run_mediator(
     """
     system_prompt = load_prompt("MEDIATOR")
 
-    user_message = f"## OBSERVER analysis\n\n{observer_text}\n"
+    user_message = ""
+
+    # If action directions are already confirmed, inject a hard constraint at the
+    # very top of the MEDIATOR input so it cannot be overridden by matched rules.
+    if action_directions:
+        _dir_labels = {
+            (-1, 0): "up", (1, 0): "down", (0, -1): "left", (0, 1): "right"
+        }
+        _parts = []
+        for act in sorted(action_directions):
+            dr, dc = action_directions[act]
+            label = _dir_labels.get(
+                (0 if dr == 0 else (-1 if dr < 0 else 1),
+                 0 if dc == 0 else (-1 if dc < 0 else 1)), "?"
+            )
+            dist = abs(dr) if dr != 0 else abs(dc)
+            _parts.append(f"{act}={label}{dist}")
+        user_message += (
+            "## ACTION DIRECTIONS — CONFIRMED FROM PRIOR EPISODES\n\n"
+            "THESE ARE ALREADY KNOWN. DO NOT SPEND ANY STEPS RE-CHARACTERIZING THEM.\n"
+            "Ignore any rules that suggest re-testing these actions.\n"
+            f"  {',  '.join(_parts)}\n\n"
+        )
+
+    if structural_context_str:
+        user_message += (
+            "## Structural context (exploration manifest & BFS routes)\n\n"
+            f"{structural_context_str}\n\n"
+        )
+
+    user_message += f"## OBSERVER analysis\n\n{observer_text}\n"
 
     if rules_section:
         user_message += f"\n## Prior knowledge rules\n\n{rules_section}\n"

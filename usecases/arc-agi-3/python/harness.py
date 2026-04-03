@@ -191,21 +191,26 @@ async def main() -> None:
     all_episodes: list[EpisodeMetadata] = []
     output_path = Path(args.output)
     best_levels = 0
+    shared_action_directions: dict = {}   # persists across episodes
 
     for ep in range(1, args.episodes + 1):
         console.rule(f"[{ep}/{args.episodes}] Episode {ep}")
 
         meta = await run_episode(
-            env           = env,
-            episode_num   = ep,
-            env_id        = args.env,
-            rule_engine   = rules,
-            tool_registry = tool_reg,
-            max_steps     = args.max_steps,
-            max_cycles    = args.max_cycles,
-            verbose       = verbose,
-            playlog_root  = playlog_root,
+            env                     = env,
+            episode_num             = ep,
+            env_id                  = args.env,
+            rule_engine             = rules,
+            tool_registry           = tool_reg,
+            max_steps               = args.max_steps,
+            max_cycles              = args.max_cycles,
+            verbose                 = verbose,
+            playlog_root            = playlog_root,
+            known_action_directions = shared_action_directions,
         )
+        # Carry confirmed directions into the next episode
+        shared_action_directions.update(meta.action_directions)
+
         all_episodes.append(meta)
         best_levels = max(best_levels, meta.levels_completed)
 
