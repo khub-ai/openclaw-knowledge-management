@@ -413,7 +413,7 @@ async def main() -> None:
         console.print("[yellow]No tasks to run.[/yellow]")
         return
 
-    from agents import DEFAULT_MODEL, get_cost_tracker, _is_openai_model
+    from agents import DEFAULT_MODEL, ACTIVE_MODEL, get_cost_tracker, _is_openai_model
     _pair_label = "all" if args.all else (args.pair or selected_pairs[0]["pair_id"])
     _mode_label = "[red]test[/red] (read-only)" if test_mode else "[green]train[/green] (learning)"
     console.print(Panel(
@@ -453,7 +453,7 @@ async def main() -> None:
                 "duration_ms":     bl_ms,
                 "cost_usd":        get_cost_tracker().cost_usd() - sum(r.get("cost_usd", 0) for r in all_results + run_results),
                 "api_calls":       1,
-                "model":           DEFAULT_MODEL,
+                "model":           ACTIVE_MODEL,
                 "baseline_mode":   baseline_mode,
             }
         else:

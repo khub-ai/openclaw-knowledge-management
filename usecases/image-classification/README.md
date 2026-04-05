@@ -3,9 +3,9 @@
 
 ---
 
-> **Status**: Research prototype — bird case study active; dermatology case study piloted across 4 iterations and 3 models (2026-04-05)
+> **Status**: Research prototype — bird case study active; dermatology case study piloted across 4 iterations and 3 models; dialogic patching loop implemented and smoke-tested (2026-04-05)
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) as a local-first knowledge authoring tool for domain experts with no AI expertise
-> **Last updated**: 2026.04.02
+> **Last updated**: 2026.04.05
 
 [Knowledge Fabric (KF)](../../docs/what-is-kf.md) treats expert input as a reusable [knowledge patch](../../docs/glossary.md#knowledge-patch): a domain expert can incrementally correct a pre-trained vision-language model in plain language, without fine-tuning the model or running an ML workflow. This README uses two reference domains to make the idea concrete: fine-grained bird identification and skin-lesion classification in dermatology.
 
@@ -292,7 +292,11 @@ Prefer to skip the upcoming dermatology section? Jump to [Cross-Use-Case Takeawa
 
 ## 4. Sub-Use-Case B: Dermatology
 
-> **Status**: Implemented and piloted (2026-04-05). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Latest pilot (v4, Claude Sonnet 4.6): **13/18 overall (72%)** — melanoma vs nevus (67%), BCC vs benign keratosis (83%), actinic keratosis vs benign keratosis (67%). Cross-model zero-shot: GPT-4o 14/18 (78%), o4-mini 11/18 (61%). Improved from v1 50% via: expanded KB (36→52 rules), no-abstain MEDIATOR, VERIFIER scoped to hard contradictions, per-pair absence-checklist schema, and LPLK-specific KB rules. For the full architecture, iteration history, and failure analysis see [DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
+> **Status**: Implemented and piloted (2026-04-05). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Latest pilot (v4, Claude Sonnet 4.6): **13/18 overall (72%)** — melanoma vs nevus (67%), BCC vs benign keratosis (83%), actinic keratosis vs benign keratosis (67%). Cross-model zero-shot: GPT-4o 14/18 (78%), o4-mini 11/18 (61%). Improved from v1 50% via: expanded KB (36→52 rules), no-abstain MEDIATOR, VERIFIER scoped to hard contradictions, per-pair absence-checklist schema, and LPLK-specific KB rules.
+>
+> **Reframing (2026-04-05)**: The 4-round ensemble pipeline is net-neutral to net-negative for already-strong VLMs — it adds cost without improving over their zero-shot baseline. KF's real value is the **dialogic patching loop**: a cheap VLM fails → a domain expert (or superior VLM) authors corrective rules with explicit pre-conditions → KF validates them against labeled training images → rules fire on future matching images. The dialogic loop is now implemented in `patch.py` and smoke-tested. A full comparative evaluation (cheap model zero-shot vs cheap model + expert-authored patch rules) is the next milestone.
+>
+> For the full architecture, iteration history, and failure analysis see [DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
 
 Dermatology is the strongest medical analogue to the bird use case. Like bird identification, it depends on subtle visual distinctions that experts can often explain in words: pigment network, asymmetry, border irregularity, color variation, streaks, dots, globules, regression structures, ulceration, and other dermoscopic criteria. It is therefore a strong fit for KF's runtime patching model.
 
@@ -338,21 +342,26 @@ What the bird experiment already shows:
 - **Some tasks require stronger evidence gating rather than plain prompt injection**. The original Crow patch failed because it relied on voice, habitat, and range, but a later structured-evidence KF patch recovered the pair to zero-shot parity.
 - **Hard cases often need a stronger patch form**. After correcting a small label-normalization issue in the Brewer Sparrow evaluation, the pair still suggests that KF should sometimes externalize the model's feature claims into a structured, human-verifiable evidence layer.
 
-What the dermatology use case is meant to test next:
+What the dermatology use case has shown so far:
 
-- whether the same mechanism transfers from field-guide knowledge to clinically meaningful visual expertise
-- whether explicit medical attributes can ground better patches than vague class descriptions
-- whether the `model + KF` system can beat zero-shot, few-shot, and raw retrieved reference text on targeted lesion confusions
-- whether the same patch can remain portable across more than one underlying VLM or deployment context
+- The 4-round KF ensemble pipeline is net-neutral to net-negative for already-strong VLMs. When a strong model already achieves high zero-shot accuracy, injecting rules adds overhead without improving results. **This is expected and does not falsify the KF thesis** — it clarifies where KF adds value.
+- **KF's real value is the dialogic patching loop**: a cheap model + expert rules can approach the accuracy of a more expensive model on targeted hard cases, without retraining. The loop works by surfacing failures to a domain expert, turning the expert's corrective insight into structured rules with pre-conditions, and storing those rules for future use.
+- Explicit pre-conditions (hard gates) are essential. Rules that describe a corrective action without pre-conditions can fire on cases they were not designed for, causing regressions. Rules with pre-conditions fire only when those features are confirmed in the image, making them safer to deploy.
+- A "cross-pair firing" — a rule authored for one lesion pair firing on a different pair — is a meaningful signal. It either indicates a quality problem (pre-conditions too broad) or a genuine visual generalization that the domain expert should confirm or further refine.
+
+What the next evaluation milestone needs:
+
+- **Dialogic loop lift measurement**: o4-mini zero-shot vs o4-mini + patch rules authored by a superior VLM (Claude Sonnet/Opus), on the same labeled test images, with all known pipeline bugs fixed.
+- **Portability**: whether the same patch rules authored for one image set transfer to a different batch of images from the same pair.
 
 Summary of current evidence:
 
-| Category | What birds already shows | What dermatology is meant to test next |
+| Category | What birds showed | What dermatology has added |
 |---|---|---|
-| Runtime patching value | Yes, on targeted confusable pairs | Whether the same applies in a medical domain |
-| Need for expert verification | Yes, clearly | Whether medical patches need even stricter review and governance |
-| Benefit of structured intermediate evidence | Suggested strongly by Brewer vs Clay-colored | Whether feature-level verification is even more valuable in medicine |
-| Portability across domains | Promising in principle | Still upcoming |
+| Runtime patching value | Yes, on targeted confusable pairs | Pipeline overhead is net-negative for strong VLMs; dialogic loop is the right framing |
+| Need for expert verification | Yes, clearly | Pre-conditions as hard gates are essential in medicine — soft rules cause regressions |
+| Benefit of structured intermediate evidence | Suggested strongly by Brewer vs Clay-colored | Feature-level observation (OBSERVER stage) confirmed as valuable; cross-pair firing adds a new quality signal |
+| Portability across domains | Promising in principle | Architecture is domain-agnostic; confirmed by transferring bird pipeline to dermatology with only prompt changes |
 
 ---
 

@@ -1,0 +1,100 @@
+{
+  "rules": [
+    {
+      "id": "r_001",
+      "condition": "[Patch rule \u2014 melanoma_vs_melanocytic_nevus] Lesion has a darker central core that transitions smoothly and gradually to lighter brown toward the periphery (centrifugal pigment gradient); Border is soft, blurred, or feathered \u2014 not angulated, notched, or sharply demarcated in focal areas; No blue-white structures, shiny white lines, or regression areas are present; No radial streaming, pseudopods, or peripheral globules indicating asymmetric growth; No atypical pigment network with thick irregular lines and irregular holes; Background pigment network, if visible, is relatively regular or blended/homogeneous; Lesion is roughly symmetric in overall shape and pigment distribution despite appearing heterogeneous at first glance",
+      "action": "Classify as Melanocytic Nevus. Confidence: medium. Rule: When a lesion displays a central darker zone that fades gradually and centrifugally into lighter brown at the periphery without sharp color cutoffs, and the overall border is soft/feathered rather than angulated, and there are no blue-white structures, regression areas, atypical network, or radial streaming, classify as Melanocytic Nevus.",
+      "source_level": 0,
+      "rule_type": "task",
+      "scope": "dataset",
+      "stats_by_ns": {
+        "derm-ham10000": {
+          "fires": 0,
+          "successes": 0,
+          "failures": 0
+        }
+      },
+      "source": "expert_vlm:claude-opus-4-6",
+      "source_task": "melanoma_vs_melanocytic_nevus_ISIC_0024392",
+      "tags": [
+        "derm-ham10000",
+        "melanoma_vs_melanocytic_nevus",
+        "patch:o4-mini",
+        "triggered_by:melanoma_vs_melanocytic_nevus_ISIC_0024392"
+      ],
+      "lineage": {
+        "type": "new",
+        "parent_ids": [],
+        "reason": "patch rule authored by expert VLM to correct o4-mini failure"
+      },
+      "status": "active",
+      "tasks_seen": 0,
+      "created": "2026-04-05T09:00:00",
+      "last_fired": null
+    },
+    {
+      "id": "r_002",
+      "condition": "[Patch rule \u2014 basal_cell_carcinoma_vs_benign_keratosis] Fine fingerprint-like or gyrate ridges visible within the lesion body; Admixture of light brown and pinkish-grey tones without true steel-blue or blue-white ovoid nests; Grey areas are diffuse and smudged rather than forming discrete blue-grey globules or ovoid nests; Absence of arborizing (branching) telangiectasia on close inspection; Absence of leaf-like structures or spoke-wheel areas at the periphery; Border shows gradual fading or moth-eaten edges rather than sharp well-defined margin typical of BCC",
+      "action": "Classify as Benign Keratosis. Confidence: medium. Rule: When a lesion displays a central structureless zone with admixed brown and pinkish-grey hues, fingerprint-like or ridge-like fine linear structures radiating within the lesion, and a gradual moth-eaten or smudged border without arborizing telangiectasia, leaf-like structures, or spoke-wheel areas, classify as Benign Keratosis.",
+      "source_level": 0,
+      "rule_type": "task",
+      "scope": "dataset",
+      "stats_by_ns": {
+        "derm-ham10000": {
+          "fires": 0,
+          "successes": 0,
+          "failures": 0
+        }
+      },
+      "source": "expert_vlm:claude-opus-4-6",
+      "source_task": "basal_cell_carcinoma_vs_benign_keratosis_ISIC_0024336",
+      "tags": [
+        "derm-ham10000",
+        "basal_cell_carcinoma_vs_benign_keratosis",
+        "patch:o4-mini",
+        "triggered_by:basal_cell_carcinoma_vs_benign_keratosis_ISIC_0024336"
+      ],
+      "lineage": {
+        "type": "new",
+        "parent_ids": [],
+        "reason": "patch rule authored by expert VLM to correct o4-mini failure"
+      },
+      "status": "active",
+      "tasks_seen": 0,
+      "created": "2026-04-05T09:00:00",
+      "last_fired": null
+    },
+    {
+      "id": "r_003",
+      "condition": "[Patch rule \u2014 actinic_keratosis_vs_benign_keratosis] Flat pigmented lesion with a mixture of brown and grey-blue hues in a patchy distribution; Fingerprint-like or cerebriform parallel ridge structures visible within the pigmented area; Grey-blue structureless zone present centrally, suggesting regression or lichenoid inflammation; Relatively well-circumscribed overall border without ill-defined erythematous spread into surrounding skin; Absence of surface scale, strawberry pattern, or rosettes typical of actinic keratosis; No prominent surrounding erythema or diffuse pink structureless background extending beyond the lesion",
+      "action": "Classify as Benign Keratosis. Confidence: medium. Rule: When a flat pigmented lesion shows a central zone with multiple colors (brown, grey-blue, pink) arranged in a patchy/mottled pattern with fingerprint-like or cerebriform ridges visible within the pigmented area, and the lesion has a well-demarcated border with a sharp transition from pigmented zone to surrounding skin, classify as Benign Keratosis (solar lentigo / lichen planus-like keratosis).",
+      "source_level": 0,
+      "rule_type": "task",
+      "scope": "dataset",
+      "stats_by_ns": {
+        "derm-ham10000": {
+          "fires": 0,
+          "successes": 0,
+          "failures": 0
+        }
+      },
+      "source": "expert_vlm:claude-opus-4-6",
+      "source_task": "actinic_keratosis_vs_benign_keratosis_ISIC_0024336",
+      "tags": [
+        "derm-ham10000",
+        "actinic_keratosis_vs_benign_keratosis",
+        "patch:o4-mini",
+        "triggered_by:actinic_keratosis_vs_benign_keratosis_ISIC_0024336"
+      ],
+      "lineage": {
+        "type": "new",
+        "parent_ids": [],
+        "reason": "patch rule authored by expert VLM to correct o4-mini failure"
+      },
+      "status": "active",
+      "tasks_seen": 0,
+      "created": "2026-04-05T09:00:00",
+      "last_fired": null
+    }
+  ]
+}

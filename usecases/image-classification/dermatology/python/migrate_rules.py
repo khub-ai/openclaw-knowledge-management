@@ -115,6 +115,12 @@ def run(rule_engine: RuleEngine | None = None, dry_run: bool = False) -> None:
                 total_added += 1
                 continue
 
+            # Deduplicate: skip if an identical condition already exists.
+            existing_conditions = {r.get("condition", "") for r in rule_engine.rules}
+            if condition in existing_conditions:
+                total_skipped_dup += 1
+                continue
+
             # Add with observability_filter=True (belt-and-suspenders)
             result = rule_engine.add_rule(
                 condition=condition,

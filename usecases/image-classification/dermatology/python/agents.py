@@ -430,7 +430,6 @@ async def run_schema_generator(task: dict, matched_rules: list) -> tuple[dict, i
         "SCHEMA_GENERATOR",
         user_msg,
         system_prompt=_SCHEMA_SYSTEM,
-        max_tokens=1024,
     )
 
     schema = _parse_json_block(text)
@@ -508,7 +507,6 @@ async def run_observer(
         "OBSERVER",
         content_blocks,
         system_prompt=_OBSERVER_SYSTEM,
-        max_tokens=1024,
     )
 
     record = _parse_json_block(text)
@@ -533,24 +531,28 @@ Classification procedure:
 2. Skip any feature with confidence < 0.35 — it is too unreliable to use.
    Features with confidence 0.35–0.5 may be used with reduced weight.
 3. Apply the expert rules to the high-confidence features.
+   For rules marked "HARD GATE": verify every listed pre-condition is met by
+   the observed features before applying the rule. If any pre-condition is not
+   confirmed, skip the rule entirely.
 4. Weigh the evidence and commit to the more likely lesion type.
 
-IMPORTANT — you must choose one of the two class labels. This is a binary classification \
-task: the ground truth is always one of the two classes, never "uncertain". \
-Return "uncertain" ONLY if you observe strong positive evidence for BOTH classes \
-simultaneously (a genuine contradiction). Weak, absent, or ambiguous evidence is \
-normal in dermoscopy — when evidence is weak, lean toward the class with even \
-slightly more support. Do not abstain.
+IMPORTANT — you MUST choose one of the two class labels. This is a strict binary \
+classification task: the ground truth is always one of the two classes. \
+"uncertain" is NOT an allowed output. Weak, absent, or ambiguous evidence is \
+normal in dermoscopy — when evidence is weak or contradictory, lean toward the \
+class with even slightly more support and output that class. You MUST commit. \
+Do not abstain. Do not output "uncertain".
 
 Output ONLY a JSON object:
 {
-  "label": "<class_a_name>" | "<class_b_name>" | "uncertain",
+  "label": "<class_a_name>" | "<class_b_name>",
   "confidence": 0.0,
   "reasoning": "Step-by-step chain of evidence from dermoscopic feature observations to decision.",
   "applied_rules": ["r_001", "r_002"],
   "features_used": ["field_name_1", "field_name_2"]
 }
 
+The "label" field MUST be exactly one of the two class names provided in the user message. \
 Do NOT include any text outside the JSON block.
 """
 
@@ -561,10 +563,28 @@ def _format_rules_for_mediator(matched_rules: list) -> str:
     lines = []
     for m in matched_rules:
         r = m.rule
-        lines.append(
-            f"[{m.rule_id}] IF {r.get('condition', '')} THEN {r.get('action', '')} "
-            f"(confidence: {m.confidence})"
-        )
+        condition = r.get("condition", "")
+        action    = r.get("action", "")
+
+        # Patch rules have the form "[Patch rule — pair_id] precond1; precond2; ..."
+        # Format them as a hard-gate checklist so the MEDIATOR cannot apply them
+        # unless ALL pre-conditions are satisfied by the observed features.
+        if condition.startswith("[Patch rule"):
+            bracket_end = condition.find("]")
+            header = condition[: bracket_end + 1]          # "[Patch rule — pair_id]"
+            rest   = condition[bracket_end + 2 :].strip()  # "precond1; precond2; ..."
+            preconditions = [p.strip() for p in rest.split(";") if p.strip()]
+            lines.append(f"[{m.rule_id}] {header}")
+            lines.append(f"  → Action if rule applies: {action}")
+            lines.append(f"  ⚠ HARD GATE — apply this rule ONLY when ALL conditions below")
+            lines.append(f"    are confirmed by the feature record (skip it if ANY is absent):")
+            for i, pc in enumerate(preconditions, 1):
+                lines.append(f"    {i}. {pc}")
+        else:
+            lines.append(
+                f"[{m.rule_id}] IF {condition} THEN {action} "
+                f"(confidence: {m.confidence})"
+            )
     return "\n".join(lines)
 
 
@@ -607,11 +627,20 @@ async def run_mediator_classify(
         "MEDIATOR",
         user_msg,
         system_prompt=_MEDIATOR_SYSTEM,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
     decision = _parse_json_block(text)
     if decision and "label" in decision:
+        label = decision["label"]
+        # If the model still returned "uncertain" despite instructions, salvage from reasoning
+        if label == "uncertain":
+            reasoning_text = decision.get("reasoning", "") + " " + text
+            for cls in (task["class_a"], task["class_b"]):
+                if cls.lower() in reasoning_text.lower():
+                    decision["label"] = cls
+                    decision["confidence"] = 0.2
+                    break
         return decision, text, ms
 
     # Fallback: try to find a lesion type name in the response
@@ -638,13 +667,13 @@ You will receive:
 - Expert visual rules
 
 Reconsider the classification in light of the feedback. You MUST commit to one of the \
-two class labels — do not return "uncertain" unless you see strong positive evidence \
-for BOTH classes at the same time. If the feedback reveals the other class is better \
-supported, switch to it. If the feedback is inconclusive, keep the original label.
+two class labels — "uncertain" is NOT an allowed output. If the feedback reveals the \
+other class is better supported, switch to it. If the feedback is inconclusive, keep \
+the original label.
 
 Output ONLY a JSON object with the same structure as before:
 {
-  "label": "<class_a_name>" | "<class_b_name>" | "uncertain",
+  "label": "<class_a_name>" | "<class_b_name>",
   "confidence": 0.0,
   "reasoning": "...",
   "applied_rules": [],
@@ -683,11 +712,22 @@ async def run_mediator_revise(
         "MEDIATOR_REVISE",
         user_msg,
         system_prompt=_MEDIATOR_REVISE_SYSTEM,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
     decision = _parse_json_block(text)
     if decision and "label" in decision:
+        label = decision["label"]
+        if label == "uncertain":
+            reasoning_text = decision.get("reasoning", "") + " " + text
+            for cls in (task["class_a"], task["class_b"]):
+                if cls.lower() in reasoning_text.lower():
+                    decision["label"] = cls
+                    decision["confidence"] = 0.2
+                    break
+            else:
+                # Fall back to the prior decision rather than staying uncertain
+                decision["label"] = prior_decision.get("label", task["class_a"])
         return decision, text, ms
 
     label = prior_decision.get("label", "uncertain")
@@ -783,7 +823,7 @@ async def run_verifier(
         "VERIFIER",
         content_blocks,
         system_prompt=_VERIFIER_SYSTEM,
-        max_tokens=512,
+        max_tokens=2048,
     )
 
     result = _parse_json_block(text)
@@ -1055,7 +1095,7 @@ async def run_expert_rule_author(
         content,
         system_prompt=_EXPERT_RULE_AUTHOR_SYSTEM,
         model=model,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
     rule = _parse_json_block(text)

@@ -42,6 +42,7 @@ from tools import ToolRegistry
 from agents import (
     call_agent,
     DEFAULT_MODEL,
+    ACTIVE_MODEL,
     reset_cost_tracker,
     get_cost_tracker,
     format_pair_for_prompt,
@@ -69,26 +70,46 @@ TWO_STAGE_THRESHOLD = 999   # derm-ham10000 is small (<100 rules); always single
 async def match_rules(rule_engine: RuleEngine, task: dict) -> list[RuleMatch]:
     """Retrieve active rules relevant to this confusable pair.
 
-    Uses two-stage retrieval when rule count exceeds TWO_STAGE_THRESHOLD.
+    Dermoscopy-specific retrieval: filters by pair_id tag first, then uses
+    the LLM to confirm relevance.  Handles both code-fenced and raw-JSON
+    responses (o4-mini / other reasoning models omit the fences).
     """
     active_task_rules = rule_engine.active_task_rules()
     if not active_task_rules:
         return []
 
-    task_text = format_pair_for_prompt(task)
+    pair_id   = task.get("pair_id", "")
+    class_a   = task.get("class_a", "")
+    class_b   = task.get("class_b", "")
 
-    if len(active_task_rules) > TWO_STAGE_THRESHOLD:
-        cat_prompt = rule_engine.build_category_filter_prompt(task_text)
-        if cat_prompt:
-            cat_text, _ = await call_agent("MEDIATOR", cat_prompt, max_tokens=256)
-            subset = rule_engine.filter_rules_by_categories(cat_text, max_rules=25)
-        else:
-            subset = active_task_rules[:25]
-        user_msg = rule_engine.build_match_prompt(task_text, rules_subset=subset)
-    else:
-        user_msg = rule_engine.build_match_prompt(task_text)
+    # Prefer rules tagged for this pair; fall back to all active rules.
+    pair_rules = [r for r in active_task_rules if pair_id in r.get("tags", [])]
+    rules_to_match = pair_rules if pair_rules else active_task_rules
 
-    text, _ = await call_agent("MEDIATOR", user_msg, max_tokens=1024)
+    rules_listing = rule_engine._format_rules_list(rules_to_match)
+
+    user_msg = (
+        f"You are a dermoscopy rule matcher. Determine which of the following visual "
+        f"discrimination rules are relevant for classifying a dermoscopic image as either "
+        f"'{class_a}' or '{class_b}' (pair: {pair_id}).\n\n"
+        f"A rule is relevant when its pre-conditions could plausibly apply to this pair. "
+        f"Rate high if the rule is explicitly tagged for this pair, medium if it overlaps, "
+        f"low otherwise.\n\n"
+        f"## Available Rules\n\n{rules_listing}\n\n"
+        "Respond ONLY with this JSON (no other text):\n"
+        "```json\n"
+        '{"matches": [{"rule_id": "r_001", "confidence": "high"}, ...]}\n'
+        "```\n"
+        'If nothing matches, return: {"matches": []}'
+    )
+
+    text, _ = await call_agent("MEDIATOR", user_msg, max_tokens=4096)
+
+    # o4-mini and other reasoning models sometimes return raw JSON without code fences.
+    stripped = text.strip()
+    if stripped.startswith("{") and "```" not in stripped:
+        text = f"```json\n{stripped}\n```"
+
     return rule_engine.parse_match_response(text)
 
 
@@ -319,7 +340,7 @@ async def run_ensemble(
         "cache_read_tokens":     ct.cache_read_tokens,
         "output_tokens":         ct.output_tokens,
         "api_calls":             ct.api_calls,
-        "model":                 DEFAULT_MODEL,
+        "model":                 ACTIVE_MODEL,
         "dataset":               dataset,
         "rule_ids_fired":        fired_ids,
         "feature_record":        {k: v for k, v in feature_record.items() if k != "raw_response"},

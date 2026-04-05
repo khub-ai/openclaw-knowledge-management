@@ -275,19 +275,21 @@ AK/BKL improved from 33% to 67% (2/6 → 4/6). Root cause of remaining failures:
 
 ### 3.4 Cross-model comparison (v4 pipeline, 2026-04-05)
 
-All three runs use the same 18-image pilot, same KB (52 rules), and same v4 pipeline. OpenAI models run as structured zero-shot because the rule retriever (which calls `call_agent()` internally) routes through the active model and returns 0 matches — the retriever output format is model-specific.
+All three runs use the same 18-image pilot, same KB (52 rules), and same v4 pipeline. OpenAI models ran as structured zero-shot in the original data below because the rule retriever returned 0 matches — two bugs were present: (1) the retriever prompt was hardcoded to ARC-AGI framing, confusing the model; (2) `parse_match_response` only handled JSON inside code fences, but o4-mini sometimes returns raw JSON. Both are now fixed (see §3.8).
+
+A third bug affected the `model` field in results: `DEFAULT_MODEL` (always `claude-sonnet-4-6`) was logged instead of `ACTIVE_MODEL`. This means the o4-mini column below was actually run with o4-mini but logged as Sonnet. The fix has been applied; future runs will log correctly.
 
 | Model | Mel/Nev | BCC/BKL | AK/BKL | **Overall** | Cost | Notes |
 |---|---|---|---|---|---|---|
 | Claude Sonnet 4.6 | 4/6 (67%) | 5/6 (83%) | 4/6 (67%) | **13/18 (72%)** | $1.38 | Full pipeline: rules + absence checklist |
 | GPT-4o | 5/6 (83%) | 5/6 (83%) | 4/6 (67%) | **14/18 (78%)** | $0.71 | Zero-shot (0 rules fired); parse fix applied |
-| o4-mini | 5/6 (83%) | 4/6 (67%) | 2/6 (33%) | **11/18 (61%)** | $0.46 | Zero-shot (0 rules fired) |
+| o4-mini | 5/6 (83%) | 4/6 (67%) | 2/6 (33%) | **11/18 (61%)** | $0.46 | Zero-shot (0 rules fired; retriever bug — now fixed) |
 
 Key observations:
-- GPT-4o outperforms Claude zero-shot on this 18-image sample. The margin (78% vs 72%) is within noise for n=18 but suggests GPT-4o's dermoscopy pattern recognition is strong even without KB guidance.
-- o4-mini underperforms relative to its cost tier — particularly on AK/BKL (33%) where absence-reasoning is essential and rules would have helped.
-- Enabling rules for OpenAI models requires fixing the rule retriever to handle OpenAI response format. This is expected to help o4-mini most, since its vision reasoning is weaker than GPT-4o.
+- GPT-4o outperforms Claude zero-shot on this 18-image sample. The margin (78% vs 72%) is within noise for n=18 but suggests GPT-4o's dermoscopy pattern recognition is strong without KB guidance.
+- o4-mini's AK/BKL score (33%) was recorded with 0 rules firing; the retriever fix is expected to improve this pair most since absence-reasoning rules could not fire.
 - All models struggle with AK/BKL due to LPLK heterogeneity in the `bkl` class.
+- A full rerun with all fixes applied is needed for honest per-model numbers — the §3.4 table is from the pre-fix runs.
 
 ### 3.5 Main failure modes
 
@@ -318,11 +320,62 @@ The three BKL images used in the AK/BKL pair (ISIC_0024336, _0024420, _0024495) 
 
 | Gap | What to do |
 |---|---|
-| Rule retrieval for OpenAI models | Fix rule matcher to handle OpenAI response format; o4-mini runs with 0 rules fired |
+| Full rerun with all fixes | Run all 18 images with token-budget fixes, retriever fix, and correct model logging to get clean per-model numbers |
+| Dialogic loop lift measurement | Compare o4-mini zero-shot vs o4-mini + patch rules authored by Claude Sonnet/Opus on the same 18 images |
 | Claude zero-shot baseline | Run `--baseline zero_shot` on same 18 images for apples-to-apples comparison |
 | `bkl` heterogeneity | Evaluate `--sk-only` flag; consider LPLK as a third class |
 | Larger sample | Run full test sets per pair (`--max-per-class 10+`) |
 | Remaining AK/BKL failures | Two LPLK images still default to AK in total feature absence; may require LPLK subclass or prior-based tiebreak |
+| Cross-pair rule generalization | Confirm or reject cross-pair rule firings detected by `patch.py`; update rule pre-conditions or promote to general rules |
+
+### 3.8 Dialogic patching loop (patch.py)
+
+#### Reframing
+
+The 4-round KF ensemble pipeline (observer → mediator → verifier) is net-negative for already-strong VLMs like Claude Sonnet 4.6 or GPT-4o: it adds cost and latency without improving accuracy over zero-shot on the 18-image pilot. This is expected: a strong VLM's pattern recognition is not improved by rules it is already implicitly aware of.
+
+**KF's real value is the dialogic patching loop** — a mechanism for upgrading a weaker model using knowledge authored by a stronger one:
+
+1. A cheap VLM (e.g. o4-mini, Claude Haiku) classifies a batch of labeled training images.
+2. Failure cases are collected and surfaced to a human expert — or, in controlled experiments, to a superior VLM (e.g. Claude Sonnet, Claude Opus) acting as expert.
+3. The expert authors corrective rules with explicit pre-conditions that describe when the rule applies.
+4. KF validates the rules: candidate rules are applied to the labeled training pool; rules that fire correctly on at least one training image are promoted to active status.
+5. Active rules fire on future images matching the pre-conditions, routing classification toward the correct class without re-running the expensive expert.
+
+The metaphor: the pupil (cheap VLM) is shown where it errs. The master (expert VLM or human) teaches the rule. The pupil applies the rule on future images — without needing the master present.
+
+#### Cross-pair firing and the "enlightened pupil" signal
+
+Rules are authored for a specific pair (e.g. `melanoma_vs_melanocytic_nevus`). When such a rule fires on a *different* pair's image, it indicates one of two things:
+
+- **Quality problem**: the rule's pre-conditions are too broad — they match features common across pairs and will generalize incorrectly.
+- **Possible generalization**: the rule captures a visual principle that is genuinely useful across pairs — a "pupil has been enlightened" moment where the master should confirm or further refine the rule.
+
+`patch.py` detects cross-pair firings automatically and surfaces them as explicit signals for the human expert or superior VLM to review.
+
+#### Architecture (patch.py)
+
+```
+patch.py --cheap-model o4-mini --expert-model claude-sonnet-4-6 --pair <pair_id>
+
+1. Run cheap VLM on labeled training images → collect failures
+2. For each failure: call EXPERT_RULE_AUTHOR (Claude Sonnet/Opus) → get candidate rule with pre-conditions and favored class
+3. Register rule into isolated patch_rules_clean.json (never touches knowledge_base/*.json or rules.json)
+4. Re-run cheap VLM with patch rules active → compare accuracy before/after
+5. Detect cross-pair firings → surface to operator
+```
+
+Rules are stored in `patch_rules_clean.json` — a clean, session-local file that starts empty and is never written to by other pipeline components. This ensures no contamination between the batch-imported KB rules and the expert-authored patch rules.
+
+#### Pre-conditions as hard gates
+
+Patch rules encode pre-conditions in the condition field as a semicolon-separated list, prefixed with `[Patch rule — <pair_id>]`. The MEDIATOR formats these as a numbered HARD GATE checklist: all conditions must be confirmed by the feature record before the rule is applied. If any pre-condition is absent, the rule is skipped entirely.
+
+This prevents the failure mode where a MEDIATOR reads a pre-condition like "centrifugal pigment gradient" as positive evidence for the favored class even when that feature was not observed.
+
+#### Token budget for reasoning models (o4-mini)
+
+OpenAI reasoning models (o4-mini, o1) share the `max_completion_tokens` budget between internal chain-of-thought tokens and output tokens. With a budget of 1024, the model spends all tokens on reasoning and produces empty or truncated output. All agents now use 4096+ tokens as the minimum for any call that goes to a reasoning model.
 
 ## 4. Repository Layout And Developer Quick Start
 
@@ -356,13 +409,15 @@ dermatology/
     basal_cell_carcinoma_vs_benign_keratosis.json
     actinic_keratosis_vs_benign_keratosis.json
   python/
-    harness.py
-    ensemble.py
-    agents.py
+    harness.py          # test harness; --all, --pair, --mode test|train
+    ensemble.py         # 4-round KF pipeline orchestrator
+    agents.py           # all LLM agent calls (observer, mediator, verifier, etc.)
     dataset.py
     rules.py
     tools.py
-    migrate_rules.py
+    migrate_rules.py    # batch-import knowledge_base/*.json into rules.json
+    patch.py            # dialogic patching loop (see §3.8)
+    patch_rules_clean.json  # isolated patch rules file; never pre-populated
 ```
 
 ### 4.3 Bird quick-start
@@ -383,9 +438,21 @@ python harness.py --prune
 ```bash
 cd usecases/image-classification/dermatology/python
 
+# Migrate batch KB rules
 python migrate_rules.py
+
+# Run KF pipeline (frozen rules, test mode)
 python harness.py --pair melanoma_vs_melanocytic_nevus --mode test
 python harness.py --all --max-per-class 3 --mode test --output results_pilot.json
+
+# Dialogic patching loop: cheap model + expert VLM patch authors
+python patch.py --cheap-model o4-mini --expert-model claude-sonnet-4-6 \
+    --pair melanoma_vs_melanocytic_nevus --max-per-class 3
+
+# Preview authored patch rules, then re-run pipeline with them
+python patch.py --cheap-model o4-mini --expert-model claude-sonnet-4-6 \
+    --patch-rules patch_rules_clean.json --pair melanoma_vs_melanocytic_nevus \
+    --max-per-class 3 --skip-patch  # run pipeline only, no new authoring
 ```
 
 ### 4.5 Runtime notes
