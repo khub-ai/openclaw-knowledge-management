@@ -970,3 +970,228 @@ async def run_baseline(
             label = cls
             break
     return {"label": label, "confidence": 0.0, "reasoning": text}, ms
+
+
+# ---------------------------------------------------------------------------
+# Dialogic patching — expert rule authoring + validation
+# ---------------------------------------------------------------------------
+
+_EXPERT_RULE_AUTHOR_SYSTEM = """\
+You are a senior dermoscopy expert and knowledge engineer.
+
+A classification model made an error on a dermoscopic image. Your job is to author
+a precise visual rule that would have led to the correct diagnosis — and that will
+generalize to similar cases in the future.
+
+The rule must be:
+1. Purely visual and dermoscopic (observable in a dermoscopic image only)
+2. Expressed as a pre-condition + prediction: "When [pre-condition features are met],
+   classify as [class]"
+3. The pre-condition must be specific enough to EXCLUDE false positives — it should
+   NOT apply to typical cases of the opposing class
+4. Generalizable: it must describe a pattern that applies to a class of similar images,
+   not just this one image
+
+Output ONLY a JSON object:
+{
+  "rule": "Natural language: When [pre-condition], classify as [class].",
+  "feature": "snake_case_feature_name",
+  "favors": "<exact class name>",
+  "confidence": "high" | "medium" | "low",
+  "preconditions": [
+    "Condition 1 that must hold for this rule to apply",
+    "Condition 2 ...",
+    ...
+  ],
+  "rationale": "Why this pattern distinguishes the two classes."
+}
+"""
+
+
+async def run_expert_rule_author(
+    task: dict,
+    wrong_prediction: str,
+    correct_label: str,
+    model_reasoning: str = "",
+    model: str = "claude-opus-4-6",
+) -> tuple[dict, int]:
+    """Call the expert VLM with a failure case and ask it to author a corrective rule.
+
+    Args:
+        task:             task dict (must have class_a, class_b, test_image_path)
+        wrong_prediction: what the cheap model predicted
+        correct_label:    the ground-truth label
+        model_reasoning:  the cheap model's reasoning (for context)
+        model:            expert VLM model identifier
+
+    Returns:
+        (candidate_rule_dict, duration_ms)
+    """
+    class_a = task["class_a"]
+    class_b = task["class_b"]
+    image_path = task["test_image_path"]
+
+    reasoning_snippet = model_reasoning[:400] if model_reasoning else "(not available)"
+
+    content = [
+        _image_block(image_path),
+        {
+            "type": "text",
+            "text": (
+                f"Lesion pair: {class_a} vs {class_b}\n\n"
+                f"Ground truth: {correct_label}\n"
+                f"Model prediction: {wrong_prediction}  ← WRONG\n"
+                f"Model reasoning: {reasoning_snippet}\n\n"
+                "The model made an error on this image. "
+                "Please author a corrective visual rule that would have led to the "
+                f"correct diagnosis ('{correct_label}') and that will generalize to "
+                "similar cases."
+            ),
+        },
+    ]
+
+    text, ms = await call_agent(
+        "EXPERT_RULE_AUTHOR",
+        content,
+        system_prompt=_EXPERT_RULE_AUTHOR_SYSTEM,
+        model=model,
+        max_tokens=1024,
+    )
+
+    rule = _parse_json_block(text)
+    if rule and "rule" in rule and "favors" in rule:
+        rule["raw_response"] = text
+        return rule, ms
+
+    return {"rule": text, "feature": "unknown", "favors": correct_label,
+            "confidence": "low", "preconditions": [], "raw_response": text}, ms
+
+
+_RULE_VALIDATOR_SYSTEM = """\
+You are a dermoscopy expert assessing whether a visual rule applies to a given image.
+
+You will be shown a dermoscopic image and a candidate rule with its pre-conditions.
+Your job is to answer two questions:
+1. Do the rule's pre-conditions hold for this image?
+2. If yes, what class would the rule predict?
+
+Be strict about pre-conditions: only mark them as met if you can clearly observe
+the required pattern. When in doubt, mark as NOT met.
+
+Output ONLY a JSON object:
+{
+  "precondition_met": true | false,
+  "would_predict": "<class_name>" | null,
+  "observations": "Brief note on what you saw that led to this assessment."
+}
+"""
+
+
+async def run_rule_validator_on_image(
+    image_path: str,
+    ground_truth: str,
+    candidate_rule: dict,
+    model: str = "",
+) -> tuple[dict, int]:
+    """Test whether a candidate rule applies to a single labeled image.
+
+    Returns:
+        ({"precondition_met": bool, "would_predict": str|None,
+          "correct": bool, "ground_truth": str}, duration_ms)
+    """
+    rule_text = candidate_rule.get("rule", "")
+    preconditions = candidate_rule.get("preconditions", [])
+    favors = candidate_rule.get("favors", "")
+
+    precond_text = "\n".join(f"  - {p}" for p in preconditions) if preconditions else "  (none specified)"
+
+    content = [
+        _image_block(image_path),
+        {
+            "type": "text",
+            "text": (
+                f"Candidate rule: {rule_text}\n\n"
+                f"Pre-conditions that must ALL hold:\n{precond_text}\n\n"
+                f"If pre-conditions are met, this rule predicts: {favors}\n\n"
+                "Does this rule apply to this image? "
+                "Answer strictly based on what you can see."
+            ),
+        },
+    ]
+
+    text, ms = await call_agent(
+        "RULE_VALIDATOR",
+        content,
+        system_prompt=_RULE_VALIDATOR_SYSTEM,
+        model=model or ACTIVE_MODEL,
+        max_tokens=512,
+    )
+
+    result = _parse_json_block(text)
+    if result and "precondition_met" in result:
+        fires = result.get("precondition_met", False)
+        predicted = result.get("would_predict") if fires else None
+        correct = (predicted == ground_truth) if fires else True  # non-firing is not an error
+        return {
+            "precondition_met": fires,
+            "would_predict": predicted,
+            "correct": correct,
+            "ground_truth": ground_truth,
+            "observations": result.get("observations", ""),
+        }, ms
+
+    return {"precondition_met": False, "would_predict": None,
+            "correct": True, "ground_truth": ground_truth, "observations": text}, ms
+
+
+async def validate_candidate_rule(
+    candidate_rule: dict,
+    validation_images: list,   # list of (image_path: str, ground_truth: str)
+    trigger_image_path: str,   # the failure image that triggered this rule
+    trigger_correct_label: str,
+    model: str = "",
+) -> dict:
+    """Test a candidate rule against a pool of labeled images.
+
+    Returns a dict with TP, FP, TN, FN counts, precision, recall,
+    whether the rule fires correctly on the trigger image, and an accept flag.
+    """
+    tp = fp = tn = fn = 0
+    fires_on_trigger = False
+
+    # Check the trigger image first
+    trigger_result, _ = await run_rule_validator_on_image(
+        trigger_image_path, trigger_correct_label, candidate_rule, model=model
+    )
+    fires_on_trigger = trigger_result["precondition_met"] and trigger_result["correct"]
+
+    # Check validation pool
+    for img_path, gt in validation_images:
+        res, _ = await run_rule_validator_on_image(img_path, gt, candidate_rule, model=model)
+        favors = candidate_rule.get("favors", "")
+        if res["precondition_met"]:
+            if gt == favors:
+                tp += 1
+            else:
+                fp += 1  # rule fires but wrong class → false positive
+        else:
+            if gt == favors:
+                fn += 1  # rule didn't fire on a case it should have
+            else:
+                tn += 1
+
+    total_fires = tp + fp
+    precision = tp / total_fires if total_fires > 0 else 0.0
+    total_positive = tp + fn
+    recall = tp / total_positive if total_positive > 0 else 0.0
+
+    # Accept if: fires on the trigger AND precision is acceptable AND not too many FP
+    accepted = fires_on_trigger and precision >= 0.75 and fp <= 1
+
+    return {
+        "fires_on_trigger": fires_on_trigger,
+        "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+        "precision": round(precision, 3),
+        "recall": round(recall, 3),
+        "accepted": accepted,
+    }

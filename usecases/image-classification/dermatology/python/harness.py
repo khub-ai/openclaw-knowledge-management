@@ -451,7 +451,7 @@ async def main() -> None:
                 "confidence":      bl_decision.get("confidence", 0.0),
                 "reasoning":       bl_decision.get("reasoning", ""),
                 "duration_ms":     bl_ms,
-                "cost_usd":        get_cost_tracker().total_cost_usd - sum(r.get("cost_usd", 0) for r in all_results + run_results),
+                "cost_usd":        get_cost_tracker().cost_usd() - sum(r.get("cost_usd", 0) for r in all_results + run_results),
                 "api_calls":       1,
                 "model":           DEFAULT_MODEL,
                 "baseline_mode":   baseline_mode,
