@@ -252,7 +252,44 @@ Average duration per image: ~52s
 | MEDIATOR must commit to one of the two classes ("uncertain" only when strong evidence exists for BOTH simultaneously) | Binary task: ground truth is always one class; abstaining is never correct |
 | VERIFIER only flags hard contradictions — a pathognomonic feature of the OTHER class unmistakably present | Dermoscopic uncertainty is normal; the old VERIFIER treated ambiguity as contradiction |
 
-### 3.4 Main failure modes
+#### v4 — absence-checklist schema + LPLK KB rules (2026-04-05)
+
+| Pair | Correct | Total | Accuracy | Cost | Avg API calls/image |
+|---|---|---|---|---|---|
+| Melanoma vs Melanocytic Nevus | 4 | 6 | **66.7%** | $0.44 | 5.1 |
+| Basal Cell Carcinoma vs Benign Keratosis | 5 | 6 | **83.3%** | $0.48 | 5.1 |
+| Actinic Keratosis vs Benign Keratosis | 4 | 6 | **66.7%** | $0.46 | 5.1 |
+| **Combined** | **13** | **18** | **72.2%** | **$1.38** | **5.1** |
+
+Average cost per image: ~$0.077
+Model: Claude Sonnet 4.6
+
+**Changes in v4 vs v3:**
+
+| Change | Rationale |
+|---|---|
+| Per-pair absence-checklist fields always appended to OBSERVER schema | Composite-absence rules never fired via retrieval; hardcoding the fields bypasses the retriever entirely |
+| 4 LPLK-specific KB rules for AK/BKL pair (`lplk_atypical_network`, `no_erythema_favors_bkl`, `flat_brown_structureless`, `lplk_regression_brown`) | LPLK-like BKL images lack SK markers and mimic AK; rules needed to make absence of erythematous background positive evidence for BKL |
+
+AK/BKL improved from 33% to 67% (2/6 → 4/6). Root cause of remaining failures: two LPLK images still lack all dermoscopic markers and the pipeline defaults to AK in total absence of evidence.
+
+### 3.4 Cross-model comparison (v4 pipeline, 2026-04-05)
+
+All three runs use the same 18-image pilot, same KB (52 rules), and same v4 pipeline. OpenAI models run as structured zero-shot because the rule retriever (which calls `call_agent()` internally) routes through the active model and returns 0 matches — the retriever output format is model-specific.
+
+| Model | Mel/Nev | BCC/BKL | AK/BKL | **Overall** | Cost | Notes |
+|---|---|---|---|---|---|---|
+| Claude Sonnet 4.6 | 4/6 (67%) | 5/6 (83%) | 4/6 (67%) | **13/18 (72%)** | $1.38 | Full pipeline: rules + absence checklist |
+| GPT-4o | 5/6 (83%) | 5/6 (83%) | 4/6 (67%) | **14/18 (78%)** | $0.71 | Zero-shot (0 rules fired); parse fix applied |
+| o4-mini | 5/6 (83%) | 4/6 (67%) | 2/6 (33%) | **11/18 (61%)** | $0.46 | Zero-shot (0 rules fired) |
+
+Key observations:
+- GPT-4o outperforms Claude zero-shot on this 18-image sample. The margin (78% vs 72%) is within noise for n=18 but suggests GPT-4o's dermoscopy pattern recognition is strong even without KB guidance.
+- o4-mini underperforms relative to its cost tier — particularly on AK/BKL (33%) where absence-reasoning is essential and rules would have helped.
+- Enabling rules for OpenAI models requires fixing the rule retriever to handle OpenAI response format. This is expected to help o4-mini most, since its vision reasoning is weaker than GPT-4o.
+- All models struggle with AK/BKL due to LPLK heterogeneity in the `bkl` class.
+
+### 3.5 Main failure modes
 
 #### Failure mode 1: absence-only evidence (partially addressed in v2, partially remaining)
 
@@ -270,21 +307,22 @@ The `--sk-only` flag (filters `bkl` test images to `dx_type=="histo"` as a proxy
 
 The three BKL images used in the AK/BKL pair (ISIC_0024336, _0024420, _0024495) were correctly identified as BKL in the BCC/BKL pair context but misclassified as AK in the AK/BKL context across all three iterations. Without typical SK markers, the rule set defaults to AK. A pair-specific fix or additional rules are needed.
 
-### 3.5 What worked
+### 3.6 What worked
 
 - BCC vs Benign Keratosis improved significantly (50% → 83%) with the VERIFIER fix. BCC has strong pathognomonic markers (arborizing vessels, ovoid nests) that make the MEDIATOR reliable once it is allowed to commit.
 - The no-abstain MEDIATOR eliminated 4 "uncertain" predictions — 3 of which became correct.
+- Absence-checklist bypass (v4) fixed the composite-absence retrieval gap: AK/BKL improved from 33% to 67%.
 - Domain transfer from birds to dermatology required only prompt and schema changes, confirming the architecture is domain-agnostic.
 
-### 3.6 What is needed next
+### 3.7 What is needed next
 
 | Gap | What to do |
 |---|---|
-| Absence-tracking schema | Force absence-checklist fields into OBSERVER schema independently of rule retrieval |
+| Rule retrieval for OpenAI models | Fix rule matcher to handle OpenAI response format; o4-mini runs with 0 rules fired |
+| Claude zero-shot baseline | Run `--baseline zero_shot` on same 18 images for apples-to-apples comparison |
 | `bkl` heterogeneity | Evaluate `--sk-only` flag; consider LPLK as a third class |
-| Same-model baselines | Run Claude zero-shot and few-shot on the same 18 images for comparison |
-| Larger sample | Run full test sets per pair |
-| AK/BKL KB | Author additional rules distinguishing LPLK-like BKL from AK |
+| Larger sample | Run full test sets per pair (`--max-per-class 10+`) |
+| Remaining AK/BKL failures | Two LPLK images still default to AK in total feature absence; may require LPLK subclass or prior-based tiebreak |
 
 ## 4. Repository Layout And Developer Quick Start
 

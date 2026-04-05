@@ -3,7 +3,7 @@
 
 ---
 
-> **Status**: Research prototype — bird case study active; dermatology case study implemented and first-pass tested (2026-04-02)
+> **Status**: Research prototype — bird case study active; dermatology case study piloted across 4 iterations and 3 models (2026-04-05)
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) as a local-first knowledge authoring tool for domain experts with no AI expertise
 > **Last updated**: 2026.04.02
 
@@ -292,7 +292,7 @@ Prefer to skip the upcoming dermatology section? Jump to [Cross-Use-Case Takeawa
 
 ## 4. Sub-Use-Case B: Dermatology
 
-> **Status**: Implemented and piloted (2026-04-05). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Latest pilot (v3): **11/18 overall (61%)** — melanoma vs nevus (67%), BCC vs benign keratosis (83%), actinic keratosis vs benign keratosis (33%). Improved from v1 50% via: expanded KB (36→48 rules with composite-absence rules), no-abstain MEDIATOR, and VERIFIER scoped to hard contradictions only. For the full architecture, iteration history, and failure analysis see [DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
+> **Status**: Implemented and piloted (2026-04-05). The KF ensemble pipeline runs end-to-end on HAM10000 dermoscopy images. Latest pilot (v4, Claude Sonnet 4.6): **13/18 overall (72%)** — melanoma vs nevus (67%), BCC vs benign keratosis (83%), actinic keratosis vs benign keratosis (67%). Cross-model zero-shot: GPT-4o 14/18 (78%), o4-mini 11/18 (61%). Improved from v1 50% via: expanded KB (36→52 rules), no-abstain MEDIATOR, VERIFIER scoped to hard contradictions, per-pair absence-checklist schema, and LPLK-specific KB rules. For the full architecture, iteration history, and failure analysis see [DESIGN.md](DESIGN.md#3-dermatology-experiments-ham10000--isic).
 
 Dermatology is the strongest medical analogue to the bird use case. Like bird identification, it depends on subtle visual distinctions that experts can often explain in words: pigment network, asymmetry, border irregularity, color variation, streaks, dots, globules, regression structures, ulceration, and other dermoscopic criteria. It is therefore a strong fit for KF's runtime patching model.
 

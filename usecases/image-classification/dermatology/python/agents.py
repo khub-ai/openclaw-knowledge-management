@@ -22,7 +22,7 @@ Re-exported from core (used by ensemble.py and harness.py):
 Multi-backend:
   Set ACTIVE_MODEL to switch between Anthropic and OpenAI backends.
   Anthropic: "claude-sonnet-4-6" (default)
-  OpenAI:    "gpt-4o"
+  OpenAI:    "gpt-4o", "o4-mini"
 """
 
 from __future__ import annotations
@@ -77,10 +77,19 @@ ACTIVE_MODEL: str = "claude-sonnet-4-6"
 DEFAULT_MODEL: str = "claude-sonnet-4-6"  # kept for harness display compatibility
 
 # ---------------------------------------------------------------------------
-# OpenAI pricing (gpt-4o, USD per token — verify at platform.openai.com)
+# OpenAI pricing (USD per token — verify at platform.openai.com)
 # ---------------------------------------------------------------------------
-_GPT4O_PRICE_INPUT_PER_TOKEN  = 2.50  / 1_000_000
-_GPT4O_PRICE_OUTPUT_PER_TOKEN = 10.00 / 1_000_000
+_GPT4O_PRICE_INPUT_PER_TOKEN   = 2.50  / 1_000_000
+_GPT4O_PRICE_OUTPUT_PER_TOKEN  = 10.00 / 1_000_000
+_O4MINI_PRICE_INPUT_PER_TOKEN  = 1.10  / 1_000_000
+_O4MINI_PRICE_OUTPUT_PER_TOKEN = 4.40  / 1_000_000
+
+
+def _openai_pricing(model: str) -> tuple[float, float]:
+    """Return (input_price, output_price) per token for the given OpenAI model."""
+    if model.startswith("o4"):
+        return _O4MINI_PRICE_INPUT_PER_TOKEN, _O4MINI_PRICE_OUTPUT_PER_TOKEN
+    return _GPT4O_PRICE_INPUT_PER_TOKEN, _GPT4O_PRICE_OUTPUT_PER_TOKEN
 
 _openai_client = None
 
@@ -134,9 +143,14 @@ async def _call_agent_openai(
     else:
         content = user_message  # plain string accepted by OpenAI
 
+    # o4-mini (and other o-series reasoning models) reject the "system" role;
+    # they accept "developer" role instead.
+    is_reasoning = model.startswith("o4") or model.startswith("o1") or model.startswith("o3")
+    system_role = "developer" if is_reasoning else "system"
+
     messages = []
     if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": system_role, "content": system_prompt})
     messages.append({"role": "user", "content": content})
 
     if SHOW_PROMPTS:
@@ -148,12 +162,15 @@ async def _call_agent_openai(
             parts = [b.get("text", "[image]") if b.get("type") == "text" else "[image]" for b in content]
             print(f"USER: {' '.join(parts)[:800]}")
 
+    # Reasoning models use max_completion_tokens; others use max_tokens.
+    token_limit_kwarg = "max_completion_tokens" if is_reasoning else "max_tokens"
+
     t0 = time.time()
     for attempt in range(max_retries):
         try:
             response = await client.chat.completions.create(
                 model=model,
-                max_tokens=max_tokens,
+                **{token_limit_kwarg: max_tokens},
                 messages=messages,
             )
             duration_ms = int((time.time() - t0) * 1000)
@@ -166,10 +183,11 @@ async def _call_agent_openai(
                 tracker.output_tokens += u.completion_tokens
                 tracker.api_calls     += 1
                 # Override cost_usd calculation for openai pricing
+                price_in, price_out = _openai_pricing(model)
                 tracker._openai_cost = getattr(tracker, "_openai_cost", 0.0)
                 tracker._openai_cost += (
-                    u.prompt_tokens     * _GPT4O_PRICE_INPUT_PER_TOKEN +
-                    u.completion_tokens * _GPT4O_PRICE_OUTPUT_PER_TOKEN
+                    u.prompt_tokens     * price_in +
+                    u.completion_tokens * price_out
                 )
             return text, duration_ms
         except _openai.RateLimitError:
@@ -189,7 +207,7 @@ async def _call_agent_openai(
 
 
 def _is_openai_model(model: str) -> bool:
-    return model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3")
+    return model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3") or model.startswith("o4")
 
 
 async def call_agent(
@@ -248,24 +266,49 @@ def format_pair_for_prompt(task: dict) -> str:
 
 
 def _parse_json_block(text: str) -> Optional[dict]:
-    """Extract the first ```json ... ``` block from LLM output and parse it.
+    """Extract the first complete JSON object from LLM output and parse it.
 
-    Falls back to raw JSON parse if no fenced block is found.
+    Handles fenced ```json ... ``` blocks and raw JSON at any nesting depth.
     """
-    # Try fenced block first
+    # Try fenced block first (Claude typically wraps in fences)
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
     if match:
         try:
             return json.loads(match.group(1))
         except json.JSONDecodeError:
             pass
-    # Try raw JSON anywhere in the text
-    match = re.search(r"(\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\})", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
+
+    # Fallback: find the first complete JSON object using bracket counting.
+    # The limited 2-level regex fails on deeply-nested responses (e.g. from
+    # OpenAI models that don't fence their output).
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i, ch in enumerate(text[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError:
+                    pass
+                break
     return None
 
 
