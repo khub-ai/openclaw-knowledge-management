@@ -144,12 +144,65 @@ Every field MUST have "uncertain/not visible" as the last option.
 """
 
 
+# Per-pair absence checklists: fields always appended to the OBSERVER schema,
+# independent of rule retrieval. Ensures the OBSERVER always reports presence/absence
+# of the most discriminating markers for each pair — composite-absence rules depend on
+# these being recorded even when no retrieval-matched rule mentions them.
+_ABSENCE_CHECKLIST: dict[str, list[dict]] = {
+    "melanoma_vs_melanocytic_nevus": [
+        {"name": "blue_white_veil_present", "question": "Is a blue-white veil present (diffuse blue-white structureless area over a raised area)?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "regression_structures_present", "question": "Are regression structures visible (white scar-like areas or blue-gray peppering)?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "atypical_network_present", "question": "Is an atypical pigment network present (irregular meshwork with variable thickness or abrupt endings)?", "options": ["present — atypical/irregular", "present — typical/regular", "absent", "uncertain/not visible"]},
+        {"name": "peripheral_dots_globules", "question": "Are dots or globules distributed asymmetrically or clustered at the periphery?", "options": ["yes — asymmetric or peripheral clustering", "no — absent or symmetrically distributed", "uncertain/not visible"]},
+    ],
+    "basal_cell_carcinoma_vs_benign_keratosis": [
+        {"name": "arborizing_vessels_present", "question": "Are arborizing (tree-like branching) vessels visible?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "blue_gray_ovoid_nests_present", "question": "Are blue-gray ovoid nests present?", "options": ["present", "absent — none visible", "uncertain/not visible"]},
+        {"name": "leaf_like_areas_present", "question": "Are leaf-like areas or spoke-wheel structures visible?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "milia_like_cysts_present", "question": "Are milia-like cysts visible (white or yellowish well-defined round dots)?", "options": ["present — multiple", "present — rare/single", "absent", "uncertain/not visible"]},
+        {"name": "comedo_like_openings_present", "question": "Are comedo-like openings visible (dark plugged pore-like structures)?", "options": ["present — multiple", "present — rare/few", "absent", "uncertain/not visible"]},
+        {"name": "cerebriform_pattern_present", "question": "Is a cerebriform (brain-like gyri and sulci) pattern present?", "options": ["present", "absent", "uncertain/not visible"]},
+    ],
+    "actinic_keratosis_vs_benign_keratosis": [
+        {"name": "strawberry_pattern_present", "question": "Is a strawberry pattern visible (red pseudonetwork around follicular openings with white halos)?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "dotted_vessels_erythema", "question": "Are dotted or glomerular vessels present on a pink/erythematous background?", "options": ["yes — dotted/coiled vessels on erythematous base", "no — vessels absent or background not erythematous", "uncertain/not visible"]},
+        {"name": "background_erythema", "question": "Is the background clearly pink or erythematous (inflammatory redness)?", "options": ["yes — clearly pink/erythematous", "no — tan, brown, gray, or skin-colored", "uncertain/not visible"]},
+        {"name": "milia_like_cysts_present", "question": "Are milia-like cysts visible (white or yellowish well-defined round dots)?", "options": ["present — multiple", "present — rare/single", "absent", "uncertain/not visible"]},
+        {"name": "comedo_like_openings_present", "question": "Are comedo-like openings visible (dark plugged pore-like structures)?", "options": ["present", "absent", "uncertain/not visible"]},
+        {"name": "regression_or_peppering", "question": "Are regression structures or blue-gray peppering visible?", "options": ["present", "absent", "uncertain/not visible"]},
+    ],
+}
+
+
+def _pair_id_from_task(task: dict) -> str:
+    """Derive a normalized pair_id from task class names."""
+    a = task.get("class_a", "").lower().replace(" ", "_")
+    b = task.get("class_b", "").lower().replace(" ", "_")
+    return f"{a}_vs_{b}"
+
+
+def _append_absence_checklist(schema: dict, pair_id: str) -> dict:
+    """Append per-pair absence-checklist fields to schema, skipping duplicates."""
+    checklist = _ABSENCE_CHECKLIST.get(pair_id, [])
+    if not checklist:
+        return schema
+    existing_names = {f["name"] for f in schema.get("fields", [])}
+    new_fields = [f for f in checklist if f["name"] not in existing_names]
+    if new_fields:
+        schema = dict(schema)
+        schema["fields"] = list(schema.get("fields", [])) + new_fields
+    return schema
+
+
 async def run_schema_generator(task: dict, matched_rules: list) -> tuple[dict, int]:
     """Generate a feature observation schema for the confusable pair.
 
     Returns (schema_dict, duration_ms).  schema_dict has key "fields".
     On parse failure returns a minimal fallback schema.
+    Always appends a per-pair absence-checklist so the OBSERVER records
+    presence/absence of key markers independent of rule retrieval results.
     """
+    pair_id = _pair_id_from_task(task)
     pair_desc = format_pair_for_prompt(task)
     rules_hint = ""
     if matched_rules:
@@ -173,10 +226,10 @@ async def run_schema_generator(task: dict, matched_rules: list) -> tuple[dict, i
 
     schema = _parse_json_block(text)
     if schema and "fields" in schema:
-        return schema, ms
+        return _append_absence_checklist(schema, pair_id), ms
 
     # Fallback: minimal schema so OBSERVER can still run
-    return {
+    fallback = {
         "fields": [
             {"name": "symmetry", "question": "Is the lesion symmetric in shape and color?", "options": ["symmetric", "asymmetric in one axis", "asymmetric in two axes", "uncertain/not visible"]},
             {"name": "border", "question": "How is the lesion border?", "options": ["regular and smooth", "irregular or notched", "uncertain/not visible"]},
@@ -184,7 +237,8 @@ async def run_schema_generator(task: dict, matched_rules: list) -> tuple[dict, i
             {"name": "pigment_network", "question": "Is a pigment network visible?", "options": ["typical/regular", "atypical/irregular", "absent", "uncertain/not visible"]},
             {"name": "special_structures", "question": "Are any special structures visible?", "options": ["milia-like cysts", "comedo-like openings", "arborizing vessels", "blue-white veil", "regression structures", "none visible", "uncertain/not visible"]},
         ]
-    }, ms
+    }
+    return _append_absence_checklist(fallback, pair_id), ms
 
 
 # ---------------------------------------------------------------------------
