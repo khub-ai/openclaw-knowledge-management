@@ -1194,10 +1194,13 @@ async def validate_candidate_rule(
     """Test a candidate rule against a pool of labeled images.
 
     Returns a dict with TP, FP, TN, FN counts, precision, recall,
-    whether the rule fires correctly on the trigger image, and an accept flag.
+    whether the rule fires correctly on the trigger image, an accept flag,
+    and the per-image case lists for contrastive analysis.
     """
     tp = fp = tn = fn = 0
     fires_on_trigger = False
+    tp_cases: list[dict] = []   # {"image_path", "ground_truth", "observations"}
+    fp_cases: list[dict] = []
 
     # Check the trigger image first
     trigger_result, _ = await run_rule_validator_on_image(
@@ -1206,17 +1209,21 @@ async def validate_candidate_rule(
     fires_on_trigger = trigger_result["precondition_met"] and trigger_result["correct"]
 
     # Check validation pool
+    favors = candidate_rule.get("favors", "")
     for img_path, gt in validation_images:
         res, _ = await run_rule_validator_on_image(img_path, gt, candidate_rule, model=model)
-        favors = candidate_rule.get("favors", "")
+        case = {"image_path": img_path, "ground_truth": gt,
+                "observations": res.get("observations", "")}
         if res["precondition_met"]:
             if gt == favors:
                 tp += 1
+                tp_cases.append(case)
             else:
-                fp += 1  # rule fires but wrong class → false positive
+                fp += 1
+                fp_cases.append(case)
         else:
             if gt == favors:
-                fn += 1  # rule didn't fire on a case it should have
+                fn += 1
             else:
                 tn += 1
 
@@ -1226,7 +1233,15 @@ async def validate_candidate_rule(
     recall = tp / total_positive if total_positive > 0 else 0.0
 
     # Accept if: fires on the trigger AND precision is acceptable AND not too many FP
+    # fp <= 1 is the binding gate in practice — a rule with 6 TP / 2 FP fails here
+    # even if precision == 0.75.
     accepted = fires_on_trigger and precision >= 0.75 and fp <= 1
+    rejection_reason = (
+        "did not fire on trigger"   if not fires_on_trigger else
+        f"fp={fp} > 1"              if fp > 1 else
+        f"precision={precision:.2f} < 0.75" if precision < 0.75 else
+        None
+    )
 
     return {
         "fires_on_trigger": fires_on_trigger,
@@ -1234,4 +1249,220 @@ async def validate_candidate_rule(
         "precision": round(precision, 3),
         "recall": round(recall, 3),
         "accepted": accepted,
+        "rejection_reason": rejection_reason,
+        "tp_cases": tp_cases,
+        "fp_cases": fp_cases,
     }
+
+
+# ---------------------------------------------------------------------------
+# Contrastive feature analysis and rule revision
+# ---------------------------------------------------------------------------
+
+_CONTRASTIVE_ANALYSIS_SYSTEM = """\
+You are a senior dermoscopy expert and knowledge engineer.
+
+You will be shown a candidate rule that fires correctly on some images (TRUE POSITIVES)
+but incorrectly on others (FALSE POSITIVES). Your task is to identify the single most
+discriminating visual feature that distinguishes the TP images from the FP images —
+i.e., a feature that is consistently present in TPs but absent in FPs, or vice versa.
+
+This feature will be used to tighten the rule's pre-conditions.
+
+Output ONLY a JSON object:
+{
+  "discriminating_feature": "snake_case_feature_name",
+  "description": "Plain-language description of the feature.",
+  "present_in": "tp" | "fp",
+  "confidence": "high" | "medium" | "low",
+  "rationale": "Why this feature distinguishes TPs from FPs."
+}
+
+If you cannot identify a reliable discriminating feature, output:
+{
+  "discriminating_feature": null,
+  "description": "Cannot identify a reliable discriminating feature.",
+  "present_in": null,
+  "confidence": "low",
+  "rationale": "Explanation of why the distinction cannot be reliably made."
+}
+"""
+
+
+async def run_contrastive_feature_analysis(
+    tp_cases: list[dict],
+    fp_cases: list[dict],
+    candidate_rule: dict,
+    pair_info: dict,
+    model: str = "",
+) -> tuple[dict, int]:
+    """Identify the visual feature that distinguishes TP from FP cases.
+
+    Uses the validator's per-image observations (text) rather than re-running
+    OBSERVER on each image, keeping cost low.
+
+    Args:
+        tp_cases:  list of {"image_path", "ground_truth", "observations"}
+        fp_cases:  list of {"image_path", "ground_truth", "observations"}
+        candidate_rule: the rule being analyzed
+        pair_info: {"class_a", "class_b", "pair_id"}
+        model:     VLM model to use
+
+    Returns:
+        (contrastive_result_dict, duration_ms)
+    """
+    rule_text     = candidate_rule.get("rule", "")
+    preconditions = candidate_rule.get("preconditions", [])
+    favors        = candidate_rule.get("favors", "")
+    class_a       = pair_info.get("class_a", "")
+    class_b       = pair_info.get("class_b", "")
+
+    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
+
+    def _format_cases(cases: list[dict], label: str) -> str:
+        lines = []
+        for i, c in enumerate(cases, 1):
+            obs = c.get("observations", "(no observations recorded)")
+            lines.append(f"  [{label} {i}] Ground truth: {c['ground_truth']}\n"
+                         f"    Validator observations: {obs}")
+        return "\n".join(lines) if lines else "  (none)"
+
+    tp_block = _format_cases(tp_cases, "TP")
+    fp_block = _format_cases(fp_cases, "FP")
+
+    user_msg = (
+        f"Pair: {class_a} vs {class_b}\n"
+        f"Rule favors: {favors}\n\n"
+        f"Rule: {rule_text}\n\n"
+        f"Pre-conditions:\n{precond_text}\n\n"
+        f"TRUE POSITIVE cases (rule fired correctly):\n{tp_block}\n\n"
+        f"FALSE POSITIVE cases (rule fired on wrong class):\n{fp_block}\n\n"
+        "What single visual feature most reliably distinguishes the TP cases from the FP cases? "
+        "Focus on what the validator *observed* in each case."
+    )
+
+    text, ms = await call_agent(
+        "EXPERT_RULE_AUTHOR",
+        user_msg,
+        system_prompt=_CONTRASTIVE_ANALYSIS_SYSTEM,
+        model=model or ACTIVE_MODEL,
+        max_tokens=1024,
+    )
+
+    result = _parse_json_block(text)
+    if result and "discriminating_feature" in result:
+        result["raw_response"] = text
+        return result, ms
+
+    return {
+        "discriminating_feature": None,
+        "description": text,
+        "present_in": None,
+        "confidence": "low",
+        "rationale": "Parse failed.",
+        "raw_response": text,
+    }, ms
+
+
+_RULE_REVISER_SYSTEM = """\
+You are a senior dermoscopy expert and knowledge engineer.
+
+You have authored a rule that passes validation on true positive cases but fires
+incorrectly on false positive cases. A contrastive analysis has identified a
+discriminating visual feature that is present in one group but not the other.
+
+Your task is to add ONE new pre-condition to the rule that incorporates this
+discriminating feature, so the rule no longer fires on false positives.
+
+Rules:
+- Add exactly one pre-condition. Do not remove or rewrite existing ones.
+- The new pre-condition must be observable in a dermoscopic image.
+- It must be phrased as a positive assertion ("Feature X is present") or a
+  negative assertion ("Feature Y is absent"), not as a comparison.
+- It must be specific enough that the RULE_VALIDATOR can answer yes/no reliably.
+
+Output ONLY a JSON object with the full updated rule (same schema as before,
+with the new pre-condition appended to the preconditions list):
+{
+  "rule": "<updated natural-language rule>",
+  "feature": "<snake_case_feature_name>",
+  "favors": "<exact class name>",
+  "confidence": "high" | "medium" | "low",
+  "preconditions": ["existing 1", "existing 2", ..., "NEW pre-condition"],
+  "rationale": "<updated rationale explaining the revision>",
+  "revision_note": "One sentence: what was added and why."
+}
+"""
+
+
+async def run_rule_reviser(
+    candidate_rule: dict,
+    contrastive_result: dict,
+    tp_cases: list[dict],
+    fp_cases: list[dict],
+    pair_info: dict,
+    model: str = "",
+) -> tuple[dict, int]:
+    """Propose a revised rule with one additional pre-condition.
+
+    Args:
+        candidate_rule:     the rejected rule
+        contrastive_result: output of run_contrastive_feature_analysis
+        tp_cases:           TP cases from validation
+        fp_cases:           FP cases from validation
+        pair_info:          {"class_a", "class_b", "pair_id"}
+        model:              VLM model to use
+
+    Returns:
+        (revised_rule_dict, duration_ms)
+    """
+    rule_text          = candidate_rule.get("rule", "")
+    preconditions      = candidate_rule.get("preconditions", [])
+    favors             = candidate_rule.get("favors", "")
+    class_a            = pair_info.get("class_a", "")
+    class_b            = pair_info.get("class_b", "")
+    disc_feature       = contrastive_result.get("description", "")
+    present_in         = contrastive_result.get("present_in", "")
+    rationale          = contrastive_result.get("rationale", "")
+
+    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
+
+    def _fmt(cases, label):
+        lines = []
+        for i, c in enumerate(cases, 1):
+            obs = c.get("observations", "")
+            lines.append(f"  [{label} {i}] {c['ground_truth']}: {obs}")
+        return "\n".join(lines) if lines else "  (none)"
+
+    user_msg = (
+        f"Pair: {class_a} vs {class_b}\n"
+        f"Rule favors: {favors}\n\n"
+        f"Current rule: {rule_text}\n\n"
+        f"Current pre-conditions:\n{precond_text}\n\n"
+        f"Discriminating feature identified by contrastive analysis:\n"
+        f"  Feature: {disc_feature}\n"
+        f"  Present in: {present_in} cases\n"
+        f"  Rationale: {rationale}\n\n"
+        f"TRUE POSITIVE observations:\n{_fmt(tp_cases, 'TP')}\n\n"
+        f"FALSE POSITIVE observations:\n{_fmt(fp_cases, 'FP')}\n\n"
+        "Please add one pre-condition to the rule that incorporates the "
+        "discriminating feature and will prevent the rule from firing on the "
+        "false positive cases."
+    )
+
+    text, ms = await call_agent(
+        "EXPERT_RULE_AUTHOR",
+        user_msg,
+        system_prompt=_RULE_REVISER_SYSTEM,
+        model=model or ACTIVE_MODEL,
+        max_tokens=2048,
+    )
+
+    result = _parse_json_block(text)
+    if result and "rule" in result and "preconditions" in result:
+        result["raw_response"] = text
+        return result, ms
+
+    # Fall back: return original rule unchanged
+    candidate_rule["raw_response"] = text
+    return candidate_rule, ms

@@ -48,8 +48,10 @@ from rich.table import Table
 console = Console()
 
 # ---------------------------------------------------------------------------
-# Knowledge base paths
+# Constants
 # ---------------------------------------------------------------------------
+
+DATASET_TAG = "derm-ham10000"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -263,50 +265,140 @@ async def run_patch_loop(
                       f"({len(val_imgs_a)} {pair_info['class_a']}, "
                       f"{len(val_imgs_b)} {pair_info['class_b']})...")
 
-        # --- Step 3: Validate rule against training pool ---
-        validation = await agents.validate_candidate_rule(
-            candidate_rule=candidate_rule,
-            validation_images=validation_images,
-            trigger_image_path=task["test_image_path"],
-            trigger_correct_label=correct,
-            model=expert_model,
-        )
+        # --- Step 3: Validate + revise loop (max 2 revision attempts) ---
+        MAX_REVISIONS = 2
+        active_rule = candidate_rule
+        revision_history: list[dict] = []
 
-        fires_on_trigger = validation["fires_on_trigger"]
-        precision        = validation["precision"]
-        accepted         = validation["accepted"] and precision >= min_precision
+        for attempt in range(MAX_REVISIONS + 1):
+            validation = await agents.validate_candidate_rule(
+                candidate_rule=active_rule,
+                validation_images=validation_images,
+                trigger_image_path=task["test_image_path"],
+                trigger_correct_label=correct,
+                model=expert_model,
+            )
 
-        console.print(
-            f"  Validation: TP={validation['tp']} FP={validation['fp']} "
-            f"TN={validation['tn']} FN={validation['fn']} | "
-            f"precision={precision:.2f} recall={validation['recall']:.2f} | "
-            f"fires_on_trigger={fires_on_trigger}"
-        )
-        status = "[green]ACCEPTED[/green]" if accepted else "[red]REJECTED[/red]"
-        if not fires_on_trigger:
-            console.print(f"  {status} — rule did not fire on the trigger image")
-        elif not accepted:
-            console.print(f"  {status} — precision {precision:.2f} < {min_precision:.2f}")
-        else:
-            console.print(f"  {status}")
+            fires_on_trigger = validation["fires_on_trigger"]
+            precision        = validation["precision"]
+            accepted         = validation["accepted"] and precision >= min_precision
+            fp               = validation["fp"]
+
+            attempt_label = f"attempt {attempt+1}" if attempt > 0 else "initial"
+            console.print(
+                f"  Validation ({attempt_label}): "
+                f"TP={validation['tp']} FP={fp} "
+                f"TN={validation['tn']} FN={validation['fn']} | "
+                f"precision={precision:.2f} recall={validation['recall']:.2f} | "
+                f"fires_on_trigger={fires_on_trigger}"
+            )
+
+            revision_history.append({
+                "attempt": attempt,
+                "rule": {k: v for k, v in active_rule.items() if k != "raw_response"},
+                "validation": {k: v for k, v in validation.items()
+                               if k not in ("tp_cases", "fp_cases")},
+                "accepted": accepted,
+            })
+
+            if accepted:
+                break
+
+            # Rejection — decide whether to attempt revision
+            if not fires_on_trigger:
+                console.print("  [red]REJECTED[/red] — rule did not fire on trigger image")
+                break
+
+            if attempt == MAX_REVISIONS:
+                # Exhausted revisions — surface to expert
+                _surface_to_expert(
+                    active_rule=active_rule,
+                    validation=validation,
+                    pair_info=pair_info,
+                    task_id=task_id,
+                )
+                break
+
+            if fp == 0:
+                # Precision failure without FP — unusual; give up
+                console.print(f"  [red]REJECTED[/red] — precision {precision:.2f} < {min_precision:.2f} (no FP cases to analyze)")
+                break
+
+            # --- Contrastive revision ---
+            tp_cases = validation.get("tp_cases", [])
+            fp_cases = validation.get("fp_cases", [])
+
+            console.print(
+                f"  [yellow]REJECTED[/yellow] — FP={fp}, precision={precision:.2f}. "
+                f"Running contrastive analysis..."
+            )
+
+            contrastive, _ = await agents.run_contrastive_feature_analysis(
+                tp_cases=tp_cases,
+                fp_cases=fp_cases,
+                candidate_rule=active_rule,
+                pair_info=pair_info,
+                model=expert_model,
+            )
+
+            disc_feature = contrastive.get("discriminating_feature")
+            disc_conf    = contrastive.get("confidence", "low")
+
+            if not disc_feature:
+                console.print(
+                    "  [red]REJECTED[/red] — contrastive analysis found no discriminating feature; "
+                    "cannot revise automatically."
+                )
+                _surface_to_expert(
+                    active_rule=active_rule,
+                    validation=validation,
+                    pair_info=pair_info,
+                    task_id=task_id,
+                )
+                break
+
+            console.print(
+                f"  Discriminating feature: [italic]{contrastive['description'][:100]}[/italic] "
+                f"(present in {contrastive.get('present_in','?')} cases, confidence={disc_conf})"
+            )
+
+            # Ask expert to add one targeted pre-condition
+            console.print(f"  Calling expert VLM to revise rule (attempt {attempt+1}/{MAX_REVISIONS})...")
+            revised_rule, _ = await agents.run_rule_reviser(
+                candidate_rule=active_rule,
+                contrastive_result=contrastive,
+                tp_cases=tp_cases,
+                fp_cases=fp_cases,
+                pair_info=pair_info,
+                model=expert_model,
+            )
+
+            note = revised_rule.get("revision_note", "")
+            new_pc_count = len(revised_rule.get("preconditions", [])) - len(active_rule.get("preconditions", []))
+            console.print(f"  Revision: {note[:120]}")
+            console.print(f"  Pre-conditions: {len(active_rule.get('preconditions', []))} → "
+                          f"{len(revised_rule.get('preconditions', []))} (+{new_pc_count})")
+
+            active_rule = revised_rule
 
         record = {
-            "task_id":       task_id,
-            "pair_id":       pair_id,
+            "task_id":          task_id,
+            "pair_id":          pair_id,
             "wrong_prediction": wrong,
-            "correct_label": correct,
-            "candidate_rule": {k: v for k, v in candidate_rule.items()
-                               if k != "raw_response"},
-            "validation":    validation,
-            "accepted":      accepted,
-            "registered":    False,
+            "correct_label":    correct,
+            "candidate_rule":   {k: v for k, v in active_rule.items() if k != "raw_response"},
+            "validation":       {k: v for k, v in validation.items()
+                                 if k not in ("tp_cases", "fp_cases")},
+            "revision_history": revision_history,
+            "accepted":         accepted,
+            "registered":       False,
         }
 
         # --- Step 4: Register in isolated patch rules file ---
         if accepted and not dry_run:
             ok = _register_rule(
                 rule_engine=rule_engine,
-                candidate_rule=candidate_rule,
+                candidate_rule=active_rule,
                 pair_id=pair_id,
                 validation=validation,
                 triggered_by=task_id,
@@ -315,9 +407,15 @@ async def run_patch_loop(
             )
             record["registered"] = ok
             if ok:
-                console.print("  Rule registered in patch rules file.")
+                console.print("  [green]ACCEPTED[/green] — rule registered in patch rules file.")
             else:
                 console.print("  [yellow]Registration failed (observability filter?)[/yellow]")
+        elif not accepted:
+            n_attempts = len(revision_history)
+            console.print(
+                f"  [red]REJECTED[/red] after {n_attempts} attempt(s) — "
+                f"precision={validation['precision']:.2f} FP={validation['fp']}"
+            )
 
         patch_records.append(record)
 
@@ -325,42 +423,74 @@ async def run_patch_loop(
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# CLI helpers
 # ---------------------------------------------------------------------------
+
+def _surface_to_expert(active_rule: dict, validation: dict,
+                        pair_info: dict, task_id: str) -> None:
+    """Print a structured question for the human expert (or superior VLM) to review.
+
+    This is the dialogic moment: the system cannot automatically resolve the
+    conflict and surfaces it with enough context for the expert to make a decision.
+    """
+    fp_cases   = validation.get("fp_cases", [])
+    tp_cases   = validation.get("tp_cases", [])
+    favors     = active_rule.get("favors", "?")
+    class_a    = pair_info.get("class_a", "?")
+    class_b    = pair_info.get("class_b", "?")
+    pair_id    = pair_info.get("pair_id", "?")
+
+    console.print("\n  [bold yellow]⚑ EXPERT REVIEW REQUIRED[/bold yellow]")
+    console.print(f"  Task:   {task_id}")
+    console.print(f"  Rule favors: {favors} (authored for {pair_id})")
+    console.print(f"  Problem: rule also fired on {len(fp_cases)} "
+                  f"training image(s) of the wrong class:")
+    for c in fp_cases:
+        console.print(f"    • {c['ground_truth']}: {c.get('observations','')[:120]}")
+    if tp_cases:
+        console.print(f"  Correct firings ({len(tp_cases)} TP):")
+        for c in tp_cases[:3]:
+            console.print(f"    • {c['ground_truth']}: {c.get('observations','')[:80]}")
+    console.print(
+        f"\n  [bold]Question for expert[/bold]: Does the rule pattern genuinely "
+        f"distinguish {favors} from {class_a if favors == class_b else class_b}?\n"
+        f"  If yes: the pre-conditions need to be tightened to exclude these cases.\n"
+        f"  If no: this rule may generalize beyond {pair_id} and should be reviewed "
+        f"before cross-pair deployment.\n"
+    )
+
 
 def _detect_cross_pair_firing(rerun_tasks: list[dict],
                                patch_records: list[dict]) -> list[dict]:
     """Check whether patch rules fired on tasks outside their intended pair.
 
-    A cross-pair firing means a rule authored for pair X matched a task from
-    pair Y.  This is either a quality problem (pre-conditions too broad) or a
-    genuine generalization — both warrant surfacing to the human expert
-    (dialogic learning: the pupil has been enlightened, the master must confirm).
+    Builds a map from rule condition prefix to intended pair_id, then checks
+    each rerun task's fired rule IDs against that map.
 
     Returns a list of cross-pair firing events.
     """
-    # Build map: rule_id → intended pair_id
-    rule_to_pair: dict[str, str] = {}
-    for rec in patch_records:
-        if rec.get("registered"):
-            rule_text = rec["candidate_rule"].get("rule", "")
-            # We don't have the rule_id directly; use pair_id from session record.
-            # Match by pair_id tag embedded in the condition prefix.
-            rule_to_pair[rec["pair_id"]] = rec["pair_id"]  # placeholder
+    # Build map: rule_id → intended pair_id using the condition prefix
+    # registered rules have condition: "[Patch rule — {pair_id}] ..."
+    # We match by the pair_id embedded in the registered record.
+    # Since we don't store rule_ids in patch_records, we flag any rerun task
+    # where rules fired AND the task's pair_id differs from a registered record's pair_id.
+    # This is conservative: if only one pair was patched and rerun covers all pairs,
+    # any cross-pair firing is meaningful.
 
-    # Better: inspect fired rule IDs per task and compare with intended pair.
+    registered_pairs = {rec["pair_id"] for rec in patch_records if rec.get("registered")}
     events = []
+
     for task in rerun_tasks:
         task_pair   = task.get("pair_id", "")
         fired_rules = task.get("rule_ids_fired", [])
-        for rid in fired_rules:
-            # Find the patch record that owns this rule.
-            for rec in patch_records:
-                intended = rec.get("pair_id", "")
-                if intended and intended != task_pair and rec.get("registered"):
+        if not fired_rules:
+            continue
+        for intended_pair in registered_pairs:
+            if intended_pair != task_pair:
+                for rid in fired_rules:
                     events.append({
                         "rule_id":       rid,
-                        "intended_pair": intended,
+                        "intended_pair": intended_pair,
                         "fired_on_pair": task_pair,
                         "task_id":       task.get("task_id", ""),
                         "correct":       task.get("correct"),
@@ -370,6 +500,18 @@ def _detect_cross_pair_firing(rerun_tasks: list[dict],
                             else "POSSIBLE GENERALIZATION — worth expert review"
                         ),
                     })
+
+    if events:
+        console.print("\n[bold yellow]Cross-pair firing detected:[/bold yellow]")
+        for e in events:
+            icon = "[red]✗[/red]" if e["flag"].startswith("QUALITY") else "[yellow]?[/yellow]"
+            console.print(
+                f"  {icon} Rule {e['rule_id']} (for {e['intended_pair']}) "
+                f"fired on {e['task_id']} ({e['fired_on_pair']}) — "
+                f"correct={e['correct']}"
+            )
+            console.print(f"    → {e['flag']}")
+
     return events
 
 
