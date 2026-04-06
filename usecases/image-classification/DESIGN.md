@@ -358,17 +358,52 @@ Rules are authored for a specific pair (e.g. `melanoma_vs_melanocytic_nevus`). W
 ```
 patch.py --cheap-model o4-mini --expert-model claude-sonnet-4-6 --pair <pair_id>
 
-1. Run cheap VLM on labeled training images → collect failures
-2. For each failure: call EXPERT_RULE_AUTHOR → candidate rule with pre-conditions
-3. Validate against labeled training pool (TP/FP/TN/FN)
-   If accepted (fp ≤ 1, precision ≥ 0.75, fires on trigger): register rule
-   If rejected due to FP > 0:
-     a. run_contrastive_feature_analysis(tp_cases, fp_cases) → discriminating feature
-     b. run_rule_reviser() → revised rule with one added pre-condition
-     c. Re-validate; repeat up to 2 times
-     d. If still failing: _surface_to_expert() — print structured question for human/VLM review
-4. Re-run cheap VLM with registered patch rules → compare accuracy
-5. Detect cross-pair firings → surface to operator
+Step 0.  Run cheap VLM zero-shot → collect failures
+
+For each failure image:
+
+Step 1a. EXPERT_RULE_AUTHOR (VLM + image)
+           → candidate rule with pre-conditions (diagnostic — what was distinctive)
+
+Step 1b. RULE_COMPLETER (text-only)
+           → fill implicit background conditions the expert omitted
+           → returns enriched rule with added_preconditions + completion_rationale
+
+Step 1c. SEMANTIC_RULE_VALIDATOR (text-only, no images)
+           → rate each pre-condition: reliable / unreliable / context_dependent
+           → overall: accept / revise / reject
+           If reject → skip image validation, surface to expert immediately
+
+Step 2.  Sample two independent image pools from training set:
+           authoring pool  (seed=0,  --max-authoring-per-class, default 8)
+             Expert-visible: used to get tp_cases/fp_cases for contrastive analysis
+           held-out pool   (seed=42, --max-val-per-class, default 8)
+             Expert-blind:  binding acceptance gate (expert never sees these images)
+
+Step 3a. Validate completed rule against authoring pool
+           → tp_cases, fp_cases with per-image observations for expert context
+
+Step 3b. Validate completed rule against held-out pool (binding gate)
+           Accept if: fires_on_trigger AND fp ≤ 1 AND precision ≥ 0.75
+           If accepted → register, skip to Step 4
+           If rejected, fires_on_trigger=False → reject (cannot tighten further)
+           If rejected, fp=0, low precision → reject (no FP observations to analyze)
+           If rejected, fp > 0 → spectrum search:
+             a. run_contrastive_feature_analysis(auth_tp_cases, auth_fp_cases)
+                  → single most discriminating visual feature (uses authoring observations)
+             b. run_rule_spectrum_generator()
+                  → 4 specificity levels in one call, ordered most-general → most-specific:
+                      Level 1: single essential pre-condition only
+                      Level 2: original pre-conditions (moderate)
+                      Level 3: original + contrastive tightening
+                      Level 4: most specific (all conditions)
+             c. validate_candidate_rules_batch(all 4 levels, held_out_images) — parallel
+             d. Pick the most general level that passes the held-out gate
+             e. If none pass → _surface_to_expert() with best-precision level
+
+Step 4.  Register accepted rule in patch_rules_clean.json
+Step 5.  Re-run cheap VLM with patch rules → compare accuracy
+Step 6.  Detect cross-pair firings → surface to operator
 ```
 
 Rules are stored in `patch_rules_clean.json` — a clean, session-local file that starts empty and is never written to by other pipeline components. This ensures no contamination between the batch-imported KB rules and the expert-authored patch rules.
@@ -378,6 +413,89 @@ Rules are stored in `patch_rules_clean.json` — a clean, session-local file tha
 Patch rules encode pre-conditions in the condition field as a semicolon-separated list, prefixed with `[Patch rule — <pair_id>]`. The MEDIATOR formats these as a numbered HARD GATE checklist: all conditions must be confirmed by the feature record before the rule is applied. If any pre-condition is absent, the rule is skipped entirely.
 
 This prevents the failure mode where a MEDIATOR reads a pre-condition like "centrifugal pigment gradient" as positive evidence for the favored class even when that feature was not observed.
+
+#### Rule completion: filling implicit background conditions
+
+Experts write **diagnostic rules** — they describe what was distinctive about the
+specific failure case. They naturally omit background conditions they consider
+obvious: standard markers that any experienced dermoscopist would assume are
+present for the favored class, or absent for the other class.
+
+A rule encoded without those background conditions creates loopholes: it fires on
+any image that shares the distinctive feature, even images that lack the typical
+profile of the favored class.
+
+`run_rule_completer()` (text-only) is called immediately after authoring. It asks
+the expert model:
+
+1. What positive background markers are expected for the favored class but absent
+   from the pre-conditions?
+2. What features of the other class should be explicitly excluded but are not?
+
+Added conditions are flagged with `added_preconditions` in the rule dict and
+`"+"` in the console output. If the rule is already complete, the completer
+returns it unchanged with an explanation.
+
+This step runs **before** semantic validation — the semantic check should evaluate
+the fully explicit rule, not the expert's partial one.
+
+#### Semantic validation: catching bad logic before image testing
+
+`run_semantic_rule_validator()` (text-only, no images) rates each pre-condition:
+
+| Rating | Meaning |
+|---|---|
+| `reliable` | Consistently separates favored class from other; rarely present in the other class |
+| `unreliable` | Vague, directionally wrong, or common to both classes |
+| `context_dependent` | Only discriminating under specific co-occurring conditions |
+
+Overall verdict: `accept` (proceed), `revise` (proceed with flagged warnings),
+`reject` (skip image validation, escalate to expert immediately).
+
+This is a cheap text-only filter. The key benefit: rules with clinically wrong
+logic never spend image-validation budget, and the error surfaces in a structured,
+reviewable form rather than as a silent FP in the precision gate.
+
+#### Split-pool validation: preventing overfitting to a small sample
+
+With only 8 images per class, a rule can pass the precision gate by coincidence —
+the features the expert chose happen to appear in those 8 images without generalizing.
+
+Two independent image pools are sampled from the training set:
+
+| Pool | Seed | Expert sees it? | Used for |
+|---|---|---|---|
+| **Authoring pool** | 0 | Yes | Initial validator run → tp_cases/fp_cases for contrastive analysis and spectrum generation |
+| **Held-out pool** | 42 | No | Binding acceptance gate for initial rule and all spectrum levels |
+
+The expert's reasoning (contrastive analysis, spectrum generation) is grounded in
+authoring-pool observations. The final accept/reject decision uses only held-out
+images the expert never saw. A rule that memorizes the authoring pool's patterns
+will fail the held-out gate.
+
+Both pool sizes are configurable (`--max-authoring-per-class`, `--max-val-per-class`,
+both default 8). Increasing both reduces coincidental passes at the cost of more
+API calls.
+
+#### Specificity spectrum: avoiding over-tightening
+
+The contrastive revision loop (earlier design) added one pre-condition per iteration
+until FP=0. This caused **over-tightening**: the added condition eliminated the FP
+cases but also eliminated the trigger image itself (`fires_on_trigger → False`).
+
+The **specificity spectrum** generates four rule variants in one call rather than
+iterating blindly:
+
+| Level | Label | Strategy |
+|---|---|---|
+| 1 | most_general | Single essential pre-condition only |
+| 2 | moderate | Original pre-conditions as authored |
+| 3 | original | Original + contrastive discriminating feature |
+| 4 | most_specific | Full tightening (all conditions) |
+
+All four are validated in parallel against the held-out pool. The most general
+passing level is selected. This avoids over-tightening because the search starts
+from the loosest formulation and only tightens as needed.
 
 #### Dialogic loop results (o4-mini, 2026-04-06)
 
