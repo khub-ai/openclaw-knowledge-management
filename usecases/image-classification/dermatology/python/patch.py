@@ -64,7 +64,7 @@ def _load_api_keys() -> None:
             if "=" in line:
                 k, v = line.split("=", 1)
                 k = k.strip(); v = v.strip()
-                if k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY") and not os.environ.get(k):
+                if k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY") and not os.environ.get(k):
                     os.environ[k] = v
 
 

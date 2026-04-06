@@ -105,6 +105,56 @@ def _get_openai_client():
     return _openai_client
 
 
+# ---------------------------------------------------------------------------
+# OpenRouter backend (aggregator — OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+
+# OpenRouter pricing varies by upstream provider; these are approximate.
+# See https://openrouter.ai/models for current prices.
+_OPENROUTER_PRICE_INPUT_PER_TOKEN = {
+    "meta-llama/llama-4-maverick":           0.27 / 1_000_000,
+    "meta-llama/llama-4-scout":              0.15 / 1_000_000,
+    "qwen/qwen2.5-vl-72b-instruct":         0.36 / 1_000_000,
+    "meta-llama/llama-3.2-11b-vision-instruct": 0.055 / 1_000_000,
+    "google/gemma-3-27b-it":                 0.10 / 1_000_000,
+}
+_OPENROUTER_PRICE_OUTPUT_PER_TOKEN = {
+    "meta-llama/llama-4-maverick":           0.85 / 1_000_000,
+    "meta-llama/llama-4-scout":              0.40 / 1_000_000,
+    "qwen/qwen2.5-vl-72b-instruct":         0.36 / 1_000_000,
+    "meta-llama/llama-3.2-11b-vision-instruct": 0.055 / 1_000_000,
+    "google/gemma-3-27b-it":                 0.22 / 1_000_000,
+}
+
+_openrouter_client = None
+
+
+def _get_openrouter_client():
+    global _openrouter_client
+    if _openrouter_client is None:
+        import openai as _openai
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY environment variable not set")
+        _openrouter_client = _openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+    return _openrouter_client
+
+
+def _openrouter_pricing(model: str) -> tuple[float, float]:
+    """Return (input_price, output_price) per token for an OpenRouter model."""
+    price_in  = _OPENROUTER_PRICE_INPUT_PER_TOKEN.get(model, 0.27 / 1_000_000)
+    price_out = _OPENROUTER_PRICE_OUTPUT_PER_TOKEN.get(model, 0.85 / 1_000_000)
+    return price_in, price_out
+
+
+def _is_openrouter_model(model: str) -> bool:
+    """Models routed through OpenRouter use slash-namespaced IDs."""
+    return "/" in model and not model.startswith("claude")
+
+
 def _anthropic_blocks_to_openai(blocks: list) -> list:
     """Convert Anthropic content blocks to OpenAI message content format."""
     result = []
@@ -210,6 +260,77 @@ def _is_openai_model(model: str) -> bool:
     return model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3") or model.startswith("o4")
 
 
+async def _call_agent_openrouter(
+    agent_id: str,
+    user_message: Union[str, list],
+    system_prompt: str = "",
+    model: str = "meta-llama/llama-4-maverick",
+    max_tokens: int = 4096,
+    max_retries: int = 5,
+) -> tuple[str, int]:
+    """OpenRouter backend — uses OpenAI-compatible API with a different base_url."""
+    import openai as _openai
+
+    client = _get_openrouter_client()
+
+    if isinstance(user_message, list):
+        content = _anthropic_blocks_to_openai(user_message)
+    else:
+        content = user_message
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": content})
+
+    if SHOW_PROMPTS:
+        print(f"\n=== {agent_id} ({model}) [openrouter] ===")
+        print(f"SYSTEM: {system_prompt[:400]}")
+        if isinstance(content, str):
+            print(f"USER: {content[:800]}")
+        else:
+            parts = [b.get("text", "[image]") if b.get("type") == "text" else "[image]" for b in content]
+            print(f"USER: {' '.join(parts)[:800]}")
+
+    t0 = time.time()
+    for attempt in range(max_retries):
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=messages,
+            )
+            duration_ms = int((time.time() - t0) * 1000)
+            text = response.choices[0].message.content or ""
+            if response.usage:
+                u = response.usage
+                tracker = get_cost_tracker()
+                tracker.input_tokens  += u.prompt_tokens
+                tracker.output_tokens += u.completion_tokens
+                tracker.api_calls     += 1
+                price_in, price_out = _openrouter_pricing(model)
+                tracker._openai_cost = getattr(tracker, "_openai_cost", 0.0)
+                tracker._openai_cost += (
+                    u.prompt_tokens     * price_in +
+                    u.completion_tokens * price_out
+                )
+            return text, duration_ms
+        except _openai.RateLimitError:
+            if attempt < max_retries - 1:
+                wait = 30 * (attempt + 1)
+                print(f"  [rate-limit] {agent_id} retry {attempt+1}/{max_retries-1} in {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                raise
+        except _openai.APIStatusError as e:
+            if e.status_code in (429, 503) and attempt < max_retries - 1:
+                wait = 2 ** attempt
+                print(f"  [overloaded] {agent_id} retry {attempt+1}/{max_retries-1} in {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                raise
+
+
 async def call_agent(
     agent_id: str,
     user_message: Union[str, list],
@@ -218,8 +339,13 @@ async def call_agent(
     max_tokens: int = 4096,
     max_retries: int = 5,
 ) -> tuple[str, int]:
-    """Route call to Anthropic or OpenAI backend based on ACTIVE_MODEL."""
+    """Route call to Anthropic, OpenAI, or OpenRouter backend based on model string."""
     active = model or ACTIVE_MODEL
+    if _is_openrouter_model(active):
+        return await _call_agent_openrouter(
+            agent_id, user_message, system_prompt,
+            model=active, max_tokens=max_tokens, max_retries=max_retries,
+        )
     if _is_openai_model(active):
         return await _call_agent_openai(
             agent_id, user_message, system_prompt,

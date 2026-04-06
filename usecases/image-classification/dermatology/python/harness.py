@@ -305,11 +305,16 @@ async def main() -> None:
             if "=" in line:
                 k, v = line.split("=", 1)
                 k = k.strip(); v = v.strip()
-                if k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY") and not os.environ.get(k):
+                if k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY") and not os.environ.get(k):
                     os.environ[k] = v
 
-    is_openai = agents._is_openai_model(args.model)
-    if is_openai:
+    is_openai      = agents._is_openai_model(args.model)
+    is_openrouter  = agents._is_openrouter_model(args.model)
+    if is_openrouter:
+        if not os.environ.get("OPENROUTER_API_KEY"):
+            console.print("[red]OPENROUTER_API_KEY not set[/red]")
+            sys.exit(1)
+    elif is_openai:
         if not os.environ.get("OPENAI_API_KEY"):
             console.print("[red]OPENAI_API_KEY not set[/red]")
             sys.exit(1)
