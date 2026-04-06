@@ -206,6 +206,7 @@ async def run_patch_loop(
     expert_model: str,
     rule_engine,
     max_val_per_class: int,
+    max_authoring_per_class: int,
     min_precision: float,
     dry_run: bool,
 ) -> list[dict]:
@@ -252,23 +253,103 @@ async def run_patch_loop(
         for pc in candidate_rule.get("preconditions", []):
             console.print(f"    Pre-condition: {pc}")
 
-        # --- Step 2: Collect validation images from training pool ---
+        # --- Step 1b: Semantic rule validation (text-only, no images) ---
+        console.print(f"  Running semantic validation ({expert_model})...")
+        semantic_result, _ = await agents.run_semantic_rule_validator(
+            candidate_rule=candidate_rule,
+            pair_info=pair_info,
+            model=expert_model,
+        )
+        semantic_overall = semantic_result.get("overall", "accept")
+        console.print(f"  Semantic: [bold]{semantic_overall.upper()}[/bold] — "
+                      f"{semantic_result.get('rationale', '')[:120]}")
+        for pr in semantic_result.get("precondition_ratings", []):
+            rating = pr.get("rating", "?")
+            color  = "green" if rating == "reliable" else ("red" if rating == "unreliable" else "yellow")
+            console.print(f"    [{color}]{rating}[/{color}]: {pr.get('precondition', '')[:80]}")
+
+        if semantic_overall == "reject":
+            console.print("  [red]SKIPPING image validation — semantic validator rejected this rule.[/red]")
+            _surface_to_expert(candidate_rule,
+                               {"fires_on_trigger": False, "tp": 0, "fp": 0,
+                                "tn": 0, "fn": 0, "precision": 0.0, "recall": 0.0,
+                                "accepted": False,
+                                "rejection_reason": "semantic_validation_rejected",
+                                "tp_cases": [], "fp_cases": []},
+                               pair_info, task_id)
+            patch_records.append({
+                "task_id":          task_id,
+                "pair_id":          pair_id,
+                "wrong_prediction": wrong,
+                "correct_label":    correct,
+                "candidate_rule":   {k: v for k, v in candidate_rule.items()
+                                     if k != "raw_response"},
+                "semantic_validation": semantic_result,
+                "validation":       {"fires_on_trigger": False, "tp": 0, "fp": 0,
+                                     "tn": 0, "fn": 0, "precision": 0.0, "recall": 0.0,
+                                     "accepted": False,
+                                     "rejection_reason": "semantic_validation_rejected"},
+                "spectrum_history": [],
+                "accepted":         False,
+                "registered":       False,
+            })
+            continue
+
+        # --- Step 2: Sample image pools ---
+        #   authoring_images  — expert sees these; used for initial validation to get
+        #                        tp_cases/fp_cases for contrastive analysis (seed=0)
+        #   held_out_images   — expert never sees; used only for the final precision
+        #                        gate on spectrum levels (seed=42)
         dx_a = pair_info.get("dx_a", "")
         dx_b = pair_info.get("dx_b", "")
-        val_imgs_a = [(str(img.file_path), pair_info["class_a"])
-                      for img in ds.sample_images(dx_a, max_val_per_class, split="train")]
-        val_imgs_b = [(str(img.file_path), pair_info["class_b"])
-                      for img in ds.sample_images(dx_b, max_val_per_class, split="train")]
-        validation_images = val_imgs_a + val_imgs_b
+        auth_imgs_a = [(str(img.file_path), pair_info["class_a"])
+                       for img in ds.sample_images(dx_a, max_authoring_per_class,
+                                                   split="train", seed=0)]
+        auth_imgs_b = [(str(img.file_path), pair_info["class_b"])
+                       for img in ds.sample_images(dx_b, max_authoring_per_class,
+                                                   split="train", seed=0)]
+        authoring_images = auth_imgs_a + auth_imgs_b
 
-        console.print(f"  Validating against {len(validation_images)} training images "
-                      f"({len(val_imgs_a)} {pair_info['class_a']}, "
-                      f"{len(val_imgs_b)} {pair_info['class_b']})...")
+        held_imgs_a = [(str(img.file_path), pair_info["class_a"])
+                       for img in ds.sample_images(dx_a, max_val_per_class,
+                                                   split="train", seed=42)]
+        held_imgs_b = [(str(img.file_path), pair_info["class_b"])
+                       for img in ds.sample_images(dx_b, max_val_per_class,
+                                                   split="train", seed=42)]
+        held_out_images = held_imgs_a + held_imgs_b
 
-        # --- Step 3: Initial validation ---
+        console.print(
+            f"  Authoring pool: {len(authoring_images)} images "
+            f"({len(auth_imgs_a)} {pair_info['class_a']}, {len(auth_imgs_b)} {pair_info['class_b']}); "
+            f"held-out pool: {len(held_out_images)} images"
+        )
+
+        # --- Step 3a: Authoring pool validation (observations only — expert context) ---
+        # The expert (contrastive analysis, spectrum generator) may reason about these.
+        authoring_val = await agents.validate_candidate_rule(
+            candidate_rule=candidate_rule,
+            validation_images=authoring_images,
+            trigger_image_path=task["test_image_path"],
+            trigger_correct_label=correct,
+            model=expert_model,
+        )
+        # Observations from the authoring pool — used for contrastive analysis/spectrum.
+        # These are the images the expert is allowed to see.
+        auth_tp_cases = authoring_val.get("tp_cases", [])
+        auth_fp_cases = authoring_val.get("fp_cases", [])
+        console.print(
+            f"  Authoring pool: "
+            f"TP={authoring_val['tp']} FP={authoring_val['fp']} "
+            f"precision={authoring_val['precision']:.2f} "
+            f"(expert context — not the acceptance gate)"
+        )
+
+        # --- Step 3b: Held-out pool validation (binding acceptance gate) ---
+        # Expert never sees these images; this is the genuine held-out precision gate.
+        console.print("  Running held-out gate...")
         validation = await agents.validate_candidate_rule(
             candidate_rule=candidate_rule,
-            validation_images=validation_images,
+            validation_images=held_out_images,
             trigger_image_path=task["test_image_path"],
             trigger_correct_label=correct,
             model=expert_model,
@@ -280,7 +361,7 @@ async def run_patch_loop(
         accepted         = validation["accepted"] and precision >= min_precision
 
         console.print(
-            f"  Validation (initial): "
+            f"  Held-out gate: "
             f"TP={validation['tp']} FP={fp} "
             f"TN={validation['tn']} FN={validation['fn']} | "
             f"precision={precision:.2f} recall={validation['recall']:.2f} | "
@@ -298,9 +379,11 @@ async def run_patch_loop(
         elif fp == 0:
             console.print(f"  [red]REJECTED[/red] — precision {precision:.2f} < {min_precision:.2f} (no FP to analyze)")
         else:
-            # --- Step 3b: Spectrum search ---
-            tp_cases = validation.get("tp_cases", [])
-            fp_cases = validation.get("fp_cases", [])
+            # --- Step 3c: Spectrum search (contrastive uses authoring observations) ---
+            # Use authoring pool tp/fp observations for expert reasoning;
+            # the final gate will still use held_out_images (never shown to expert).
+            tp_cases = auth_tp_cases
+            fp_cases = auth_fp_cases
 
             console.print(
                 f"  [yellow]REJECTED[/yellow] — FP={fp}, precision={precision:.2f}. "
@@ -339,10 +422,11 @@ async def run_patch_loop(
                 )
                 console.print(f"  Spectrum: {len(spectrum_levels)} level(s) generated")
 
-                # Validate all levels in parallel
+                # Validate all levels in parallel against the held-out pool
+                # (expert never saw these images — genuine held-out gate)
                 validations = await agents.validate_candidate_rules_batch(
                     rules=spectrum_levels,
-                    validation_images=validation_images,
+                    validation_images=held_out_images,
                     trigger_image_path=task["test_image_path"],
                     trigger_correct_label=correct,
                     model=expert_model,
@@ -393,17 +477,18 @@ async def run_patch_loop(
                     )
 
         record = {
-            "task_id":          task_id,
-            "pair_id":          pair_id,
-            "wrong_prediction": wrong,
-            "correct_label":    correct,
-            "candidate_rule":   {k: v for k, v in active_rule.items()
-                                 if k != "raw_response"},
-            "validation":       {k: v for k, v in validation.items()
-                                 if k not in ("tp_cases", "fp_cases")},
-            "spectrum_history": spectrum_history,
-            "accepted":         accepted,
-            "registered":       False,
+            "task_id":           task_id,
+            "pair_id":           pair_id,
+            "wrong_prediction":  wrong,
+            "correct_label":     correct,
+            "candidate_rule":    {k: v for k, v in active_rule.items()
+                                  if k != "raw_response"},
+            "semantic_validation": semantic_result,
+            "validation":        {k: v for k, v in validation.items()
+                                  if k not in ("tp_cases", "fp_cases")},
+            "spectrum_history":  spectrum_history,
+            "accepted":          accepted,
+            "registered":        False,
         }
 
         # --- Step 4: Register in isolated patch rules file ---
@@ -535,8 +620,11 @@ def parse_args() -> argparse.Namespace:
                    help="Load failures from an existing results JSON")
     p.add_argument("--pair",              default="",
                    help="Limit zero-shot + rerun to a single pair ID")
-    p.add_argument("--max-per-class",     dest="max_per_class",     type=int, default=3)
-    p.add_argument("--max-val-per-class", dest="max_val_per_class", type=int, default=8)
+    p.add_argument("--max-per-class",          dest="max_per_class",          type=int, default=3)
+    p.add_argument("--max-val-per-class",      dest="max_val_per_class",      type=int, default=8,
+                   help="Held-out validation pool size per class (expert never sees)")
+    p.add_argument("--max-authoring-per-class", dest="max_authoring_per_class", type=int, default=8,
+                   help="Authoring pool size per class (shown to expert for contrastive analysis)")
     p.add_argument("--min-precision",     dest="min_precision",     type=float, default=0.75)
     p.add_argument("--data-dir",          dest="data_dir",
                    default="C:/_backup/ml/data/DermaMNIST_HAM10000")
@@ -557,10 +645,14 @@ async def main() -> None:
     patch_rules_path = Path(_HERE) / args.patch_rules
 
     console.rule("[bold]KF Dialogic Patching Loop[/bold]")
-    console.print(f"  Cheap model:       [cyan]{args.cheap_model}[/cyan]")
-    console.print(f"  Expert model:      [cyan]{args.expert_model}[/cyan]")
-    console.print(f"  Patch rules file:  [cyan]{patch_rules_path}[/cyan]")
-    console.print(f"  Dry-run:           {args.dry_run}")
+    console.print(f"  Cheap model:            [cyan]{args.cheap_model}[/cyan]")
+    console.print(f"  Expert model:           [cyan]{args.expert_model}[/cyan]")
+    console.print(f"  Patch rules file:       [cyan]{patch_rules_path}[/cyan]")
+    console.print(f"  Authoring pool/class:   {args.max_authoring_per_class} "
+                  f"(expert sees; contrastive analysis context)")
+    console.print(f"  Held-out pool/class:    {args.max_val_per_class} "
+                  f"(expert never sees; precision gate)")
+    console.print(f"  Dry-run:                {args.dry_run}")
 
     # Load dataset
     console.print(f"\n[dim]Loading HAM10000 from {args.data_dir}...[/dim]")
@@ -605,6 +697,7 @@ async def main() -> None:
         expert_model=args.expert_model,
         rule_engine=rule_engine,
         max_val_per_class=args.max_val_per_class,
+        max_authoring_per_class=args.max_authoring_per_class,
         min_precision=args.min_precision,
         dry_run=args.dry_run,
     )

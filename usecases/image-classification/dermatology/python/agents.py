@@ -1595,6 +1595,102 @@ async def run_rule_spectrum_generator(
     return [candidate_rule], ms
 
 
+# ---------------------------------------------------------------------------
+# Semantic rule validator (text-only, no images)
+# ---------------------------------------------------------------------------
+
+_SEMANTIC_VALIDATOR_SYSTEM = """\
+You are a senior dermoscopy expert and knowledge engineer reviewing a proposed
+classification rule before it is tested on images.
+
+You will be given:
+1. A candidate rule and its pre-conditions
+2. The pair of classes it is meant to distinguish (favored class vs other class)
+
+Your task: evaluate whether each pre-condition is a reliable dermoscopic discriminator.
+
+For each pre-condition, rate it as one of:
+- "reliable"          — feature consistently separates the favored class from the other;
+                        rarely or never present in the other class
+- "unreliable"        — feature can easily occur in both classes, is too vague,
+                        or points in the wrong direction
+- "context_dependent" — only discriminating under specific co-occurring conditions;
+                        risky as a stand-alone gate
+
+Then give an overall recommendation:
+- "accept"  — all or most pre-conditions are reliable; safe to proceed to image validation
+- "revise"  — one or more pre-conditions are unreliable; flag them before image validation
+- "reject"  — the rule's core logic is fundamentally flawed; do not spend image-validation
+               budget on it
+
+Output ONLY a JSON object (no markdown, no commentary):
+{
+  "precondition_ratings": [
+    {
+      "precondition": "<exact text of pre-condition>",
+      "rating": "reliable|unreliable|context_dependent",
+      "comment": "<one-sentence clinical justification>"
+    }
+  ],
+  "overall": "accept|revise|reject",
+  "rationale": "<two-to-three sentence overall assessment>"
+}
+"""
+
+
+async def run_semantic_rule_validator(
+    candidate_rule: dict,
+    pair_info: dict,
+    model: str = "",
+) -> tuple[dict, int]:
+    """Text-only semantic check of a candidate rule's clinical logic.
+
+    Does NOT use images.  Returns (semantic_result_dict, duration_ms).
+
+    semantic_result_dict schema:
+      {
+        "precondition_ratings": [{"precondition", "rating", "comment"}, ...],
+        "overall": "accept|revise|reject",
+        "rationale": str,
+      }
+    """
+    rule_text     = candidate_rule.get("rule", "")
+    preconditions = candidate_rule.get("preconditions", [])
+    favors        = candidate_rule.get("favors", "")
+    class_a       = pair_info.get("class_a", "")
+    class_b       = pair_info.get("class_b", "")
+    other_class   = class_b if favors == class_a else class_a
+
+    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
+
+    user_msg = (
+        f"Favored class: {favors}\n"
+        f"Other class: {other_class}\n\n"
+        f"Rule:\n{rule_text}\n\n"
+        f"Pre-conditions:\n{precond_text}\n\n"
+        "Please evaluate each pre-condition and provide an overall recommendation."
+    )
+
+    text, ms = await call_agent(
+        "SEMANTIC_RULE_VALIDATOR",
+        user_msg,
+        system_prompt=_SEMANTIC_VALIDATOR_SYSTEM,
+        model=model or ACTIVE_MODEL,
+        max_tokens=2048,
+    )
+
+    result = _parse_json_block(text)
+    if result and "overall" in result:
+        return result, ms
+
+    # Fallback: assume accept so we don't silently block everything on parse failure
+    return {
+        "precondition_ratings": [],
+        "overall": "accept",
+        "rationale": f"(parse error — raw: {text[:200]})",
+    }, ms
+
+
 async def validate_candidate_rules_batch(
     rules: list[dict],
     validation_images: list,
