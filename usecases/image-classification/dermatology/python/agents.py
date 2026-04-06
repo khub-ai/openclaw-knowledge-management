@@ -1596,6 +1596,118 @@ async def run_rule_spectrum_generator(
 
 
 # ---------------------------------------------------------------------------
+# Rule completer — fills in implicit background conditions the expert omitted
+# ---------------------------------------------------------------------------
+
+_RULE_COMPLETER_SYSTEM = """\
+You are a senior dermoscopy knowledge engineer completing a classification rule.
+
+BACKGROUND
+The rule was authored by an expert responding to a specific failure case. Experts
+naturally write DIAGNOSTIC rules: they describe what was distinctive about that one
+image. But they omit BACKGROUND conditions — features so obvious to a trained
+dermoscopist that they go without saying. When the rule is evaluated by a naive
+classifier that checks only what is explicitly listed, those omitted conditions
+create loopholes: the rule fires on images that share the distinctive feature but
+lack the expected background markers of the favored class.
+
+YOUR TASK
+Identify the implicit pre-conditions the expert assumed but did not write down.
+These are conditions that:
+  1. Are standard, well-established dermoscopic markers expected to be PRESENT for
+     the favored class (positive background conditions).
+  2. Are standard markers expected to be ABSENT for the favored class — i.e.,
+     features that would instead indicate the other class — that the rule does not
+     already exclude (negative background conditions).
+  3. Are NOT already covered, even implicitly, by the existing pre-conditions.
+
+DO NOT add:
+  - Conditions that could plausibly occur in both classes.
+  - Conditions already implied by the existing pre-conditions.
+  - Highly specific conditions that would rarely be met — do not over-tighten.
+  - Conditions that are only sometimes true of the favored class.
+
+Keep the original rule text and feature key unchanged.
+Add the new pre-conditions to the existing list.
+
+Output ONLY a JSON object (no markdown fences, no commentary outside the JSON):
+{
+  "rule": "<original rule text — unchanged>",
+  "feature": "<original feature key — unchanged>",
+  "favors": "<unchanged>",
+  "confidence": "<unchanged>",
+  "preconditions": ["<full list: original pre-conditions + new ones>"],
+  "added_preconditions": ["<only the newly added pre-conditions>"],
+  "completion_rationale": "<2–3 sentences explaining what background knowledge was
+                           implicit and why it needed to be made explicit>"
+}
+
+If the existing pre-conditions are already complete and you have nothing meaningful
+to add, return the rule unchanged with "added_preconditions": [] and explain why.
+"""
+
+
+async def run_rule_completer(
+    candidate_rule: dict,
+    pair_info: dict,
+    model: str = "",
+) -> tuple[dict, int]:
+    """Enrich a candidate rule with implicit background conditions the expert omitted.
+
+    Text-only — no images.  Returns (completed_rule_dict, duration_ms).
+
+    The completed rule has the same schema as the input but with additional
+    pre-conditions and two extra keys:
+      "added_preconditions": list of newly added pre-conditions
+      "completion_rationale": explanation of what was added and why
+    """
+    rule_text     = candidate_rule.get("rule", "")
+    preconditions = candidate_rule.get("preconditions", [])
+    favors        = candidate_rule.get("favors", "")
+    confidence    = candidate_rule.get("confidence", "medium")
+    feature       = candidate_rule.get("feature", "")
+    class_a       = pair_info.get("class_a", "")
+    class_b       = pair_info.get("class_b", "")
+    other_class   = class_b if favors == class_a else class_a
+
+    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
+
+    user_msg = (
+        f"Favored class: {favors}\n"
+        f"Other class: {other_class}\n\n"
+        f"Rule:\n{rule_text}\n\n"
+        f"Existing pre-conditions ({len(preconditions)}):\n"
+        f"{precond_text if precond_text else '  (none)'}\n\n"
+        "Please complete the rule by adding any implicit background conditions "
+        "the expert assumed but did not state."
+    )
+
+    text, ms = await call_agent(
+        "RULE_COMPLETER",
+        user_msg,
+        system_prompt=_RULE_COMPLETER_SYSTEM,
+        model=model or ACTIVE_MODEL,
+        max_tokens=2048,
+    )
+
+    result = _parse_json_block(text)
+    if result and "preconditions" in result:
+        # Preserve fields from original rule that the completer may not return
+        completed = {**candidate_rule, **result}
+        completed.setdefault("added_preconditions", [])
+        completed.setdefault("completion_rationale", "")
+        return completed, ms
+
+    # Parse failure — return original unchanged with a note
+    fallback = {
+        **candidate_rule,
+        "added_preconditions": [],
+        "completion_rationale": f"(completion parse error — raw: {text[:200]})",
+    }
+    return fallback, ms
+
+
+# ---------------------------------------------------------------------------
 # Semantic rule validator (text-only, no images)
 # ---------------------------------------------------------------------------
 

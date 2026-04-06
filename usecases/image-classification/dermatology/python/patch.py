@@ -253,7 +253,28 @@ async def run_patch_loop(
         for pc in candidate_rule.get("preconditions", []):
             console.print(f"    Pre-condition: {pc}")
 
-        # --- Step 1b: Semantic rule validation (text-only, no images) ---
+        # --- Step 1b: Rule completion — fill in implicit background conditions ---
+        # Experts write diagnostic rules (what was distinctive) and omit background
+        # conditions (what's obviously expected for the class). Complete the rule
+        # before semantic validation so the semantic check sees the full picture.
+        console.print(f"  Completing rule (filling implicit background conditions)...")
+        candidate_rule, _ = await agents.run_rule_completer(
+            candidate_rule=candidate_rule,
+            pair_info=pair_info,
+            model=expert_model,
+        )
+        added = candidate_rule.get("added_preconditions", [])
+        if added:
+            console.print(f"  [cyan]{len(added)} background condition(s) added:[/cyan]")
+            for pc in added:
+                console.print(f"    + {pc}")
+            console.print(f"  Completion note: "
+                          f"{candidate_rule.get('completion_rationale', '')[:120]}")
+        else:
+            console.print("  Rule already complete — no additions needed.")
+
+        # --- Step 1d: Semantic rule validation (text-only, no images) ---
+        # Now runs on the COMPLETED rule (original + added background conditions).
         console.print(f"  Running semantic validation ({expert_model})...")
         semantic_result, _ = await agents.run_semantic_rule_validator(
             candidate_rule=candidate_rule,
