@@ -1316,28 +1316,52 @@ async def validate_candidate_rule(
     trigger_image_path: str,   # the failure image that triggered this rule
     trigger_correct_label: str,
     model: str = "",
+    early_exit_fp: int = 2,    # stop checking images once FP exceeds this
 ) -> dict:
     """Test a candidate rule against a pool of labeled images.
 
     Returns a dict with TP, FP, TN, FN counts, precision, recall,
     whether the rule fires correctly on the trigger image, an accept flag,
     and the per-image case lists for contrastive analysis.
+
+    early_exit_fp: stop iterating once fp > early_exit_fp.  Default 2
+    (binding gate is fp <= 1, so fp=2 is already a definite rejection).
+    Remaining images are counted as TN (conservative — understates FP,
+    but the accept/reject decision is already determined).
     """
     tp = fp = tn = fn = 0
     fires_on_trigger = False
     tp_cases: list[dict] = []   # {"image_path", "ground_truth", "observations"}
     fp_cases: list[dict] = []
 
-    # Check the trigger image first
+    # Check the trigger image first — if it doesn't fire, reject immediately
     trigger_result, _ = await run_rule_validator_on_image(
         trigger_image_path, trigger_correct_label, candidate_rule, model=model
     )
     fires_on_trigger = trigger_result["precondition_met"] and trigger_result["correct"]
 
-    # Check validation pool
+    if not fires_on_trigger:
+        # No point checking the pool — rule is already rejected
+        remaining = len(validation_images)
+        favors = candidate_rule.get("favors", "")
+        fn = sum(1 for _, gt in validation_images if gt == favors)
+        tn = remaining - fn
+        return {
+            "fires_on_trigger": False,
+            "tp": 0, "fp": 0, "tn": tn, "fn": fn,
+            "precision": 0.0, "recall": 0.0,
+            "accepted": False,
+            "rejection_reason": "did not fire on trigger",
+            "tp_cases": [], "fp_cases": [],
+        }
+
+    # Check validation pool with early exit
     favors = candidate_rule.get("favors", "")
+    early_exited = False
+    checked = 0
     for img_path, gt in validation_images:
         res, _ = await run_rule_validator_on_image(img_path, gt, candidate_rule, model=model)
+        checked += 1
         case = {"image_path": img_path, "ground_truth": gt,
                 "observations": res.get("observations", "")}
         if res["precondition_met"]:
@@ -1352,6 +1376,17 @@ async def validate_candidate_rule(
                 fn += 1
             else:
                 tn += 1
+        # Early exit: once fp exceeds the gate threshold, stop —
+        # the rule is already rejected regardless of remaining images.
+        if fp > early_exit_fp:
+            early_exited = True
+            # Count remaining unchecked images conservatively as TN
+            for _, ugt in validation_images[checked:]:
+                if ugt == favors:
+                    fn += 1
+                else:
+                    tn += 1
+            break
 
     total_fires = tp + fp
     precision = tp / total_fires if total_fires > 0 else 0.0
@@ -1363,7 +1398,6 @@ async def validate_candidate_rule(
     # even if precision == 0.75.
     accepted = fires_on_trigger and precision >= 0.75 and fp <= 1
     rejection_reason = (
-        "did not fire on trigger"   if not fires_on_trigger else
         f"fp={fp} > 1"              if fp > 1 else
         f"precision={precision:.2f} < 0.75" if precision < 0.75 else
         None
@@ -1378,6 +1412,7 @@ async def validate_candidate_rule(
         "rejection_reason": rejection_reason,
         "tp_cases": tp_cases,
         "fp_cases": fp_cases,
+        "early_exited": early_exited,
     }
 
 

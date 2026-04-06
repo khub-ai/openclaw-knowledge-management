@@ -318,20 +318,44 @@ async def run_patch_loop(
             continue
 
         # --- Step 2: Sample image pools ---
-        #   authoring_images  — expert sees these; used for initial validation to get
-        #                        tp_cases/fp_cases for contrastive analysis (seed=0)
-        #   held_out_images   — expert never sees; used only for the final precision
-        #                        gate on spectrum levels (seed=42)
+        #   Authoring pool is sampled lazily — only when contrastive analysis is needed.
+        #   This saves 16+ validation calls when the rule passes the held-out gate.
+        authoring_pool_cache: dict = {}  # populated lazily by _get_authoring_cases()
+
+        async def _get_authoring_cases(rule_to_check):
+            """Lazily sample and validate the authoring pool. Returns (tp_cases, fp_cases)."""
+            cache_key = id(rule_to_check)
+            if cache_key in authoring_pool_cache:
+                return authoring_pool_cache[cache_key]
+            auth_imgs_a = [(str(img.file_path), pair_info["class_a"])
+                           for img in ds.sample_images(dx_a, max_authoring_per_class,
+                                                       split="train", seed=0)]
+            auth_imgs_b = [(str(img.file_path), pair_info["class_b"])
+                           for img in ds.sample_images(dx_b, max_authoring_per_class,
+                                                       split="train", seed=0)]
+            authoring_images = auth_imgs_a + auth_imgs_b
+            console.print(
+                f"  Authoring pool: {len(authoring_images)} images "
+                f"({len(auth_imgs_a)} {pair_info['class_a']}, "
+                f"{len(auth_imgs_b)} {pair_info['class_b']})"
+            )
+            authoring_val = await agents.validate_candidate_rule(
+                candidate_rule=rule_to_check,
+                validation_images=authoring_images,
+                trigger_image_path=task["test_image_path"],
+                trigger_correct_label=correct,
+                model=expert_model,
+            )
+            tp_c = authoring_val.get("tp_cases", [])
+            fp_c = authoring_val.get("fp_cases", [])
+            console.print(
+                f"  Authoring pool: TP={authoring_val['tp']} FP={authoring_val['fp']} "
+                f"precision={authoring_val['precision']:.2f}"
+            )
+            authoring_pool_cache[cache_key] = (tp_c, fp_c)
+            return tp_c, fp_c
         dx_a = pair_info.get("dx_a", "")
         dx_b = pair_info.get("dx_b", "")
-        auth_imgs_a = [(str(img.file_path), pair_info["class_a"])
-                       for img in ds.sample_images(dx_a, max_authoring_per_class,
-                                                   split="train", seed=0)]
-        auth_imgs_b = [(str(img.file_path), pair_info["class_b"])
-                       for img in ds.sample_images(dx_b, max_authoring_per_class,
-                                                   split="train", seed=0)]
-        authoring_images = auth_imgs_a + auth_imgs_b
-
         held_imgs_a = [(str(img.file_path), pair_info["class_a"])
                        for img in ds.sample_images(dx_a, max_val_per_class,
                                                    split="train", seed=42)]
@@ -340,34 +364,11 @@ async def run_patch_loop(
                                                    split="train", seed=42)]
         held_out_images = held_imgs_a + held_imgs_b
 
-        console.print(
-            f"  Authoring pool: {len(authoring_images)} images "
-            f"({len(auth_imgs_a)} {pair_info['class_a']}, {len(auth_imgs_b)} {pair_info['class_b']}); "
-            f"held-out pool: {len(held_out_images)} images"
-        )
+        console.print(f"  Held-out pool: {len(held_out_images)} images")
 
-        # --- Step 3a: Authoring pool validation (observations only — expert context) ---
-        # The expert (contrastive analysis, spectrum generator) may reason about these.
-        authoring_val = await agents.validate_candidate_rule(
-            candidate_rule=candidate_rule,
-            validation_images=authoring_images,
-            trigger_image_path=task["test_image_path"],
-            trigger_correct_label=correct,
-            model=expert_model,
-        )
-        # Observations from the authoring pool — used for contrastive analysis/spectrum.
-        # These are the images the expert is allowed to see.
-        auth_tp_cases = authoring_val.get("tp_cases", [])
-        auth_fp_cases = authoring_val.get("fp_cases", [])
-        console.print(
-            f"  Authoring pool: "
-            f"TP={authoring_val['tp']} FP={authoring_val['fp']} "
-            f"precision={authoring_val['precision']:.2f} "
-            f"(expert context — not the acceptance gate)"
-        )
-
-        # --- Step 3b: Held-out pool validation (binding acceptance gate) ---
-        # Expert never sees these images; this is the genuine held-out precision gate.
+        # --- Step 3: Held-out gate FIRST (binding acceptance gate) ---
+        # Run this before the authoring pool — if the rule passes, we're done
+        # and save 16 authoring-pool calls.  Early exit on FP > 1.
         console.print("  Running held-out gate...")
         validation = await agents.validate_candidate_rule(
             candidate_rule=candidate_rule,
@@ -388,6 +389,7 @@ async def run_patch_loop(
             f"TN={validation['tn']} FN={validation['fn']} | "
             f"precision={precision:.2f} recall={validation['recall']:.2f} | "
             f"fires_on_trigger={fires_on_trigger}"
+            f"{' (early exit)' if validation.get('early_exited') else ''}"
         )
 
         spectrum_history: list[dict] = []
@@ -419,9 +421,8 @@ async def run_patch_loop(
                     "completion over-tightened. Running spectrum from pre-completion base..."
                 )
                 # Re-run spectrum search with pre-completion rule as the anchor.
-                # tp_cases/fp_cases from authoring pool (already computed above).
-                tp_cases = auth_tp_cases
-                fp_cases = auth_fp_cases
+                # Lazily fetch authoring pool observations for contrastive analysis.
+                tp_cases, fp_cases = await _get_authoring_cases(pre_completion_rule)
                 contrastive, _ = await agents.run_contrastive_feature_analysis(
                     tp_cases=tp_cases,
                     fp_cases=fp_cases,
@@ -498,10 +499,9 @@ async def run_patch_loop(
             console.print(f"  [red]REJECTED[/red] — precision {precision:.2f} < {min_precision:.2f} (no FP to analyze)")
         else:
             # --- Step 3c: Spectrum search (contrastive uses authoring observations) ---
-            # Use authoring pool tp/fp observations for expert reasoning;
-            # the final gate will still use held_out_images (never shown to expert).
-            tp_cases = auth_tp_cases
-            fp_cases = auth_fp_cases
+            # Lazily fetch authoring pool observations for contrastive analysis.
+            # The final gate will still use held_out_images (never shown to expert).
+            tp_cases, fp_cases = await _get_authoring_cases(candidate_rule)
 
             console.print(
                 f"  [yellow]REJECTED[/yellow] — FP={fp}, precision={precision:.2f}. "
@@ -733,7 +733,7 @@ def _detect_cross_pair_firing(rerun_tasks: list[dict],
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="KF dialogic patching loop")
     p.add_argument("--cheap-model",       dest="cheap_model",       default="o4-mini")
-    p.add_argument("--expert-model",      dest="expert_model",      default="claude-opus-4-6")
+    p.add_argument("--expert-model",      dest="expert_model",      default="gpt-4o")
     p.add_argument("--failures-from",     dest="failures_from",     default="",
                    help="Load failures from an existing results JSON")
     p.add_argument("--pair",              default="",
