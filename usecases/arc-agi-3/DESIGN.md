@@ -1,6 +1,7 @@
 # ARC-AGI-3 Ensemble — Design Decisions
 
 > Status: working document, not for publication yet.
+> Private companion: `.private/DESIGN_PRIVATE.md` (gitignored) — LLM architecture, air-gap strategy.
 
 ## Overview
 

@@ -284,6 +284,7 @@ class RuleEngine:
         status: str = "active",
         scope: str = "dataset",
         observability_filter: bool = False,
+        source_level: int = 0,
     ) -> Optional[dict]:
         """
         Create a new rule and persist it.
@@ -347,6 +348,7 @@ class RuleEngine:
             "tags": tags_list,
             "lineage": lineage or {"type": "new", "parent_ids": [], "reason": ""},
             "status": status,
+            "source_level": source_level,
             "tasks_seen": 0,
             "created": self._now_iso(),
             "last_fired": None,
@@ -363,6 +365,7 @@ class RuleEngine:
         reason: str,
         source_task: str = "",
         tags: list[str] | None = None,
+        source_level: int = 0,
     ) -> dict:
         """Create a more general rule derived from an existing one.
 
@@ -382,6 +385,7 @@ class RuleEngine:
                 "reason": reason,
             },
             status="candidate",
+            source_level=source_level,
         )
 
     def specialize_rule(
@@ -392,6 +396,7 @@ class RuleEngine:
         reason: str,
         source_task: str = "",
         tags: list[str] | None = None,
+        source_level: int = 0,
     ) -> dict:
         """Create a more specific rule derived from an existing one."""
         parent = self.get(parent_id)
@@ -407,6 +412,7 @@ class RuleEngine:
                 "parent_ids": [parent_id],
                 "reason": reason,
             },
+            source_level=source_level,
         )
 
     def merge_rules(
@@ -417,6 +423,7 @@ class RuleEngine:
         reason: str,
         source_task: str = "",
         tags: list[str] | None = None,
+        source_level: int = 0,
     ) -> dict:
         """Create a rule that combines insights from multiple parent rules."""
         all_tags = list(tags or [])
@@ -435,6 +442,7 @@ class RuleEngine:
                 "parent_ids": parent_ids,
                 "reason": reason,
             },
+            source_level=source_level,
         )
 
     # ------------------------------------------------------------------
@@ -782,10 +790,15 @@ class RuleEngine:
         return "\n".join(lines)
 
     def format_fired_rules_for_prompt(self, matches: list[RuleMatch],
-                                       max_rules: int = 5) -> str:
+                                       max_rules: int = 5,
+                                       current_level: int = 0) -> str:
         """
         Build a prompt section with the top-N fired rules' actions,
         suitable for injection into solver/MEDIATOR prompts.
+
+        When current_level > 0, rules from a different source_level are
+        annotated as "[HYPOTHESIS from level N — verify at level M]" so the
+        MEDIATOR treats them as starting guesses rather than confirmed facts.
         """
         top = sorted(matches, key=lambda m: m.score, reverse=True)[:max_rules]
         if not top:
@@ -794,11 +807,48 @@ class RuleEngine:
         for m in top:
             sr = self._success_rate(m.rule)
             fires = self._ns_stats(m.rule)["fires"]
+            rule_level = m.rule.get("source_level", 0)
+            is_hypothesis = (
+                current_level > 0
+                and rule_level > 0
+                and rule_level != current_level
+            )
+            label = (
+                f" [HYPOTHESIS from level {rule_level} — verify at level {current_level}]"
+                if is_hypothesis else ""
+            )
             lines.append(
                 f"- **{m.rule['id']}** (confidence: {m.confidence}, "
-                f"success rate: {sr:.0%}, fired {fires}x)\n"
+                f"success rate: {sr:.0%}, fired {fires}x){label}\n"
                 f"  {m.rule['action']}"
             )
+        return "\n".join(lines)
+
+    def format_performance_report(self) -> str:
+        """
+        Return a per-lineage-type breakdown of rule performance stats.
+        Emitted at end of episode for monitoring.
+        """
+        if not self.rules:
+            return "(no rules)"
+        by_type: dict[str, list[dict]] = {}
+        for r in self.rules:
+            lt = r.get("lineage", {}).get("type", "new")
+            by_type.setdefault(lt, []).append(r)
+        lines = ["## Rule Performance Report"]
+        for lt, rules in sorted(by_type.items()):
+            lines.append(f"\n### lineage={lt} ({len(rules)} rules)")
+            for r in rules:
+                ns = self._ns_stats(r)
+                fires = ns["fires"]
+                succ  = ns["successes"]
+                fail  = ns["failures"]
+                sr    = self._success_rate(r)
+                lvl   = r.get("source_level", 0)
+                lines.append(
+                    f"  {r['id']} [{r['status']}] lvl={lvl} "
+                    f"fires={fires} succ={succ} fail={fail} sr={sr:.0%}"
+                )
         return "\n".join(lines)
 
     def _success_rate(self, rule: dict) -> float:
@@ -859,7 +909,8 @@ class RuleEngine:
     # ------------------------------------------------------------------
 
     def parse_mediator_rule_updates(self, mediator_text: str,
-                                     task_id: str) -> list[dict]:
+                                     task_id: str,
+                                     source_level: int = 0) -> list[dict]:
         """
         Parse MEDIATOR output for rule creation/evolution instructions.
 
@@ -915,18 +966,22 @@ class RuleEngine:
 
                     if act == "generalize" and parent:
                         r = self.generalize_rule(parent, cond, ract, reason,
-                                                  source_task=task_id, tags=tags)
+                                                  source_task=task_id, tags=tags,
+                                                  source_level=source_level)
                     elif act == "specialize" and parent:
                         r = self.specialize_rule(parent, cond, ract, reason,
-                                                  source_task=task_id, tags=tags)
+                                                  source_task=task_id, tags=tags,
+                                                  source_level=source_level)
                     elif act == "merge":
                         pids = upd.get("parent_ids", [parent] if parent else [])
                         r = self.merge_rules(pids, cond, ract, reason,
-                                              source_task=task_id, tags=tags)
+                                              source_task=task_id, tags=tags,
+                                              source_level=source_level)
                     else:
                         r = self.add_rule(cond, ract, source="mediator",
                                            source_task=task_id, tags=tags,
-                                           rule_type=rule_type)
+                                           rule_type=rule_type,
+                                           source_level=source_level)
                     if r is not None:
                         created.append(r)
             except (json.JSONDecodeError, Exception):

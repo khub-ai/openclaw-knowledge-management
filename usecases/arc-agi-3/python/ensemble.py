@@ -66,6 +66,130 @@ from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
 MAX_STEPS  = 200   # hard cap on total env.step() calls per episode
 MAX_CYCLES = 40    # hard cap on OBSERVER-MEDIATOR cycles per episode
 
+# Known action sequences to pre-solve (skip) levels that are already mastered.
+# Keys are env_id strings.  Values are ordered action names.
+# LS20: ACTION3×3 + ACTION1×4 + ACTION4×3 + ACTION1×3 = 13 steps to complete level 1.
+_KNOWN_SUBPLANS: dict[str, list[str]] = {
+    # ls20 level 1→2 (13 steps): navigate cross at rows 47-48, cols 50-52
+    # ls20 level 2→3 (45 steps): shape-match puzzle
+    #   - Navigate to rotation changer at (49,45), touch 3× to reach 270°
+    #   - Collect step-counter resets at (40,51)→step20 and (15,16)→step40
+    #   - Navigate to target at (14,40) with rotation=270°
+    # ls20 level 3→4 (41 steps): color+rotation+push-pad puzzle
+    #   - Go up col 9 to y=5 (8×A1): yjgargdic_r push pad fires at (9,5) → pushed to (34,5)
+    #   - Left to (29,5) (A3), down to (29,15) (2×A2)
+    #   - Right to (34,15): collect reset1 (A4)
+    #   - Down to (34,30) (3×A2), left to (29,30) (A3)
+    #   - Down to (29,45): touch color changer col→1 (3×A2)
+    #   - Up to (29,30) (3×A1), left to (19,30): collect reset2 (2×A3)
+    #   - Up to (19,25) (A1), right across maze to (54,25) (7×A4)
+    #   - Up to (54,10) (3×A1), left to (49,10): touch rot changer rot→1 (A3)
+    #   - Up to (49,5) (A1), down to (49,10): touch rot changer rot→2 (A2)
+    #   - Up to (49,5) (A1), right to (54,5): kapcaakvb_b push pad → pushed to (54,45) (A4)
+    #   - Down to (54,50): target with rot=2, col=1 → WIN (A2)
+    # ls20 level 4→5 (43 steps): shape+color+push-pad puzzle
+    #   - Start (54,5): shape=4→need 5 (mkjdaccuuf at 24,30), color=2→need 1 (3× soyhouuebz at 34,30)
+    #   - A3x3: left to (39,5)
+    #   - A2x3: down to (39,20)
+    #   - A3: step to (34,20) → yjgargdic_r pad at (33,20) fires → pushed right to (54,20)
+    #   - A2x2: down to (54,30)
+    #   - A3x2: left to (44,30)
+    #   - A1: step to (44,25) → tihiodtoj_l pad at (45,25) fires → pushed left to (34,25)
+    #   - A2,A1,A2,A1,A2: bounce on color changer at (34,30): col 2→3→0→1
+    #   - A1x2: up from (34,25) → (34,20) → yjgargdic_r pad → pushed to (54,20)
+    #   - A3x2: left to (49,20) → kapcaakvb_b pad at (44,19) fires → pushed down to (44,45)
+    #   - A1: step to (44,40) → tihiodtoj_l pad at (45,40) fires → pushed left to (34,40)
+    #   - A2,A3x2: down and left to (24,45)
+    #   - A1: step to (24,40) → tihiodtoj_l pad at (25,40) fires → pushed left to (9,40)
+    #   - A1: step to (9,35) → yjgargdic_r pad at (8,35) fires → pushed right to (24,35)
+    #   - A1: step to (24,30) → mkjdaccuuf shape changer fires: shape 4→5
+    #   - A2x2,A4,A1x4: down, right, up navigating to (19,15) → reset1 collected (ctr→42)
+    #   - A4,A1,A4,A1x2: navigate right and up to (24,5)
+    #   - A3x3: left to (9,5) → target with shape=5, col=1, rot=0 → WIN
+    "ls20": (
+        ["ACTION3"] * 3 + ["ACTION1"] * 4 + ["ACTION4"] * 3 + ["ACTION1"] * 3
+        + ["ACTION1", "ACTION4", "ACTION1", "ACTION1", "ACTION1", "ACTION1", "ACTION1",
+           "ACTION4", "ACTION4", "ACTION2", "ACTION4", "ACTION2", "ACTION2", "ACTION2",
+           "ACTION2", "ACTION2", "ACTION2", "ACTION2", "ACTION3", "ACTION3",
+           "ACTION4", "ACTION4", "ACTION1", "ACTION3", "ACTION4"]
+        + ["ACTION1"] * 7
+        + ["ACTION3"] * 7
+        + ["ACTION2"] * 6
+        + ["ACTION1"] * 8
+        + ["ACTION3"]
+        + ["ACTION2"] * 2
+        + ["ACTION4"]
+        + ["ACTION2"] * 3
+        + ["ACTION3"]
+        + ["ACTION2"] * 3
+        + ["ACTION1"] * 3
+        + ["ACTION3"] * 2
+        + ["ACTION1"]
+        + ["ACTION4"] * 7
+        + ["ACTION1"] * 3
+        + ["ACTION3"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION4"]
+        + ["ACTION2"]
+        + ["ACTION3"] * 3
+        + ["ACTION2"] * 3
+        + ["ACTION3"]
+        + ["ACTION2"] * 2
+        + ["ACTION3"] * 2
+        + ["ACTION1"]
+        + ["ACTION2", "ACTION1", "ACTION2", "ACTION1", "ACTION2"]
+        + ["ACTION1"] * 2
+        + ["ACTION3"] * 2
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION3"] * 2
+        + ["ACTION1"] * 3
+        + ["ACTION2"] * 2
+        + ["ACTION4"]
+        + ["ACTION1"] * 4
+        + ["ACTION4"]
+        + ["ACTION1"]
+        + ["ACTION4"]
+        + ["ACTION1"] * 2
+        + ["ACTION3"] * 3
+        # ls20 level 5→6 (44 steps): shape+color+rot+reset+push-pad puzzle
+        #   - Start (49,40): shape=4→need 0 (mkjdaccuuf at 19,10 x2), color=0→need 3 (3× soyhouuebz at 29,25), rot=0→need 2 (2× rot-changer at 14,35; changer oscillates, must time visits)
+        #   - A1,A3,A1x2,A3x3: navigate to (34,25) via push pads
+        #   - A4,A3,A4,A3,A4: bounce left-right on color changer 3× (col 0→1→2→3)
+        #   - A1x2,A3x4,A1: navigate up to (24,10), touch shape changer (sh 4→5)
+        #   - A3x3: continue left to (9,10), collect reset at (10,11) (ctr→40)
+        #   - A4x2: right to (19,10), touch shape changer again (sh 5→0)
+        #   - A2x5,A4x2,A3: navigate to (14,35) area
+        #   - A2x2: enter rot-changer zone; rot changer fires twice (rot 0→1→2)
+        #   - A4,A2,A4x7: navigate east along row 50 to (54,10) via lujfinsby push pad
+        #   - A1: up to target (54,5) → WIN
+        + ["ACTION1"]
+        + ["ACTION3"]
+        + ["ACTION1"] * 2
+        + ["ACTION3"] * 3
+        + ["ACTION4"]
+        + ["ACTION3"]
+        + ["ACTION4"]
+        + ["ACTION3"]
+        + ["ACTION4"]
+        + ["ACTION1"] * 2
+        + ["ACTION3"] * 4
+        + ["ACTION1"]
+        + ["ACTION3"] * 3
+        + ["ACTION4"] * 2
+        + ["ACTION2"] * 5
+        + ["ACTION4"] * 2
+        + ["ACTION3"]
+        + ["ACTION2"] * 2
+        + ["ACTION4"]
+        + ["ACTION2"]
+        + ["ACTION4"] * 7
+        + ["ACTION1"]
+    ),
+}
+
 
 # ---------------------------------------------------------------------------
 # Episode metadata
@@ -274,6 +398,7 @@ def _write_step_log(
     output_tokens: int,
     api_calls: int,
     plan_index: int,
+    win_levels: int = 0,
 ) -> None:
     """Write one step as a JSON file compatible with the playlog viewer format."""
     playlog_dir.mkdir(parents=True, exist_ok=True)
@@ -291,7 +416,7 @@ def _write_step_log(
         "action_name":        action_name,
         "observation_state":  obs_state_name(obs),
         "levels_completed":   obs_levels_completed(obs),
-        "win_levels":         7,                        # LS20 has 7 levels; TODO: read from env
+        "win_levels":         win_levels,
         "returned":           {"frame": frame},
         "change_summary":     change_summary,
         "decision_note":      decision_note,
@@ -555,6 +680,7 @@ async def run_episode(
     verbose: bool = True,
     playlog_root: Optional[Path] = None,
     known_action_directions: Optional[dict] = None,
+    start_level: int = 1,
 ) -> EpisodeMetadata:
     """
     Run one full episode of an ARC-AGI-3 environment.
@@ -607,6 +733,35 @@ async def run_episode(
     co_registry = CoOccurrenceRegistry(path=_co_path)
 
     obs = env.reset()
+
+    # Determine total number of levels from the game object (env-agnostic).
+    # Falls back to 0 (unknown) so the viewer can still display partial info.
+    _game = getattr(env, "_game", None)
+    _win_levels: int = len(_game.levels) if (_game and hasattr(_game, "levels")) else 0
+
+    # Pre-solve: advance to start_level if we're not there yet.
+    # If the scorecard already has level N-1 completed, env.reset() restores
+    # directly to level N — no steps needed.  If we're behind the target,
+    # execute the known subplan to skip through mastered levels.
+    _levels_after_reset = obs_levels_completed(obs)
+    if start_level > 1:
+        if _levels_after_reset >= start_level - 1:
+            log(f"[PRE-SOLVE] Scorecard already at level {_levels_after_reset + 1} "
+                f"(target: {start_level}) — skipping pre-solve.")
+        else:
+            subplan = _KNOWN_SUBPLANS.get(env_id, [])
+            if subplan:
+                log(f"[PRE-SOLVE] Currently at level {_levels_after_reset + 1}, "
+                    f"target level {start_level}. Executing {len(subplan)} known actions...")
+                for _act in subplan:
+                    if obs_levels_completed(obs) >= start_level - 1:
+                        break
+                    obs = env.step(_act)
+                log(f"[PRE-SOLVE] Done. Now at level {obs_levels_completed(obs) + 1}.")
+            else:
+                log(f"[PRE-SOLVE] No known subplan for '{env_id}' — "
+                    f"proceeding from level {_levels_after_reset + 1}.")
+
     step_count      = 0
     cycle_count     = 0
     action_history: list[dict] = []
@@ -679,7 +834,7 @@ async def run_episode(
         ep_log.cycle_start(cycle_count, step_count, max_steps, levels_now,
                            [m.rule_id for m in matched])
 
-        rules_section = rule_engine.format_fired_rules_for_prompt(matched)
+        rules_section = rule_engine.format_fired_rules_for_prompt(matched, current_level=levels_now + 1)
         tools_section = tool_registry.build_tool_section_for_prompt()
 
         # State / goal context
@@ -837,7 +992,7 @@ async def run_episode(
         # confirmed (level advance or win) before being promoted to "active".
         if med_text:
             rule_changes = rule_engine.parse_mediator_rule_updates(
-                med_text, task_id
+                med_text, task_id, source_level=levels_now + 1
             )
             if rule_changes:
                 new_ids = []
@@ -952,6 +1107,7 @@ async def run_episode(
                     output_tokens= ct_now.output_tokens,
                     api_calls    = ct_now.api_calls,
                     plan_index   = _plan_step_idx,
+                    win_levels   = _win_levels,
                 )
 
             curr_frame = obs_frame(obs)
@@ -1308,6 +1464,10 @@ async def run_episode(
         for line in conf_lines:
             log(line)
         ep_log._write("  [CONCEPTS] bindings at episode end:\n" + "\n".join(conf_lines))
+
+    perf_report = rule_engine.format_performance_report()
+    log(perf_report)
+    ep_log._write(perf_report)
 
     ep_log.episode_end(
         state=final_state,

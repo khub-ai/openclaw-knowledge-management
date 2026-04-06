@@ -1389,8 +1389,56 @@ def format_structural_context(
     # All non-background, non-player foreground objects, grouped by whether
     # the player has already made contact with them.  Gives MEDIATOR a clear
     # checklist: what is still unknown and how to reach it.
-    fg_non_player = [o for o in objects
-                     if not o.is_background and o.color not in dynamic]
+
+    # Build exclusion sets from concept_bindings
+    _non_interactive_roles_set = {"wall", "background", "border", "reference_pattern", "reference_box"}
+    _step_counter_colors_set: set[int] = set()
+    _non_interactive_colors_set: set[int] = set()
+    for _k, _v in bindings.items():
+        try:
+            _color_int = int(_k)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(_v, dict):
+            _bound_role = _v.get("role", "")
+        elif isinstance(_v, str):
+            _bound_role = _v
+        else:
+            continue
+        if _bound_role == "step_counter":
+            _step_counter_colors_set.add(_color_int)
+        elif _bound_role in _non_interactive_roles_set:
+            _non_interactive_colors_set.add(_color_int)
+    # Also pick up explicit wall_colors list if present
+    for _wc in bindings.get("wall_colors", []):
+        try:
+            _non_interactive_colors_set.add(int(_wc))
+        except (ValueError, TypeError):
+            pass
+
+    # Bar-shaped step_counter instances (excluded — not interaction targets)
+    _step_counter_bar_ids: set[int] = set()
+    for _o in objects:
+        if _o.color in _step_counter_colors_set:
+            if _o.aspect_ratio >= 3.0 or _o.aspect_ratio <= 0.33:
+                _step_counter_bar_ids.add(id(_o))
+
+    # Container objects (already shown in containers section; not navigation targets)
+    _container_obj_ids_manifest = {id(r.container) for r in containment}
+
+    # Size cap: objects > 10× total player size are structural (arena floor/walls)
+    _player_total_size = sum(o.size for o in objects if o.color in dynamic) or 1
+    _max_manifest_size = _player_total_size * 10
+
+    fg_non_player = [
+        o for o in objects
+        if not o.is_background
+        and o.color not in dynamic
+        and o.color not in _non_interactive_colors_set
+        and id(o) not in _container_obj_ids_manifest
+        and id(o) not in _step_counter_bar_ids
+        and o.size <= _max_manifest_size
+    ]
 
     # Determine player centroid for navigation hints
     player_objs = [o for o in objects if o.color in dynamic]

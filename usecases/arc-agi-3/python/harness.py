@@ -125,6 +125,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--playlog", dest="playlog", default="playlogs",
                    help="Directory for per-step playlog JSON files (default: playlogs). "
                         "Pass empty string to disable.")
+    p.add_argument("--start-level", dest="start_level", type=int, default=1,
+                   help="Level to start playing from (default: 1). "
+                        "If the scorecard already has prior levels completed, skips pre-solve. "
+                        "If not, executes the known subplan for this env to advance levels.")
     return p.parse_args()
 
 
@@ -178,7 +182,7 @@ async def main() -> None:
         f"[bold]ARC-AGI-3 Ensemble[/bold]\n"
         f"Model:       [cyan]{DEFAULT_MODEL}[/cyan]\n"
         f"Environment: [cyan]{args.env}[/cyan]\n"
-        f"Episodes:    {args.episodes}\n"
+        f"Episodes:    {args.episodes}   Start level: {args.start_level}\n"
         f"Max steps/ep: {args.max_steps}   Max cycles/ep: {args.max_cycles}\n"
         f"Render:      {args.render}\n"
         f"NS tag:      [cyan]{args.dataset_tag}[/cyan]\n"
@@ -207,6 +211,7 @@ async def main() -> None:
             verbose                 = verbose,
             playlog_root            = playlog_root,
             known_action_directions = shared_action_directions,
+            start_level             = args.start_level,
         )
         # Carry confirmed directions into the next episode
         shared_action_directions.update(meta.action_directions)
