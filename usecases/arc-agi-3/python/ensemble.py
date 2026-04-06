@@ -187,6 +187,84 @@ _KNOWN_SUBPLANS: dict[str, list[str]] = {
         + ["ACTION2"]
         + ["ACTION4"] * 7
         + ["ACTION1"]
+        # ls20 level 6→7 (72 steps): dual-target puzzle with 3 period-8 sliding gates
+        #   - Start (24,50): shape=0, color=2, rot=0
+        #   - Target 0 at (54,50): shape=5, color_idx=1, rot_idx=1
+        #   - Target 1 at (54,35): shape=0, color_idx=3, rot_idx=2
+        #   - Gate-driven changers period 8, undo on blocked moves
+        #   - Strategy: reach target 1 first (sh=0,col=3,rot=2) then collect shape & hit target 0
+        + ["ACTION1"] * 2
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION4"] * 2
+        + ["ACTION1"]
+        + ["ACTION4"]
+        + ["ACTION1"] * 3
+        + ["ACTION3"] * 2
+        + ["ACTION4"] * 2
+        + ["ACTION1"] * 2
+        + ["ACTION4"] * 2
+        + ["ACTION1"] * 2
+        + ["ACTION4"]
+        + ["ACTION2"] * 2
+        + ["ACTION1"] * 2
+        + ["ACTION3"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION3"] * 4
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION3"] * 2
+        + ["ACTION2"] * 4
+        + ["ACTION1"]
+        + ["ACTION4"] * 3
+        + ["ACTION3"] * 3
+        + ["ACTION1"] * 6
+        + ["ACTION4"] * 6
+        + ["ACTION2"]
+        + ["ACTION4"] * 2
+        + ["ACTION1"] * 2
+        + ["ACTION4"]
+        + ["ACTION2"] * 5
+        # ls20 level 7→WIN (53 steps): shape+color+rot puzzle with period-8 sliding gate
+        #   - Start (19,15): shape=1, color=0, rot=0
+        #   - Target at (29,50): shape=0, color_idx=3, rot_idx=2
+        #   - shape changer at (19,40): 5 touches (1→0 via 6 steps)
+        #   - color changer at (9,40): 3 touches (0→3)
+        #   - rot changer: sliding gate period 8 (rail x=54, y∈[10..30])
+        #   - 6 resets; StepsDecrement=2
+        + ["ACTION1"] * 2
+        + ["ACTION2"] * 2
+        + ["ACTION3"] * 2
+        + ["ACTION2"] * 5
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION4"]
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION4"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION1"]
+        + ["ACTION2"]
+        + ["ACTION3"] * 2
+        + ["ACTION1"] * 3
+        + ["ACTION4"] * 4
+        + ["ACTION1"]
+        + ["ACTION4"] * 2
+        + ["ACTION1"]
+        + ["ACTION4"] * 2
+        + ["ACTION1"] * 2
+        + ["ACTION4"]
+        + ["ACTION2"] * 2
+        + ["ACTION3"] * 3
+        + ["ACTION1"]
+        + ["ACTION2"] * 4
     ),
 }
 
