@@ -130,6 +130,10 @@ def parse_args() -> argparse.Namespace:
                    help="Level to start playing from (default: 1). "
                         "If the scorecard already has prior levels completed, skips pre-solve. "
                         "If not, executes the known subplan for this env to advance levels.")
+    p.add_argument("--model", default="",
+                   help="Override LLM model. Examples: claude-sonnet-4-6, "
+                        "Qwen/Qwen3.5-9B, meta-llama/Llama-3.3-70B-Instruct-Turbo, "
+                        "deepseek-ai/DeepSeek-V3.1, Qwen/Qwen3.5-397B-A17B")
     return p.parse_args()
 
 
@@ -144,6 +148,15 @@ async def main() -> None:
     if args.prompts:
         import core.pipeline.agents as _ca
         _ca.SHOW_PROMPTS = True
+
+    # Override model across all modules
+    if args.model:
+        import core.pipeline.agents as _ca2
+        _ca2.DEFAULT_MODEL = args.model
+        agents.DEFAULT_MODEL = args.model
+        ens.DEFAULT_MODEL = args.model
+        global DEFAULT_MODEL
+        DEFAULT_MODEL = args.model
 
     # Load API keys
     _key_file = Path("P:/_access/Security/api_keys.env")

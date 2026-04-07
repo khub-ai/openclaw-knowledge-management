@@ -55,6 +55,7 @@ from agents import (
     obs_frame,
     frame_to_str,
     format_action_space,
+    _format_action_effects,
 )
 from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
 
@@ -99,6 +100,11 @@ def save_level_frame(
 
 MAX_STEPS  = 200   # hard cap on total env.step() calls per episode
 MAX_CYCLES = 40    # hard cap on OBSERVER-MEDIATOR cycles per episode
+
+# Feature flag: skip the OBSERVER LLM call on puzzle levels (≥6 visual groups)
+# and pass the structural context directly to the MEDIATOR.
+# Set to False to revert to full OBSERVER calls on every cycle.
+SKIP_OBSERVER_FOR_PUZZLES = True
 
 # Known action sequences to pre-solve (skip) levels that are already mastered.
 # Keys are env_id strings.  Values are ordered action names.
@@ -747,11 +753,19 @@ async def _match_rules(
     rule_engine: RuleEngine,
     obs: Any,
     action_history: list[dict],
+    env_id: str = "",
 ) -> list:
     """Match rules against current game observation. Returns list of RuleMatch."""
     active = rule_engine.active_task_rules()
     if not active:
         return []
+
+    # Pre-filter: only send rules tagged with the current environment to the LLM.
+    # This cuts the rule set from ~3000 to ~900 for a typical environment.
+    if env_id:
+        env_rules = [r for r in active if env_id in r.get("tags", [])]
+        if env_rules:
+            active = env_rules
 
     frame = obs_frame(obs)
     grid_str = frame_to_str(frame)
@@ -772,7 +786,7 @@ async def _match_rules(
         f"Frame:\n{grid_str}"
     )
 
-    user_msg = rule_engine.build_match_prompt(task_text)
+    user_msg = rule_engine.build_match_prompt(task_text, rules_subset=active)
     text, _ = await _core_call_agent("MEDIATOR", user_msg, max_tokens=1024)
     return rule_engine.parse_match_response(text)
 
@@ -897,6 +911,8 @@ async def run_episode(
     _med_plan_current:  list = []
     _med_reason_current = ""
     _plan_step_idx      = 0
+    _last_obs_frame: list = []  # frame at last OBSERVER call, for caching
+    _is_puzzle: bool = False    # cached from previous cycle for early rule-skip
 
     def log(msg: str) -> None:
         if verbose:
@@ -936,13 +952,26 @@ async def run_episode(
         levels_before = levels_now
         _plan_step_idx = 0
 
+        _cycle_t0 = time.time()
+
         log(f"\n-- Cycle {cycle_count}  "
             f"(steps {step_count}/{max_steps}, levels={levels_now}) --")
 
         # ------------------------------------------------------------------
         # Round 0: Rule matching
         # ------------------------------------------------------------------
-        matched = await _match_rules(rule_engine, obs, action_history)
+        # Skip rule matching after cycle 2 on the same level —
+        # saves ~12s per cycle. Re-match only on cycle 1, 2, or level change.
+        # For puzzle levels, match only on cycle 1 (action semantics are stable).
+        _t0 = time.time()
+        _skip_rules = (cycle_count > 2 and last_matched) or (
+            _is_puzzle and cycle_count > 1 and last_matched
+        )
+        if _skip_rules:
+            matched = last_matched
+            log("  [rules] reusing previous matches (cycle > 2, same level)")
+        else:
+            matched = await _match_rules(rule_engine, obs, action_history, env_id=env_id)
         last_matched = matched
         if matched:
             ids = [m.rule_id for m in matched]
@@ -952,6 +981,9 @@ async def run_episode(
         ep_log.cycle_start(cycle_count, step_count, max_steps, levels_now,
                            [m.rule_id for m in matched])
 
+        _rules_ms = int((time.time() - _t0) * 1000)
+
+        _t0 = time.time()
         rules_section = rule_engine.format_fired_rules_for_prompt(matched, current_level=levels_now + 1)
         tools_section = tool_registry.build_tool_section_for_prompt()
 
@@ -970,8 +1002,11 @@ async def run_episode(
         available_actions = list(getattr(env, "action_space", []))
         concept_bindings: dict = state_manager._data.get("concept_bindings") or {}
 
+        _prep_ms = int((time.time() - _t0) * 1000)
+
         # Pre-compute structural context (zero LLM cost) so it can be passed
         # directly to the MEDIATOR — the OBSERVER may summarize/drop BFS routes.
+        _t0 = time.time()
         _curr_frame = obs_frame(obs)
         structural_str = format_structural_context(
             _curr_frame,
@@ -982,20 +1017,64 @@ async def run_episode(
             contact_events=contact_events,
         )
 
-        obs_text, _obs_ms = await run_observer(
-            obs,
-            available_actions,
-            action_history,
-            rules_section=rules_section,
-            action_effects=state_manager._data.get("action_effects"),
-            concept_bindings=concept_bindings,
-            steps_remaining=max_steps - step_count,
-            known_dynamic_colors=known_dynamic_colors,
-            explored_colors=explored_colors,
-            action_directions=action_directions,
-            contact_events=contact_events,
-            verbose=verbose,
-        )
+        _struct_ms = int((time.time() - _t0) * 1000)
+
+        # Detect puzzle levels from structural context (≥6 visual groups).
+        _is_puzzle = "Visual groups:" in structural_str
+
+        # Check if the frame changed enough to warrant a new OBSERVER call.
+        _frame_diff = 0
+        if _last_obs_frame:
+            for r_idx in range(min(len(_curr_frame), len(_last_obs_frame))):
+                for c_idx in range(min(len(_curr_frame[r_idx]), len(_last_obs_frame[r_idx]))):
+                    if _curr_frame[r_idx][c_idx] != _last_obs_frame[r_idx][c_idx]:
+                        _frame_diff += 1
+        else:
+            _frame_diff = 999  # first cycle — always observe
+
+        _t0 = time.time()
+
+        # --- Puzzle-level OBSERVER bypass (SKIP_OBSERVER_FOR_PUZZLES) ---
+        # On puzzle levels the structural context already contains groups,
+        # focus/cursor, mismatch info, and reference slot mapping — everything
+        # the MEDIATOR needs. We build a lightweight synthetic OBSERVER output
+        # from locally-computed data, saving ~$0.15 per skipped call.
+        if SKIP_OBSERVER_FOR_PUZZLES and _is_puzzle:
+            _action_effects = state_manager._data.get("action_effects") or {}
+            _effects_str = _format_action_effects(_action_effects)
+            _preds = compute_trend_predictions(_action_effects, max_steps - step_count)
+            _preds_str = ("\n".join(f"  {p}" for p in _preds)
+                          if _preds else "  (none)")
+            obs_text = (
+                "## Structural context (puzzle level — OBSERVER bypassed)\n\n"
+                f"{structural_str}\n\n"
+                "## Observed action effects\n\n"
+                f"{_effects_str}\n\n"
+                "## Trend predictions\n\n"
+                f"{_preds_str}\n"
+            )
+            log("  [OBSERVER] Puzzle level — bypassed LLM (structural context only)")
+        elif _frame_diff > 3 or not _obs_text_current:
+            obs_text, _obs_ms = await run_observer(
+                obs,
+                available_actions,
+                action_history,
+                rules_section=rules_section,
+                action_effects=state_manager._data.get("action_effects"),
+                concept_bindings=concept_bindings,
+                steps_remaining=max_steps - step_count,
+                known_dynamic_colors=known_dynamic_colors,
+                explored_colors=explored_colors,
+                action_directions=action_directions,
+                contact_events=contact_events,
+                verbose=verbose,
+            )
+            _last_obs_frame = [row[:] for row in _curr_frame]
+        else:
+            obs_text = _obs_text_current  # reuse cached OBSERVER output
+            log("  [OBSERVER] Frame unchanged (<4 pixels) — reusing cached analysis")
+        _observer_ms = int((time.time() - _t0) * 1000)
+
         _obs_text_current = obs_text
         ep_log.observer_output(obs_text)
 
@@ -1072,6 +1151,7 @@ async def run_episode(
         # ------------------------------------------------------------------
         # Round 2: MEDIATOR
         # ------------------------------------------------------------------
+        _t0 = time.time()
         action_plan, med_text, _med_ms = await run_mediator(
             obs_text,
             rules_section=rules_section,
@@ -1083,6 +1163,8 @@ async def run_episode(
             structural_context_str=structural_str,
             verbose=verbose,
         )
+        _mediator_ms = int((time.time() - _t0) * 1000)
+
         _med_plan_current  = action_plan
         _med_reason_current = _extract_reasoning(med_text)
         ep_log.mediator_output(med_text, action_plan)
@@ -1143,6 +1225,17 @@ async def run_episode(
             if concepts:
                 cb_str = "  ".join(f"color{c}={n}" for c, n in sorted(concepts.items(), key=lambda x: str(x[0])))
                 log(f"  [CONCEPTS] {cb_str}")
+
+        # Timing summary for cycle
+        _cycle_total_ms = int((time.time() - _cycle_t0) * 1000)
+        log(f"  [TIMING] cycle={_cycle_total_ms}ms  "
+            f"rules={_rules_ms}ms  struct={_struct_ms}ms  "
+            f"observer={_observer_ms}ms  mediator={_mediator_ms}ms")
+        ep_log._write(
+            f"  [TIMING] cycle={_cycle_total_ms}ms  "
+            f"rules={_rules_ms}ms  struct={_struct_ms}ms  "
+            f"observer={_observer_ms}ms  mediator={_mediator_ms}ms"
+        )
 
         if not action_plan:
             log("  [MEDIATOR] No action plan produced — cycle skipped")
@@ -1228,6 +1321,7 @@ async def run_episode(
                     win_levels   = _win_levels,
                 )
 
+            _step_t0 = time.time()
             curr_frame = obs_frame(obs)
             change = _compute_change_summary(frame_before, curr_frame)
             prev_frame = curr_frame
@@ -1445,10 +1539,13 @@ async def run_episode(
                         log(f"    [GOAL] urgency goal pushed: {pred[:80]}")
                         ep_log._write(f"  [GOAL URGENT] {pred}")
 
+            _step_proc_ms = int((time.time() - _step_t0) * 1000)
+
             data_str = f" {data}" if data else ""
             log(f"    step {step_count}: {action_name}{data_str}"
                 f" -> {state_after} levels={levels_after}"
-                f" diff={change['diff_count']}")
+                f" diff={change['diff_count']}"
+                f" proc={_step_proc_ms}ms")
             if verbose and obj_summary != "no object-level changes detected":
                 for line in obj_summary.splitlines():
                     log(f"      {line.strip()}")
@@ -1461,6 +1558,8 @@ async def run_episode(
                 break
 
             if levels_after > levels_before:
+                last_matched = []  # force rule re-match on new level
+                _last_obs_frame = []  # force OBSERVER re-run on new level
                 log(f"  [ACTOR] Level advanced: {levels_before} -> {levels_after}")
                 ep_log.level_advance(levels_before, levels_after)
                 if playlog_root is not None:

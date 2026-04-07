@@ -24,6 +24,22 @@ summarize_action_effects(action_effects)
     -> str
     Render the full accumulated action-effect table (object-level) for
     injection into OBSERVER / MEDIATOR prompts.
+
+extract_subgrid(frame, bbox, foreground_color=None)
+    -> list[list[int]]
+    Crop a rectangular region from a frame.  Optionally binarize to a
+    foreground mask.
+
+compare_shapes(mask_a, mask_b)
+    -> dict
+    Compare two binary masks under all 8 D4 symmetry transforms (4 rotations
+    x 2 reflections).  Returns whether they match, which transform, and
+    Jaccard distances for each.
+
+find_transformation(pairs)
+    -> dict
+    Given multiple (input, output) mask pairs, find a single consistent D4
+    transform that maps every input to its output.
 """
 
 from __future__ import annotations
@@ -35,22 +51,26 @@ from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
-# Color names (same as ARC-AGI palette)
+# Color names — matches the SDK rendering palette (arc_agi/rendering.py)
 # ---------------------------------------------------------------------------
 
 _COLOR_NAMES = {
-    0: "black",
-    1: "blue",
-    2: "red",
-    3: "green",
-    4: "yellow",
-    5: "grey",
-    6: "magenta",
-    7: "orange",
-    8: "azure",
-    9: "white",
-    # Colors beyond 9 are game-specific extensions — named generically so the
-    # system discovers their roles through exploration rather than hardcoding.
+    0: "white",         # #FFFFFF
+    1: "off-white",     # #CCCCCC
+    2: "light-grey",    # #999999
+    3: "dark-grey",     # #666666
+    4: "off-black",     # #333333
+    5: "black",         # #000000
+    6: "magenta",       # #E53AA3
+    7: "pink",          # #FF7BCC
+    8: "red",           # #F93C31
+    9: "blue",          # #1E93FF
+    10: "cyan",         # #88D8F1
+    11: "yellow",       # #FFDC00
+    12: "orange",       # #FF851B
+    13: "maroon",       # #921231
+    14: "green",        # #4FCC30
+    15: "purple",       # #A356D6
 }
 
 
@@ -1317,8 +1337,13 @@ def format_structural_context(
 
     lines: list[str] = []
 
+    # Pre-compute groups to detect puzzle levels (groups are reused at the end).
+    _groups = detect_groups(frame, objects, containment) if objects and containment else []
+    _is_puzzle = len(_groups) >= 6  # puzzle levels have many grouped slots
+
     # --- Confirmed action directions (suppresses re-characterization) ---
-    if directions:
+    # Skip for puzzle levels: navigation-era directions don't apply to puzzles.
+    if directions and not _is_puzzle:
         dir_labels = {(-1, 0): "up", (1, 0): "down", (0, -1): "left", (0, 1): "right"}
         dir_parts = []
         for act in sorted(directions):
@@ -1522,11 +1547,1132 @@ def format_structural_context(
                     f"  [step {step}] touching color{color}({color_name(color)}) caused:"
                 )
                 for eff in effects:
-                    lines.append(f"    → {eff}")
+                    lines.append(f"    -> {eff}")
             else:
                 lines.append(
                     f"  [step {step}] touching color{color}({color_name(color)}): "
                     f"no detected world change (may be a passive/inert object)"
                 )
 
+    # --- Visual reasoning: grouping, types, focus, mismatches ---------------
+    if _groups:
+        groups = _groups
+        if groups:
+            types = classify_group_types(groups)
+            # Partition into reference (top half) and target (bottom half)
+            rows = len(frame)
+            midpoint = rows / 2
+            ref_groups = [g for g in groups if g.centroid[0] < midpoint]
+            tgt_groups = [g for g in groups if g.centroid[0] >= midpoint]
+
+            # Build a position label for each group: "g3@(row,col)"
+            def _pos_label(g: ObjectGroup) -> str:
+                r, c = g.centroid
+                return f"{g.id}@({int(r)},{int(c)})"
+
+            if len(types) > 1:
+                lines.append("\nVisual groups:")
+                for t in types:
+                    ids = [_pos_label(g) for g in t.instances]
+                    lines.append(f"  Type {t.type_id} ({len(t.instances)}x): {t.description}")
+                    lines.append(f"    instances: {ids}")
+
+            if ref_groups and tgt_groups:
+                # Sort target groups by column for stable slot ordering
+                tgt_sorted = sorted(tgt_groups, key=lambda g: g.centroid[1])
+                slot_index = {id(g): i for i, g in enumerate(tgt_sorted)}
+
+                def _slot_label(g: ObjectGroup) -> str:
+                    idx = slot_index.get(id(g))
+                    if idx is not None:
+                        return f"{g.id}@({int(g.centroid[0])},{int(g.centroid[1])}) [slot {idx+1}/{len(tgt_sorted)}]"
+                    return _pos_label(g)
+
+                # Focus detection
+                focus = detect_focus(objects, groups, indicator_colors={0})
+                if focus and focus.target_group:
+                    fg = focus.target_group
+                    lines.append(
+                        f"\nFocus/cursor: {color_name(focus.color)} markers "
+                        f"-> {_slot_label(fg)}"
+                    )
+
+                # Pairwise mismatches (cyan strip -> reference pairs)
+                pw = detect_pairwise_mismatches(ref_groups, tgt_groups, frame)
+                if pw:
+                    lines.append(f"\nReference slot mapping ({len(pw)} matched):")
+                    for mm in pw:
+                        lines.append(
+                            f"  {_slot_label(mm.group_b)} -> ref {_pos_label(mm.group_a)}: {mm.detail}"
+                        )
+
+                # Simple mismatches for target groups NOT already covered
+                # by pairwise mapping (to avoid conflicting signals).
+                pw_covered = {id(mm.group_b) for mm in pw} if pw else set()
+                remaining_tgt = [g for g in tgt_groups if id(g) not in pw_covered]
+                sm = detect_mismatches(ref_groups, remaining_tgt, frame)
+                # Include pairwise results as matches for the count
+                total = len(sm) + len(pw_covered)
+                pw_match_count = sum(1 for mm in (pw or []) if mm.match)
+                matched = [mm for mm in sm if mm.match]
+                mismatched = [mm for mm in sm if not mm.match]
+                all_matched = len(matched) + pw_match_count
+                if matched:
+                    lines.append(f"\nContent matches ({all_matched}/{total}):")
+                    for mm in matched:
+                        lines.append(f"  {_slot_label(mm.group_b)}: MATCH via {mm.best_transform}")
+                if mismatched:
+                    lines.append(f"\nContent mismatches ({len(mismatched)}/{total}):")
+                    for mm in mismatched:
+                        lines.append(f"  {_slot_label(mm.group_b)}: closest to {_pos_label(mm.group_a)} ({mm.detail})")
+
     return "\n".join(lines) if lines else "  (no structural context detected)"
+
+
+# ---------------------------------------------------------------------------
+# Visual reasoning primitives: Grouping, Type Equivalence, Focus, Mismatch
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ObjectGroup:
+    """A logical group of spatially related objects treated as one unit.
+
+    E.g., a cyan border-box containing a black shape = one group.
+    A (cyan-box, connector, pink-box) triple = one pair-group.
+    """
+    id: str                              # unique group id, e.g. "g0", "g1"
+    members: list[ObjectRecord]          # constituent objects
+    role: str = ""                       # e.g. "reference_pair", "editable_slot"
+    group_type: str = ""                 # type tag for equivalence, e.g. "box_pair"
+    bbox: dict = field(default_factory=dict)  # combined bounding box
+    anchor: ObjectRecord | None = None   # primary member (e.g. the border box)
+    content_mask: list[list[int]] | None = None  # extracted foreground mask
+
+    @property
+    def centroid(self) -> tuple[float, float]:
+        if not self.members:
+            return (0.0, 0.0)
+        r = sum(m.centroid[0] for m in self.members) / len(self.members)
+        c = sum(m.centroid[1] for m in self.members) / len(self.members)
+        return (r, c)
+
+    @property
+    def label(self) -> str:
+        colors = sorted(set(m.color for m in self.members))
+        color_str = "+".join(color_name(c) for c in colors)
+        return f"group[{self.id}]({color_str}, {self.role or self.group_type or '?'})"
+
+
+@dataclass
+class GroupType:
+    """A type shared by multiple ObjectGroups.
+
+    Groups of the same type have the same structural signature: same member
+    color set, same spatial arrangement, same size class.
+    """
+    type_id: str                         # e.g. "t0", "t1"
+    signature: str                       # structural fingerprint
+    instances: list[ObjectGroup] = field(default_factory=list)
+    description: str = ""                # human-readable, e.g. "cyan+black box pair"
+
+
+@dataclass
+class FocusIndicator:
+    """A visual cursor/bracket selecting one element from a set."""
+    indicator_objects: list[ObjectRecord]  # the cursor objects (e.g. white brackets)
+    target_group: ObjectGroup | None       # which group is currently selected
+    target_index: int = -1                 # index within the group type's instances
+    color: int = -1                        # color of the indicator
+
+
+@dataclass
+class Mismatch:
+    """A difference between two same-type groups."""
+    group_a: ObjectGroup                  # reference group
+    group_b: ObjectGroup                  # group being compared
+    match: bool                           # True if content masks are identical
+    best_transform: str = ""              # closest D4 transform name
+    distance: float = 1.0                 # Jaccard distance (0 = identical)
+    detail: str = ""                      # human-readable description
+
+
+def _combined_bbox(objects: list[ObjectRecord]) -> dict:
+    """Compute the bounding box that encloses all given objects."""
+    r_min = min(o.bbox["r_min"] for o in objects)
+    r_max = max(o.bbox["r_max"] for o in objects)
+    c_min = min(o.bbox["c_min"] for o in objects)
+    c_max = max(o.bbox["c_max"] for o in objects)
+    return {"r_min": r_min, "r_max": r_max, "c_min": c_min, "c_max": c_max}
+
+
+def _bbox_adjacent(a: dict, b: dict, gap: int = 3) -> bool:
+    """True if two bounding boxes are within *gap* cells of each other
+    horizontally or vertically (but not overlapping)."""
+    # Horizontal adjacency (same row band)
+    row_overlap = a["r_min"] <= b["r_max"] and b["r_min"] <= a["r_max"]
+    if row_overlap:
+        h_gap = max(b["c_min"] - a["c_max"], a["c_min"] - b["c_max"])
+        if 0 < h_gap <= gap:
+            return True
+    # Vertical adjacency (same column band)
+    col_overlap = a["c_min"] <= b["c_max"] and b["c_min"] <= a["c_max"]
+    if col_overlap:
+        v_gap = max(b["r_min"] - a["r_max"], a["r_min"] - b["r_max"])
+        if 0 < v_gap <= gap:
+            return True
+    return False
+
+
+def _bbox_overlaps(a: dict, b: dict) -> bool:
+    """True if two bounding boxes overlap at all."""
+    return (a["r_min"] <= b["r_max"] and b["r_min"] <= a["r_max"]
+            and a["c_min"] <= b["c_max"] and b["c_min"] <= a["c_max"])
+
+
+def _group_signature(members: list[ObjectRecord]) -> str:
+    """Structural fingerprint: sorted color set + size class + arrangement.
+
+    Two groups with the same signature are the same type.
+    Objects smaller than 3 cells are treated as border artifacts and excluded
+    from the size/arrangement parts of the signature (but their colors are
+    still included).
+    """
+    colors = tuple(sorted(set(m.color for m in members)))
+    # Filter out border artifacts for size/arrangement
+    significant = [m for m in members if m.size >= 3]
+    if not significant:
+        significant = members  # fallback
+    sizes = tuple(sorted(_size_bucket(m.size) for m in significant))
+    # Arrangement: relative positions (quantized)
+    if len(significant) >= 2:
+        cx = sum(m.centroid[1] for m in significant) / len(significant)
+        cy = sum(m.centroid[0] for m in significant) / len(significant)
+        arrangement = tuple(sorted(
+            (round((m.centroid[0] - cy) / 5), round((m.centroid[1] - cx) / 5))
+            for m in significant
+        ))
+    else:
+        arrangement = ()
+    return f"colors={colors}|sizes={sizes}|arr={arrangement}"
+
+
+def _size_bucket(size: int) -> str:
+    if size <= 5:
+        return "tiny"
+    if size <= 20:
+        return "small"
+    if size <= 60:
+        return "medium"
+    if size <= 200:
+        return "large"
+    return "xlarge"
+
+
+def _cluster_objects(
+    objects: list[ObjectRecord], gap: int = 3,
+) -> list[list[ObjectRecord]]:
+    """Cluster objects by spatial proximity using single-linkage.
+
+    Two objects are linked if their bounding boxes are within *gap* cells.
+    Returns a list of clusters (each a list of objects).
+    """
+    n = len(objects)
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            bi, bj = objects[i].bbox, objects[j].bbox
+            # Check horizontal gap (row-overlap + column gap)
+            row_overlap = bi["r_min"] <= bj["r_max"] and bj["r_min"] <= bi["r_max"]
+            col_overlap = bi["c_min"] <= bj["c_max"] and bj["c_min"] <= bi["c_max"]
+            h_gap = max(bj["c_min"] - bi["c_max"], bi["c_min"] - bj["c_max"])
+            v_gap = max(bj["r_min"] - bi["r_max"], bi["r_min"] - bj["r_max"])
+            if (row_overlap and h_gap <= gap) or (col_overlap and v_gap <= gap):
+                union(i, j)
+
+    from collections import defaultdict
+    clusters_map: dict[int, list[ObjectRecord]] = defaultdict(list)
+    for i in range(n):
+        clusters_map[find(i)].append(objects[i])
+    return list(clusters_map.values())
+
+
+# ---- 1. GROUPING ----------------------------------------------------------
+
+def detect_groups(
+    frame: list[list[int]],
+    objects: list[ObjectRecord],
+    containment: list[ContainmentRelation] | None = None,
+    *,
+    adjacency_gap: int = 5,
+    min_group_size: int = 2,
+    max_container_fraction: float = 0.10,
+) -> list[ObjectGroup]:
+    """Detect logical groups of objects based on containment and adjacency.
+
+    Strategy:
+    1. Filter containment to use only *tightest* (smallest) container per
+       content object, excluding region-scale containers.
+    2. Each tight container + its contents = one atomic "box group."
+    3. Adjacent box groups of different colors are merged into "pair groups."
+    4. Each group gets a content mask extracted from the inner bbox.
+
+    Parameters
+    ----------
+    frame : the full game frame (needed for mask extraction)
+    objects : all detected objects
+    containment : pre-computed containment relations (or None to compute)
+    adjacency_gap : max pixel gap between boxes to consider them paired
+    min_group_size : minimum members to form a group (default 2)
+    max_container_fraction : containers whose size exceeds this fraction of
+        the frame are excluded (too large = background region, not a box)
+    """
+    if containment is None:
+        containment = detect_containment(objects)
+
+    total_cells = len(frame) * len(frame[0]) if frame else 1
+    max_container_size = int(total_cells * max_container_fraction)
+
+    # Step 1: For each content object, find its TIGHTEST (smallest) container.
+    # Exclude region-scale containers.
+    tightest: dict[int, tuple[ObjectRecord, ObjectRecord]] = {}  # id(content) -> (container, content)
+    for rel in containment:
+        if rel.container.size > max_container_size:
+            continue  # skip region-scale containers
+        cid = id(rel.content)
+        if cid not in tightest or rel.container.size < tightest[cid][0].size:
+            tightest[cid] = (rel.container, rel.content)
+
+    # Step 2: Build atomic box groups: each container + its tight contents.
+    container_to_contents: dict[int, list[ObjectRecord]] = {}
+    container_objs: dict[int, ObjectRecord] = {}
+    for container, content in tightest.values():
+        key = id(container)
+        container_objs[key] = container
+        container_to_contents.setdefault(key, []).append(content)
+
+    # Each box group = container + its contents.
+    # If a container has multiple spatially separated contents, split into
+    # individual slot groups (e.g., a strip with 5 sub-shapes).
+    box_groups: dict[int, list[ObjectRecord]] = {}  # key = id(container) or synthetic
+    split_slot_keys: set[int] = set()  # keys from strip-split groups
+    _next_synthetic = -1  # synthetic keys for split groups
+
+    for key, contents in container_to_contents.items():
+        container = container_objs[key]
+        if len(contents) <= 2:
+            box_groups[key] = [container] + contents
+            continue
+
+        # Cluster spatially separated contents via single-linkage clustering.
+        clusters = _cluster_objects(contents, gap=1)
+        if len(clusters) <= 1:
+            box_groups[key] = [container] + contents
+        else:
+            # Split: each cluster + shared container = one slot group
+            for cluster in clusters:
+                _next_synthetic -= 1
+                syn_key = _next_synthetic
+                box_groups[syn_key] = [container] + list(cluster)
+                container_objs[syn_key] = container
+                split_slot_keys.add(syn_key)
+
+    # Step 2b: Exclude nested box groups entirely.
+    # If a container is itself a content object (has its own tightest container),
+    # it's a nested level (e.g., black 5×5 inside a colored 7×7 box containing
+    # pink pattern content).  These create duplicate groups that interfere with
+    # pairing and deduplication.
+    content_obj_ids = set(id(content) for _, content in tightest.values())
+    nested_keys = {k for k in box_groups if id(container_objs[k]) in content_obj_ids}
+    for nk in nested_keys:
+        del box_groups[nk]
+        # Keep container_objs entries (harmless, may be shared)
+
+    # Step 3: Merge adjacent box groups of different container colors into pairs.
+    keys = list(box_groups.keys())
+    # Union-find: each key starts in its own set
+    parent: dict[int, int] = {k: k for k in keys}
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    # Helper: content-effective bbox for split slots (use content position,
+    # not the full strip bbox), falling back to container bbox otherwise.
+    def _effective_bb(key: int) -> dict:
+        if key in split_slot_keys:
+            container = container_objs[key]
+            content = [m for m in box_groups[key] if m is not container]
+            if content:
+                return _combined_bbox(content)
+        return container_objs[key].bbox
+
+    for i in range(len(keys)):
+        for j in range(i + 1, len(keys)):
+            a_box = container_objs[keys[i]]
+            b_box = container_objs[keys[j]]
+            # Only pair different-color containers of similar size
+            if a_box.color == b_box.color:
+                continue
+            size_ratio = max(a_box.size, b_box.size) / max(min(a_box.size, b_box.size), 1)
+            if size_ratio > 3.0:
+                continue  # too different in size to be a pair
+
+            # Use content-effective bbox for spatial checks
+            a_bb = _effective_bb(keys[i])
+            b_bb = _effective_bb(keys[j])
+
+            # Horizontal adjacency (boxes share a row band)
+            row_overlap = a_bb["r_min"] <= b_bb["r_max"] and b_bb["r_min"] <= a_bb["r_max"]
+            if row_overlap:
+                h_gap = max(b_bb["c_min"] - a_bb["c_max"], a_bb["c_min"] - b_bb["c_max"])
+                if 0 < h_gap <= adjacency_gap:
+                    union(keys[i], keys[j])
+                    continue
+
+            # Vertical adjacency for split slot groups (stacked strips).
+            # Only applies when both groups are from strip-split containers,
+            # preventing reference 7×7 boxes from merging with target strips.
+            if keys[i] in split_slot_keys and keys[j] in split_slot_keys:
+                col_overlap = a_bb["c_min"] <= b_bb["c_max"] and b_bb["c_min"] <= a_bb["c_max"]
+                if col_overlap:
+                    v_gap = max(b_bb["r_min"] - a_bb["r_max"], a_bb["r_min"] - b_bb["r_max"])
+                    if 0 < v_gap <= adjacency_gap * 3:
+                        union(keys[i], keys[j])
+
+    # Collect merged groups
+    from collections import defaultdict
+    root_to_keys: dict[int, list[int]] = defaultdict(list)
+    for k in keys:
+        root_to_keys[find(k)].append(k)
+
+    groups: list[ObjectGroup] = []
+    gid = 0
+
+    for root, member_keys in root_to_keys.items():
+        all_members: list[ObjectRecord] = []
+        anchors: list[ObjectRecord] = []
+        seen_ids: set[int] = set()
+        for mk in member_keys:
+            anchors.append(container_objs[mk])
+            for m in box_groups[mk]:
+                if id(m) not in seen_ids:
+                    seen_ids.add(id(m))
+                    all_members.append(m)
+
+        if len(all_members) < min_group_size:
+            continue
+
+        combined = _combined_bbox(all_members)
+
+        # Extract content mask from each anchor's inner bbox (skip 1-cell border).
+        # For split slot groups (anchor much larger than content), use the
+        # content objects' bbox instead of the anchor's full inner bbox.
+        anchor_colors = set(a.color for a in anchors)
+        content_objs = [m for m in all_members if m not in anchors]
+        masks: list[tuple[ObjectRecord, list[list[int]]]] = []
+        for anchor in anchors:
+            # Scope content to objects within this anchor's bbox.
+            # Critical for vertically-paired groups where two anchors (strips)
+            # share the content list — each anchor should only use its own content.
+            a_bb = anchor.bbox
+            anchor_content = [
+                m for m in content_objs
+                if (a_bb["r_min"] <= m.centroid[0] <= a_bb["r_max"]
+                    and a_bb["c_min"] <= m.centroid[1] <= a_bb["c_max"])
+            ]
+            if not anchor_content:
+                anchor_content = content_objs  # fallback
+            # Check if this is a split slot (anchor >> content)
+            content_size = sum(o.size for o in anchor_content)
+            is_slot = anchor_content and anchor.size > content_size * 5
+            if is_slot and anchor_content:
+                # Use anchor-scoped content objects' bbox
+                inner = _combined_bbox(anchor_content)
+            else:
+                # Normal: use anchor's inner bbox (skip 1-cell border)
+                inner = {
+                    "r_min": anchor.bbox["r_min"] + 1,
+                    "r_max": anchor.bbox["r_max"] - 1,
+                    "c_min": anchor.bbox["c_min"] + 1,
+                    "c_max": anchor.bbox["c_max"] - 1,
+                }
+            shape_color = _find_shape_color(frame, inner, {anchor.color})
+            if shape_color is not None:
+                mask = extract_subgrid(frame, inner, foreground_color=shape_color)
+                masks.append((anchor, mask))
+
+        # Use the first mask as the group's content_mask
+        primary_mask = masks[0][1] if masks else None
+
+        # For split slot groups, use content-only bbox and members to avoid
+        # the shared container inflating the signature.
+        anchor_ids = {id(a) for a in anchors}
+        content_objs_only = [m for m in all_members if id(m) not in anchor_ids]
+        is_slot = (
+            len(anchors) == 1
+            and content_objs_only
+            and anchors[0].size > 50  # only large containers can be strips
+            and anchors[0].size > sum(o.size for o in content_objs_only) * 5
+        )
+        if is_slot:
+            effective_bbox = _combined_bbox(content_objs_only)
+        else:
+            effective_bbox = combined
+
+        group = ObjectGroup(
+            id=f"g{gid}",
+            members=all_members,
+            bbox=effective_bbox,
+            anchor=anchors[0],
+            content_mask=primary_mask,
+        )
+        group._is_slot = is_slot  # type: ignore[attr-defined]
+        # Store all sub-masks as a private attribute for pairwise comparison
+        group._sub_masks = masks  # type: ignore[attr-defined]
+        groups.append(group)
+        gid += 1
+
+    # Deduplicate: if two groups overlap spatially and share non-anchor content,
+    # keep the more specific one (smaller anchor).
+    # Build content-object -> group mapping (excluding all anchors).
+    # For paired groups with multiple anchors (e.g., vertically-paired strip
+    # slots sharing cyan + pink strip containers), exclude ALL anchors, not
+    # just g.anchor — otherwise shared strips trigger false dedup.
+    all_anchor_ids: set[int] = set()
+    for root, member_keys in root_to_keys.items():
+        for mk in member_keys:
+            all_anchor_ids.add(id(container_objs[mk]))
+    content_to_groups: dict[int, list[ObjectGroup]] = {}
+    for g in groups:
+        for m in g.members:
+            if id(m) not in all_anchor_ids:
+                content_to_groups.setdefault(id(m), []).append(g)
+
+    # Also check: if a content object in group A is the anchor of group B
+    # and their bboxes overlap, they're duplicates.
+    anchor_to_group: dict[int, ObjectGroup] = {}
+    for g in groups:
+        if g.anchor:
+            anchor_to_group[id(g.anchor)] = g
+
+    drop_groups: set[str] = set()
+    for obj_id, grps in content_to_groups.items():
+        # Check if this content object is also an anchor in another group
+        all_groups = list(grps)
+        if obj_id in anchor_to_group:
+            anchor_grp = anchor_to_group[obj_id]
+            if anchor_grp not in all_groups:
+                # Check bbox overlap with any content group
+                for cg in grps:
+                    if _bbox_overlaps(cg.bbox, anchor_grp.bbox):
+                        all_groups.append(anchor_grp)
+                        break
+
+        if len(all_groups) <= 1:
+            continue
+        # Keep the group with the smallest anchor (most specific container).
+        best = min(all_groups, key=lambda g: g.anchor.size if g.anchor else 0)
+        for g in all_groups:
+            if g is not best:
+                drop_groups.add(g.id)
+
+    groups = [g for g in groups if g.id not in drop_groups]
+
+    # Sort groups by spatial position (row, col) for stable IDs across cycles.
+    # Same physical slot will always get the same ID regardless of detection order.
+    groups.sort(key=lambda g: (round(g.centroid[0], 1), round(g.centroid[1], 1)))
+
+    # Re-number groups sequentially
+    for i, g in enumerate(groups):
+        g.id = f"g{i}"
+
+    return groups
+
+
+def _find_root(merged: dict[int, set[int]], key: int) -> int:
+    """Simple union-find root lookup."""
+    while True:
+        parent_set = merged[key]
+        # The root is the key whose set we're in
+        for candidate in parent_set:
+            if merged[candidate] is parent_set:
+                return candidate
+        return key
+
+
+def _find_shape_color(
+    frame: list[list[int]],
+    bbox: dict,
+    exclude_colors: set[int],
+) -> int | None:
+    """Find the most common non-excluded, non-background color inside a bbox."""
+    from collections import Counter
+    counts: Counter = Counter()
+    bg_colors = set()
+    # Gather all background-like objects (the frame's dominant colors)
+    r_min, r_max = bbox["r_min"], bbox["r_max"]
+    c_min, c_max = bbox["c_min"], bbox["c_max"]
+    for r in range(r_min, r_max + 1):
+        for c in range(c_min, c_max + 1):
+            val = frame[r][c]
+            if val not in exclude_colors:
+                counts[val] += 1
+
+    if not counts:
+        return None
+    # Return the most common non-excluded color
+    for color, _count in counts.most_common():
+        return color
+    return None
+
+
+# ---- 2. TYPE EQUIVALENCE --------------------------------------------------
+
+def classify_group_types(groups: list[ObjectGroup]) -> list[GroupType]:
+    """Assign each group to a type based on structural signature.
+
+    Groups with identical signatures (same colors, sizes, arrangement)
+    are instances of the same type.
+    """
+    type_map: dict[str, GroupType] = {}
+    tid = 0
+
+    for g in groups:
+        # For slot groups, use content-only members for signature to avoid
+        # the shared container inflating the fingerprint.
+        is_slot = getattr(g, "_is_slot", False)
+        if is_slot and g.anchor:
+            sig_members = [m for m in g.members if m is not g.anchor]
+        else:
+            sig_members = g.members
+        sig = _group_signature(sig_members) if sig_members else _group_signature(g.members)
+        if sig not in type_map:
+            type_map[sig] = GroupType(
+                type_id=f"t{tid}",
+                signature=sig,
+                description=_describe_type(g),
+            )
+            tid += 1
+        gt = type_map[sig]
+        gt.instances.append(g)
+        g.group_type = gt.type_id
+
+    return list(type_map.values())
+
+
+def _describe_type(g: ObjectGroup) -> str:
+    """Human-readable description of a group type."""
+    colors = sorted(set(color_name(m.color) for m in g.members))
+    sizes = [m.size for m in g.members]
+    return f"{'+'.join(colors)} group ({len(g.members)} members, sizes {sizes})"
+
+
+# ---- 3. FOCUS DETECTION ---------------------------------------------------
+
+def detect_focus(
+    objects: list[ObjectRecord],
+    groups: list[ObjectGroup],
+    *,
+    indicator_colors: set[int] | None = None,
+    indicator_max_size: int = 15,
+) -> FocusIndicator | None:
+    """Detect a visual focus indicator (cursor/bracket) and determine which
+    group it's pointing at.
+
+    Strategy:
+    1. Find small objects of a distinct color (not used by any group) — these
+       are candidate indicators (e.g., white brackets in TR87).
+    2. If indicator_colors is given, use those directly.
+    3. For each candidate set, find the group whose bbox they overlap or are
+       closest to — that's the focused group.
+    """
+    # Colors used by groups
+    group_colors: set[int] = set()
+    for g in groups:
+        for m in g.members:
+            group_colors.add(m.color)
+
+    # Find candidate indicator objects: small, non-background, non-group-color
+    candidates: list[ObjectRecord] = []
+    for o in objects:
+        if o.is_background:
+            continue
+        if o.size > indicator_max_size:
+            continue
+        if indicator_colors is not None:
+            if o.color in indicator_colors:
+                candidates.append(o)
+        else:
+            if o.color not in group_colors:
+                candidates.append(o)
+
+    if not candidates:
+        return None
+
+    # Group candidates by color (the indicator is usually one color)
+    from collections import defaultdict
+    by_color: dict[int, list[ObjectRecord]] = defaultdict(list)
+    for c in candidates:
+        by_color[c.color].append(c)
+
+    # Pick the color with the most candidates (brackets come in pairs)
+    best_color = max(by_color, key=lambda c: len(by_color[c]))
+    indicators = by_color[best_color]
+
+    # Find which group the indicators are closest to
+    indicator_centroid_r = sum(o.centroid[0] for o in indicators) / len(indicators)
+    indicator_centroid_c = sum(o.centroid[1] for o in indicators) / len(indicators)
+
+    best_group = None
+    best_dist = float("inf")
+    best_idx = -1
+
+    # Sort groups by type so we can compute index within type
+    type_instances: dict[str, list[ObjectGroup]] = {}
+    for g in groups:
+        type_instances.setdefault(g.group_type, []).append(g)
+    # Sort each type's instances by column position (left to right)
+    for instances in type_instances.values():
+        instances.sort(key=lambda g: g.centroid[1])
+
+    for g in groups:
+        gr, gc = g.centroid
+        dist = math.hypot(indicator_centroid_r - gr, indicator_centroid_c - gc)
+        if dist < best_dist:
+            best_dist = dist
+            best_group = g
+            # Find index within its type
+            instances = type_instances.get(g.group_type, [])
+            best_idx = instances.index(g) if g in instances else -1
+
+    return FocusIndicator(
+        indicator_objects=indicators,
+        target_group=best_group,
+        target_index=best_idx,
+        color=best_color,
+    )
+
+
+# ---- 4. MISMATCH DETECTION -----------------------------------------------
+
+def detect_mismatches(
+    reference_groups: list[ObjectGroup],
+    target_groups: list[ObjectGroup],
+    frame: list[list[int]],
+) -> list[Mismatch]:
+    """Compare target groups against reference groups to find mismatches.
+
+    For each target group, finds the reference group with the best-matching
+    content mask and reports whether it's an exact match or a mismatch.
+
+    If the groups contain paired boxes (two different anchor colors), the
+    comparison is done on each box separately and the *relationship* between
+    the pair members is compared.
+    """
+    mismatches: list[Mismatch] = []
+
+    for tg in target_groups:
+        if tg.content_mask is None:
+            continue
+        t_h, t_w = len(tg.content_mask), len(tg.content_mask[0]) if tg.content_mask else 0
+
+        best_match: Mismatch | None = None
+        best_dist = float("inf")
+
+        for rg in reference_groups:
+            if rg.content_mask is None:
+                continue
+
+            # Collect candidate reference masks.
+            # Primary mask first; only try sub-masks when the target is
+            # much smaller than the primary (e.g. 3x3 pink slot vs 5x5
+            # primary), to avoid false matches across different sub-box
+            # types of the same size.
+            r_h0 = len(rg.content_mask)
+            r_w0 = len(rg.content_mask[0]) if rg.content_mask else 0
+            primary_too_big = (r_h0 - t_h > 1) or (r_w0 - t_w > 1)
+
+            r_masks = [rg.content_mask]
+            if primary_too_big:
+                sub_masks = getattr(rg, "_sub_masks", None)
+                if sub_masks:
+                    for _anchor, sm in sub_masks:
+                        sm_h = len(sm)
+                        sm_w = len(sm[0]) if sm else 0
+                        # Only add sub-masks that are closer in size to target
+                        if abs(sm_h - t_h) <= 1 and abs(sm_w - t_w) <= 1:
+                            r_masks.append(sm)
+
+            for r_mask in r_masks:
+                result = compare_shapes(r_mask, tg.content_mask)
+                dist = result["best_distance"]
+
+                if dist < best_dist:
+                    best_dist = dist
+                    best_match = Mismatch(
+                        group_a=rg,
+                        group_b=tg,
+                        match=result["match"],
+                        best_transform=result["best_transform"] or "",
+                        distance=dist,
+                        detail=(f"exact match via {result['transform']}"
+                                if result["match"]
+                                else f"closest: {result['best_transform']} "
+                                     f"(dist={dist:.3f})"),
+                    )
+
+        if best_match is not None:
+            mismatches.append(best_match)
+
+    return mismatches
+
+
+def detect_pairwise_mismatches(
+    reference_groups: list[ObjectGroup],
+    target_groups: list[ObjectGroup],
+    frame: list[list[int]],
+) -> list[Mismatch]:
+    """Compare paired groups by their internal relationship, not absolute content.
+
+    For groups that contain two sub-boxes of different colors (e.g., cyan + pink),
+    extract the content mask from each sub-box separately, then compare:
+    - The relationship (input_mask -> output_mask) in reference pairs
+    - Against the relationship in target pairs
+
+    This detects whether the *transformation* matches, not just the shapes.
+    """
+    def _split_pair(group: ObjectGroup, frame: list[list[int]]) -> tuple[list[list[int]] | None, list[list[int]] | None]:
+        """Split a pair-group into (input_mask, output_mask) using stored sub_masks.
+
+        Sub-masks are sorted by column (leftmost = input, rightmost = output).
+        """
+        sub_masks = getattr(group, "_sub_masks", None)
+        if not sub_masks:
+            return group.content_mask, None
+        if len(sub_masks) < 2:
+            return sub_masks[0][1] if sub_masks else None, None
+        # Sort by column position of the anchor
+        sorted_masks = sorted(sub_masks, key=lambda x: x[0].bbox["c_min"])
+        return sorted_masks[0][1], sorted_masks[1][1]
+
+    mismatches: list[Mismatch] = []
+
+    # Extract (input, output) from each reference pair
+    ref_pairs: list[tuple[list[list[int]] | None, list[list[int]] | None, ObjectGroup]] = []
+    for rg in reference_groups:
+        inp, out = _split_pair(rg, frame)
+        ref_pairs.append((inp, out, rg))
+
+    for tg in target_groups:
+        t_inp, t_out = _split_pair(tg, frame)
+        if t_inp is None:
+            continue
+
+        # If target has no output side, compare input only
+        if t_out is None:
+            # Compare target's single mask against reference inputs
+            for r_inp, r_out, rg in ref_pairs:
+                if r_inp is None:
+                    continue
+                result = compare_shapes(t_inp, r_inp)
+                if result["match"]:
+                    # Found which reference pair this target corresponds to
+                    mismatches.append(Mismatch(
+                        group_a=rg,
+                        group_b=tg,
+                        match=True,
+                        best_transform=result["transform"] or "",
+                        distance=0.0,
+                        detail=f"input matches ref {rg.id} via {result['transform']}",
+                    ))
+                    break
+            continue
+
+        # Both target and references have (input, output) pairs.
+        # For each reference pair, check if the same relationship holds.
+        best: Mismatch | None = None
+        best_dist = float("inf")
+
+        for r_inp, r_out, rg in ref_pairs:
+            if r_inp is None or r_out is None:
+                continue
+            # Check: does target_input match ref_input under some transform?
+            input_cmp = compare_shapes(t_inp, r_inp)
+            if not input_cmp["match"]:
+                continue  # Different input shape — not the same reference pair
+
+            # Inputs match → check if outputs also match
+            output_cmp = compare_shapes(t_out, r_out)
+            mm = Mismatch(
+                group_a=rg,
+                group_b=tg,
+                match=output_cmp["match"],
+                best_transform=output_cmp["best_transform"] or "",
+                distance=output_cmp["best_distance"],
+                detail=(f"pair matches ref {rg.id}"
+                        if output_cmp["match"]
+                        else f"input matches ref {rg.id} but output differs "
+                             f"(dist={output_cmp['best_distance']:.3f})"),
+            )
+            if output_cmp["best_distance"] < best_dist:
+                best_dist = output_cmp["best_distance"]
+                best = mm
+
+        if best is not None:
+            mismatches.append(best)
+
+    return mismatches
+
+# The 8 symmetry operations of the dihedral group D4 (square symmetry).
+# Each is a function: (row, col, height, width) -> (new_row, new_col).
+# After applying the function, the caller must recompute the bounding size.
+TRANSFORM_NAMES = [
+    "identity",       # 0°
+    "rot90",           # 90° clockwise
+    "rot180",          # 180°
+    "rot270",          # 270° clockwise (= 90° counter-clockwise)
+    "flip_h",          # horizontal mirror (left-right)
+    "flip_v",          # vertical mirror (top-bottom)
+    "flip_main_diag",  # transpose (reflect over main diagonal)
+    "flip_anti_diag",  # reflect over anti-diagonal
+]
+
+
+def extract_subgrid(
+    frame: list[list[int]],
+    bbox: dict,
+    *,
+    foreground_color: int | None = None,
+) -> list[list[int]]:
+    """Extract the rectangular sub-grid from *frame* bounded by *bbox*.
+
+    Parameters
+    ----------
+    frame : 2-D grid of ints
+    bbox : dict with keys r_min, r_max, c_min, c_max
+    foreground_color : if given, return a binary mask (1 = foreground, 0 = bg)
+                       where foreground = cells matching this color.
+
+    Returns
+    -------
+    2-D list[list[int]] — the cropped region (or binary mask).
+    """
+    r_min, r_max = bbox["r_min"], bbox["r_max"]
+    c_min, c_max = bbox["c_min"], bbox["c_max"]
+    sub = []
+    for r in range(r_min, r_max + 1):
+        row = []
+        for c in range(c_min, c_max + 1):
+            val = frame[r][c]
+            if foreground_color is not None:
+                row.append(1 if val == foreground_color else 0)
+            else:
+                row.append(val)
+        sub.append(row)
+    return sub
+
+
+def _to_pixel_set(mask: list[list[int]]) -> frozenset[tuple[int, int]]:
+    """Convert a 2-D binary mask to a frozenset of (row, col) coordinates."""
+    return frozenset(
+        (r, c)
+        for r, row in enumerate(mask)
+        for c, val in enumerate(row)
+        if val
+    )
+
+
+def _normalize_pixel_set(
+    pixels: frozenset[tuple[int, int]],
+) -> frozenset[tuple[int, int]]:
+    """Translate a pixel set so its bounding box starts at (0, 0)."""
+    if not pixels:
+        return pixels
+    min_r = min(r for r, _ in pixels)
+    min_c = min(c for _, c in pixels)
+    return frozenset((r - min_r, c - min_c) for r, c in pixels)
+
+
+def _apply_transform(
+    pixels: frozenset[tuple[int, int]],
+    transform_index: int,
+) -> frozenset[tuple[int, int]]:
+    """Apply one of the 8 D4 symmetry transforms to a pixel set.
+
+    The pixel set is assumed to be origin-normalized (min row/col = 0).
+    The result is re-normalized to origin after transformation.
+    """
+    if not pixels:
+        return pixels
+    max_r = max(r for r, _ in pixels)
+    max_c = max(c for _, c in pixels)
+
+    if transform_index == 0:    # identity
+        return pixels
+    elif transform_index == 1:  # rot90 CW: (r, c) -> (c, max_r - r)
+        out = frozenset((c, max_r - r) for r, c in pixels)
+    elif transform_index == 2:  # rot180: (r, c) -> (max_r - r, max_c - c)
+        out = frozenset((max_r - r, max_c - c) for r, c in pixels)
+    elif transform_index == 3:  # rot270 CW: (r, c) -> (max_c - c, r)
+        out = frozenset((max_c - c, r) for r, c in pixels)
+    elif transform_index == 4:  # flip_h: (r, c) -> (r, max_c - c)
+        out = frozenset((r, max_c - c) for r, c in pixels)
+    elif transform_index == 5:  # flip_v: (r, c) -> (max_r - r, c)
+        out = frozenset((max_r - r, c) for r, c in pixels)
+    elif transform_index == 6:  # flip_main_diag: (r, c) -> (c, r)
+        out = frozenset((c, r) for r, c in pixels)
+    elif transform_index == 7:  # flip_anti_diag: (r, c) -> (max_c - c, max_r - r)
+        out = frozenset((max_c - c, max_r - r) for r, c in pixels)
+    else:
+        raise ValueError(f"Invalid transform_index: {transform_index}")
+
+    return _normalize_pixel_set(out)
+
+
+def all_transforms(
+    mask: list[list[int]],
+) -> list[tuple[str, frozenset[tuple[int, int]]]]:
+    """Generate all 8 D4 transforms of a binary mask.
+
+    Returns a list of (transform_name, normalized_pixel_set) tuples.
+    """
+    base = _normalize_pixel_set(_to_pixel_set(mask))
+    return [
+        (TRANSFORM_NAMES[i], _apply_transform(base, i))
+        for i in range(8)
+    ]
+
+
+def compare_shapes(
+    mask_a: list[list[int]],
+    mask_b: list[list[int]],
+) -> dict:
+    """Compare two binary masks under all D4 symmetry transforms.
+
+    Returns
+    -------
+    dict with keys:
+        "match": bool — True if any transform of A equals B
+        "transform": str | None — name of the matching transform (A -> B)
+        "transform_index": int | None
+        "all_distances": list[tuple[str, float]] — Jaccard distance for each
+            transform (0.0 = perfect match, 1.0 = no overlap)
+    """
+    pixels_b = _normalize_pixel_set(_to_pixel_set(mask_b))
+    transforms_a = all_transforms(mask_a)
+
+    best_dist = 1.0
+    best_name = None
+    best_idx = None
+    distances = []
+
+    for i, (name, pixels_a_t) in enumerate(transforms_a):
+        if not pixels_a_t and not pixels_b:
+            dist = 0.0
+        elif not pixels_a_t or not pixels_b:
+            dist = 1.0
+        else:
+            union = pixels_a_t | pixels_b
+            inter = pixels_a_t & pixels_b
+            dist = 1.0 - len(inter) / len(union) if union else 0.0
+        distances.append((name, round(dist, 4)))
+        if dist < best_dist:
+            best_dist = dist
+            best_name = name
+            best_idx = i
+
+    return {
+        "match": best_dist == 0.0,
+        "transform": best_name if best_dist == 0.0 else None,
+        "transform_index": best_idx if best_dist == 0.0 else None,
+        "best_transform": best_name,
+        "best_distance": best_dist,
+        "all_distances": distances,
+    }
+
+
+def find_transformation(
+    pairs: list[tuple[list[list[int]], list[list[int]]]],
+) -> dict:
+    """Given a list of (input_mask, output_mask) pairs, find a consistent
+    D4 transform that maps every input to its output.
+
+    Parameters
+    ----------
+    pairs : list of (mask_a, mask_b) where each mask is a 2-D binary grid.
+
+    Returns
+    -------
+    dict with keys:
+        "consistent": bool — True if one transform works for ALL pairs
+        "transform": str | None — the consistent transform name
+        "transform_index": int | None
+        "per_pair": list[dict] — compare_shapes result for each pair
+        "candidate_transforms": list[str] — transforms that matched at least
+            one pair (useful when no single transform is consistent)
+    """
+    if not pairs:
+        return {
+            "consistent": False,
+            "transform": None,
+            "transform_index": None,
+            "per_pair": [],
+            "candidate_transforms": [],
+        }
+
+    per_pair = [compare_shapes(a, b) for a, b in pairs]
+
+    # Find transforms that are exact matches for ALL pairs
+    # Start with all 8 candidates, intersect down
+    valid_indices: set[int] | None = None
+    for pp in per_pair:
+        exact_this = set()
+        for i, (name, dist) in enumerate(pp["all_distances"]):
+            if dist == 0.0:
+                exact_this.add(i)
+        if valid_indices is None:
+            valid_indices = exact_this
+        else:
+            valid_indices &= exact_this
+
+    if valid_indices is None:
+        valid_indices = set()
+
+    # Pick the simplest consistent transform (lowest index = identity first)
+    consistent = len(valid_indices) > 0
+    best_idx = min(valid_indices) if valid_indices else None
+    best_name = TRANSFORM_NAMES[best_idx] if best_idx is not None else None
+
+    # Candidate transforms: matched at least one pair
+    candidate_set: set[int] = set()
+    for pp in per_pair:
+        for i, (name, dist) in enumerate(pp["all_distances"]):
+            if dist == 0.0:
+                candidate_set.add(i)
+
+    return {
+        "consistent": consistent,
+        "transform": best_name,
+        "transform_index": best_idx,
+        "per_pair": per_pair,
+        "candidate_transforms": [TRANSFORM_NAMES[i] for i in sorted(candidate_set)],
+    }

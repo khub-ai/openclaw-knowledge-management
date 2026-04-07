@@ -40,6 +40,17 @@ Standard ARC-AGI colors (values 0-9):
 - **Structural landmarks**: borders, center, corners, color boundaries
 - **Changes since last step**: what moved? what appeared or disappeared? by how many cells?
 
+## Visual puzzle reasoning
+
+Not all games are navigation puzzles. Some are **pattern-matching** or **transformation** puzzles. Watch for these structural patterns:
+
+- **Reference pairs**: two bordered boxes side by side (often different border colors) containing shapes. The left box shows an *input* and the right shows the *output* — together they demonstrate a transformation rule. Multiple pairs may show different examples of the same rule.
+- **Editable slots**: a strip of positions containing shapes that the player can modify. These usually appear below or separate from the reference pairs.
+- **Focus/cursor indicator**: small markers (brackets, arrows, highlights) of a distinct color that select which slot is currently active. Actions typically affect only the focused slot.
+- **Transformation effects**: after an action, observe: did the shape in the focused slot change? Did it rotate, flip, cycle to a different shape, or stay the same? Track the specific before/after difference.
+- **Match verification**: the structural context includes `Content matches` and `Content mismatches`. After performing an action, check if the mismatch count decreased. If a slot now shows `MATCH`, that slot is correct — move the cursor to the next slot.
+- **Action roles**: in transformation puzzles, some actions modify the current slot's content (rotate, cycle) while others navigate the cursor (left, right). Determine which is which by observing what changes after each action.
+
 ## Output format
 
 Respond with a single JSON block (inside ```json fences):
