@@ -1,0 +1,30 @@
+{
+  "summary": {"correct": 2, "total": 6, "accuracy": 0.333,
+              "model": "qwen/qwen3-vl-8b-instruct", "pair": "bronzed_cowbird_vs_shiny_cowbird"},
+  "tasks": [
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Bronzed_Cowbird_0019_796242",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\026.Bronzed_Cowbird\\Bronzed_Cowbird_0019_796242.jpg",
+     "correct_label": "Bronzed Cowbird", "predicted_label": "Shiny Cowbird", "correct": false},
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Bronzed_Cowbird_0061_796232",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\026.Bronzed_Cowbird\\Bronzed_Cowbird_0061_796232.jpg",
+     "correct_label": "Bronzed Cowbird", "predicted_label": "Shiny Cowbird", "correct": false},
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Bronzed_Cowbird_0081_24198",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\026.Bronzed_Cowbird\\Bronzed_Cowbird_0081_24198.jpg",
+     "correct_label": "Bronzed Cowbird", "predicted_label": "Shiny Cowbird", "correct": false},
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Shiny_Cowbird_0005_796873",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\027.Shiny_Cowbird\\Shiny_Cowbird_0005_796873.jpg",
+     "correct_label": "Shiny Cowbird", "predicted_label": "Shiny Cowbird", "correct": true},
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Shiny_Cowbird_0030_24206",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\027.Shiny_Cowbird\\Shiny_Cowbird_0030_24206.jpg",
+     "correct_label": "Shiny Cowbird", "predicted_label": "Shiny Cowbird", "correct": true},
+    {"task_id": "bronzed_cowbird_vs_shiny_cowbird_Shiny_Cowbird_0080_796875",
+     "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+     "image_path": "C:\\_backup\\ml\\data\\_tmp\\CUB_200_2011\\CUB_200_2011\\images\\027.Shiny_Cowbird\\Shiny_Cowbird_0080_796875.jpg",
+     "correct_label": "Shiny Cowbird", "predicted_label": "Bronzed Cowbird", "correct": false}
+  ]
+}

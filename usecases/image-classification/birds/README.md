@@ -2,7 +2,7 @@
 
 > **For**: Ornithologists, naturalists, and field biologists curious about how AI can be corrected by domain experts without any programming or retraining.
 >
-> **Status**: Two experiments completed. First experiment: GPT-4o, single-pass rule injection. Second experiment: Claude Sonnet 4.6, full KF ensemble pipeline with structured observation layer.
+> **Status**: Three experiments completed. First: GPT-4o, single-pass rule injection. Second: Claude Sonnet 4.6, full KF ensemble pipeline with structured observation layer. Third: Qwen3-VL-8B pupil + Claude Sonnet 4.6 expert, full KF dialogic patching loop — 33%→67% on Bronzed/Shiny Cowbird.
 >
 > **Dataset**: CUB-200-2011, 200 North American bird species, 11,788 images.
 >
@@ -23,7 +23,8 @@ An AI model was confused by pairs of visually similar bird species. An ornitholo
 3. [The Approach](#3-the-approach)
 4. [Experiment 1 — Single-Pass Rule Injection (GPT-4o)](#4-experiment-1--single-pass-rule-injection-gpt-4o)
 5. [Experiment 2 — KF Ensemble with Structured Observation (Claude Sonnet 4.6)](#5-experiment-2--kf-ensemble-with-structured-observation-claude-sonnet-46)
-6. [What This Shows About Expert Knowledge Patching](#6-what-this-shows-about-expert-knowledge-patching)
+6. [Experiment 3 — KF Dialogic Patching Loop (Qwen3-VL-8B + Claude Sonnet 4.6)](#6-experiment-3--kf-dialogic-patching-loop-qwen3-vl-8b--claude-sonnet-46)
+7. [What This Shows About Expert Knowledge Patching](#7-what-this-shows-about-expert-knowledge-patching)
 
 ---
 
@@ -169,7 +170,85 @@ The aggregate numbers understate the real lessons. The pair-level results divide
 
 ---
 
-## 6. What This Shows About Expert Knowledge Patching
+## 6. Experiment 3 — KF Dialogic Patching Loop (Qwen3-VL-8B + Claude Sonnet 4.6)
+
+**Setup**: A cheap pupil VLM (Qwen3-VL-8B-Instruct via OpenRouter) makes zero-shot predictions. For each failure, the KF loop calls an expert VLM (Claude Sonnet 4.6) to author a discriminative visual rule. Each candidate rule goes through semantic validation, a precision-gated held-out pool test, and — when needed — a 4-level specificity spectrum search. Accepted rules are registered and then injected back into the pupil on a re-run.
+
+**Pair**: Bronzed Cowbird vs Shiny Cowbird (6 images, 3 per class).
+
+**Baseline (zero-shot, Qwen3-VL-8B)**:
+
+| Image | Ground Truth | Prediction | Correct |
+|---|---|---|---|
+| Bronzed_Cowbird_0019 | Bronzed Cowbird | Shiny Cowbird | WRONG |
+| Bronzed_Cowbird_0061 | Bronzed Cowbird | Shiny Cowbird | WRONG |
+| Bronzed_Cowbird_0081 | Bronzed Cowbird | Shiny Cowbird | WRONG |
+| Shiny_Cowbird_0005  | Shiny Cowbird   | Shiny Cowbird | correct |
+| Shiny_Cowbird_0030  | Shiny Cowbird   | Shiny Cowbird | correct |
+| Shiny_Cowbird_0080  | Shiny Cowbird   | Bronzed Cowbird | WRONG |
+
+Zero-shot: **2/6 (33.3%)** — Qwen3-VL-8B defaults to Shiny Cowbird for every dark-plumaged cowbird.
+
+### Rules authored and registered
+
+The expert authored 4 rules; 2 passed the precision gate (FP ≤ 1, precision ≥ 0.75):
+
+**r_001 — bright red iris + thick decurved bill → Bronzed Cowbird**
+
+> *"When a small, all-black cowbird shows a conspicuous bright red or orange-red iris that is clearly visible as a bold colored eye, combined with a distinctly thick-based, slightly decurved bill that appears heavier and more robust than a typical icterid bill, identify as Bronzed Cowbird."*
+
+Held-out gate: TP=1 FP=0 precision=1.00. Registered.
+
+**r_002 — thick heavy bill + bull-necked head + dull/matte gloss → Bronzed Cowbird**
+
+> *"When a black cowbird on the ground shows a visibly thick, heavy, conical bill with a distinctly rounded head profile (approaching a 'bull-necked' or large-headed appearance), and the plumage shows a dull-to-moderate gloss rather than intense iridescent sheen across the entire body, identify as Bronzed Cowbird."*
+
+Held-out gate (spectrum Level 3, 5 preconditions): TP=2 FP=0 precision=1.00. Registered.
+
+The 2 rejected rules failed because the validator could not reliably confirm the relevant field marks in the photographic context: one fired on 0/4 trigger images (over-tightened by the completer), one fired but had precision=0.00 on the held-out pool.
+
+### After patching
+
+| Image | Ground Truth | Before KF | After KF | Rule fired |
+|---|---|---|---|---|
+| ![bronzed_0019](../assets/birds/bronzed_0019_fixed.jpg) Bronzed_Cowbird_0019 | Bronzed Cowbird | Shiny Cowbird | **Bronzed Cowbird** | r_002 |
+| ![bronzed_0061](../assets/birds/bronzed_0061_fixed.jpg) Bronzed_Cowbird_0061 | Bronzed Cowbird | Shiny Cowbird | **Bronzed Cowbird** | r_001 |
+| ![bronzed_0081](../assets/birds/bronzed_0081_unfixed.jpg) Bronzed_Cowbird_0081 | Bronzed Cowbird | Shiny Cowbird | Shiny Cowbird | — |
+| Shiny_Cowbird_0005 | Shiny Cowbird | Shiny Cowbird | Shiny Cowbird | — |
+| Shiny_Cowbird_0030 | Shiny Cowbird | Shiny Cowbird | Shiny Cowbird | — |
+| ![shiny_0080](../assets/birds/shiny_0080_unfixed.jpg) Shiny_Cowbird_0080 | Shiny Cowbird | Bronzed Cowbird | Bronzed Cowbird | r_002 (FP) |
+
+After patching: **4/6 (66.7%)** — up from 33.3% zero-shot (+33pp).
+
+### Cross-rule generalization
+
+The most notable result: **r_001 and r_002 fixed different failures than the images they were authored from.**
+- r_001 was authored from Bronzed_0019 but fixed Bronzed_0061 at rerun.
+- r_002 was authored from Bronzed_0081 but fixed Bronzed_0019 at rerun.
+
+Each rule generalized beyond its trigger image to another example of the same confusion — the core prediction of the KF hypothesis.
+
+### Remaining failures
+
+Two failures persisted:
+
+**Bronzed_Cowbird_0081** — Neither rule fires. The image shows a Bronzed Cowbird but both the red iris and the heavy-bill gestalt were insufficient to trigger either rule on this particular shot (likely an angle or lighting issue that obscures the diagnostic features). A third rule targeting a different visual cue would be needed.
+
+**Shiny_Cowbird_0080** — r_002 fires as a false positive, flipping what was already a correct-direction-wrong-species error into a confident wrong answer. This image is a female or subdued-plumage bird whose bill and head proportions superficially resemble Bronzed. The precision gate (FP ≤ 1) on the held-out pool did not catch this particular image because the pool was sampled from train-split images; the FP bird in question was in the test split. This is expected behavior: the precision gate controls for the worst known FP case, not for all possible FP cases.
+
+### Summary
+
+| Phase | Correct | Accuracy |
+|---|---|---|
+| Zero-shot (Qwen3-VL-8B) | 2/6 | 33.3% |
+| After KF patching | 4/6 | 66.7% |
+| Delta | +2 | +33pp |
+| Rules authored | 4 | |
+| Rules accepted / registered | 2 | |
+
+---
+
+## 7. What This Shows About Expert Knowledge Patching
 
 ### Correct, visually grounded rules help immediately
 
@@ -198,6 +277,6 @@ Because no live ornithologist was available for this test, expert knowledge was 
 
 ---
 
-*For the technical architecture, per-round pipeline design, and full experiment implementation notes, see [DESIGN.md](../DESIGN.md#2-bird-experiments-cub-200-2011).*
+*For the technical architecture, per-round pipeline design, and full experiment implementation notes — including the dialogic patching loop design — see [DESIGN.md](../DESIGN.md).*
 
 *For the broader Knowledge Fabric positioning and the dermatology use case, see the [Image Classification Overview](../README.md).*

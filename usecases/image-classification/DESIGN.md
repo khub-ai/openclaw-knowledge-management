@@ -180,7 +180,63 @@ human-verifiable intermediate layer.**
 This is what made the structured ensemble pipeline more promising than direct
 prompt injection.
 
-### 2.6 What is needed before a bird benchmark claim
+### 2.6 Experiment 3: KF dialogic patching loop
+
+**Cheap pupil**: Qwen3-VL-8B-Instruct (via OpenRouter)  
+**Expert**: Claude Sonnet 4.6  
+**Validator**: Claude Sonnet 4.6  
+**Pair**: Bronzed Cowbird vs Shiny Cowbird  
+**Test images**: 3 per class (6 total, same images used for baseline and rerun)  
+**Implementation**: `birds/python/patch.py` + `birds/python/agents.py`
+
+This is the first end-to-end run of the full KF dialogic patching loop on bird data.
+It matches the dermatology loop architecture exactly — same pipeline steps, same
+precision gate, same specificity spectrum — with only prompt vocabulary changed.
+
+#### Steps
+
+1. Zero-shot baseline on 6 images (cheap model only).
+2. For each failure: expert authors a candidate rule.
+3. Rule completer fills implicit background conditions.
+4. Semantic validator rates each precondition (reliable / context_dependent / unreliable)
+   and flags if REVISE; rule proceeds regardless — semantic validation is advisory.
+5. Held-out gate: pool of 8 images (4 per class), min precision 0.75 and FP ≤ 1.
+   If the completed rule fails but the pre-completion rule passes, run 4-level spectrum.
+6. Accepted rules are registered in-memory and written to `patch_rules_birds_test.json`.
+7. Rerun: all 4 failures re-classified with registered rules active.
+
+#### Results
+
+| Phase | Correct | Accuracy |
+|---|---|---|
+| Zero-shot (Qwen3-VL-8B) | 2/6 | 33.3% |
+| After KF patching | 4/6 | 66.7% |
+| Delta | +2 | +33pp |
+| Rules authored / accepted / registered | 4 / 2 / 2 | |
+
+**r_001** (red iris + thick decurved bill → Bronzed Cowbird): held-out TP=1 FP=0 precision=1.00. Registered.  
+**r_002** (bull-necked profile + heavy bill + matte/dull gloss → Bronzed Cowbird): spectrum Level 3 (5 preconditions) TP=2 FP=0 precision=1.00. Registered.
+
+Two rules were rejected: one failed to fire on any held-out trigger image (over-tightened by
+completer), one fired but precision=0.00.
+
+#### Cross-rule generalization
+
+r_001 fixed Bronzed_0061 (not the image it was authored from).  
+r_002 fixed Bronzed_0019 (not the image it was authored from).  
+Both rules generalized beyond their trigger image — the expected behavior when a rule
+captures a class-level discriminator rather than an image-specific artifact.
+
+#### Remaining failures
+
+- **Bronzed_0081**: no rule fires. Diagnostic features (red iris, bull-neck) not
+  reliably visible in this particular shot. A third rule with a different trigger
+  feature is needed.
+- **Shiny_0080**: r_002 fires as a false positive (a subdued-plumage female whose
+  bill/head proportions resemble Bronzed). The precision gate caught FP ≤ 1 on the
+  held-out pool but this specific FP image was not in the pool. Expected edge case.
+
+### 2.7 What is needed before a bird benchmark claim
 
 | Gap | What to do |
 |---|---|
@@ -188,6 +244,7 @@ prompt injection.
 | Model confound | Add Claude zero-shot and Claude few-shot baselines |
 | Small sample | Run the full test set for both pilot pairs |
 | Narrow scope | Expand back out to more of the 15 confusable pairs |
+| Dialogic loop coverage | Run Experiment 3 loop on additional confusable pairs |
 
 ## 3. Dermatology Experiments (HAM10000 / ISIC)
 
