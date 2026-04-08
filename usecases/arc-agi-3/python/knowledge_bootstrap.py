@@ -139,6 +139,8 @@ class BootstrapSession:
         self.engine   = engine
         self.dry_run  = dry_run
         self._rules_written: list[dict] = []
+        # Track principle tags emitted this session to avoid per-level duplicates.
+        self._emitted_principles: set[tuple] = set()
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -296,8 +298,111 @@ class BootstrapSession:
         return kp
 
     # ------------------------------------------------------------------
-    # Rule synthesis
+    # Rule synthesis — two tiers
     # ------------------------------------------------------------------
+    # Tier 1: General mechanic principles.
+    #   Condition = observable event pattern (no coordinates, no game name).
+    #   Applies to any ARC-AGI-3 game.  Emitted once per mechanic type
+    #   across all levels; duplicates are suppressed by checking existing rules.
+    #
+    # Tier 2: Game-level instance hints.
+    #   Condition = game + level context only — NOT a position.
+    #   Action = position hints labelled as "last seen at (x,y)" so they read
+    #   as memory, not as navigational preconditions.
+    #   Tagged game+level so they are low-priority and can age out.
+    # ------------------------------------------------------------------
+
+    # Mechanic principle text — keyed by changer type.
+    # Written once; same text appears for any game that has this mechanic.
+    _PRINCIPLE_COND = {
+        "rot_changer": (
+            "In an ARC-AGI-3 game, after the player piece moves to a new cell "
+            "and the object tracker diff shows the player's orientation attribute "
+            "changed (e.g. horizontal -> vertical or vertical -> horizontal)"
+        ),
+        "color_changer": (
+            "In an ARC-AGI-3 game, after the player piece moves to a new cell "
+            "and the object tracker diff shows the player's color attribute changed"
+        ),
+        "shape_changer": (
+            "In an ARC-AGI-3 game, after the player piece moves to a new cell "
+            "and the object tracker diff shows the player's shape attribute changed"
+        ),
+        "win_target": (
+            "In an ARC-AGI-3 game, after an action, obs.levels_completed "
+            "increments (the level just advanced)"
+        ),
+        "strategy": (
+            "In an ARC-AGI-3 game level, at episode start, the player has a "
+            "starting state (rotation, color, shape) that may differ from the "
+            "goal state required to advance the level"
+        ),
+        "budget": (
+            "In an ARC-AGI-3 game, a step counter is visible in the frame and "
+            "depletes with each action taken"
+        ),
+    }
+
+    _PRINCIPLE_ACTION = {
+        "rot_changer": (
+            "The cell just visited is a ROTATION CHANGER. "
+            "Record its position for this game/level. "
+            "If more rotation steps are needed, revisit it (each visit cycles "
+            "the rotation index by one step). "
+            "Confirm the changer position by watching for the orientation "
+            "attribute change in subsequent steps — do not rely on visual "
+            "appearance alone. "
+            "Visit all required changers before attempting the win target."
+        ),
+        "color_changer": (
+            "The cell just visited is a COLOR CHANGER. "
+            "Record its position for this game/level. "
+            "Each visit may cycle the color to the next index. "
+            "Visit all required changers before attempting the win target."
+        ),
+        "shape_changer": (
+            "The cell just visited is a SHAPE CHANGER. "
+            "Record its position for this game/level. "
+            "Visit all required changers before attempting the win target."
+        ),
+        "win_target": (
+            "The player's current position is the WIN TARGET for this level. "
+            "Record the position and the player's rotation/color/shape state "
+            "at this moment — that combination is what the level required. "
+            "In future episodes, navigate to the same position with the same "
+            "player state to advance the level reliably."
+        ),
+        "strategy": (
+            "Explore the level to find changer cells that transform the player's "
+            "state from start to goal. "
+            "Rotation changers change orientation; color changers change color; "
+            "shape changers change shape. "
+            "Each fires when the player occupies the changer's cell — observable "
+            "as an attribute change in the object tracker diff on that step. "
+            "Visit all required changers in sequence to match the goal state, "
+            "then navigate to the win target. "
+            "Plan the path to stay within the step budget."
+        ),
+        "budget": (
+            "This counter defines the maximum number of actions before the "
+            "episode ends (likely GAME_OVER when it reaches zero). "
+            "Plan the shortest path through all required changers to the win "
+            "target. Avoid backtracking. "
+            "If the counter is almost depleted, prioritise reaching the target "
+            "directly even if the state may be wrong — partial progress may be "
+            "better than running out of steps."
+        ),
+    }
+
+    # Tag for principle rules: global scope so they match any game.
+    _PRINCIPLE_TAGS = {
+        "rot_changer":   ["rot-changer",    "mechanic-principle", "arc-agi-3"],
+        "color_changer": ["color-changer",  "mechanic-principle", "arc-agi-3"],
+        "shape_changer": ["shape-changer",  "mechanic-principle", "arc-agi-3"],
+        "win_target":    ["win-condition",  "mechanic-principle", "arc-agi-3"],
+        "strategy":      ["strategy",       "mechanic-principle", "arc-agi-3"],
+        "budget":        ["step-counter",   "mechanic-principle", "arc-agi-3"],
+    }
 
     def _synthesise_rules(
         self,
@@ -308,107 +413,104 @@ class BootstrapSession:
     ) -> list[dict]:
         rules = []
         ns    = self.engine.dataset_tag or "arc-agi-3"
+        game  = "ls20"  # TODO: pass game_id as a parameter when supporting other games
 
-        # --- Rule: rotation changer observation ----------------------------
-        rot_events = [e for e in events if e.get("key_hit") == "rot_changer"]
-        if rot_events:
-            re = rot_events[0]
-            gx, gy   = re["key_gx"], re["key_gy"]
-            nb       = re["neighbourhood"]
-            dominant = [_color_name(c) for c, _ in nb.most_common(3) if c != 3]  # skip green bg
-            rot_before = None
-            for e in events:
-                if e["step"] < re["step"]:
-                    rot_before = e["rot_idx"]
-            rot_after = re["rot_idx"]
-            attr_desc = ""
-            if re["attr_changes"]:
-                ac = re["attr_changes"][0]
-                before_orient = ac["before"].get("orientation", "?")
-                after_orient  = ac["after"].get("orientation",  "?")
-                attr_desc = (f"; player orientation changed from "
-                             f"{before_orient} to {after_orient}")
+        # --- Determine which mechanic types were observed this level ----------
+        saw_rot    = any(e.get("key_hit") == "rot_changer"   for e in events)
+        saw_color  = any(e.get("key_hit") == "color_changer" for e in events)
+        saw_shape  = any(e.get("key_hit") == "shape_changer" for e in events)
+        saw_win    = any(e.get("level_advanced")              for e in events)
 
-            cond = (
-                f"In ls20 level {level}, the player piece approaches a visually "
-                f"distinct cell at approximately game-coord (col {gx}, row {gy}) "
-                f"[frame colours nearby: {', '.join(dominant[:2])}]"
-            )
-            action = (
-                f"This cell is a ROTATION CHANGER — visit it before the target. "
-                f"After stepping on it the player rotation index changes from "
-                f"{rot_before} to {rot_after}{attr_desc}. "
-                f"[OBSERVABLE: watch for player orientation attribute change in "
-                f"the object tracker diff when this cell is visited]"
-            )
-            rules.append(self._emit(cond, action, level, ns,
-                                    ["rot-changer", "mechanic-discovery",
-                                     f"ls20", f"level-{level}"]))
+        # Always emit strategy + budget principles if we completed the level.
+        needed_principles: list[str] = []
+        if saw_win:
+            needed_principles += ["strategy", "budget", "win_target"]
+        if saw_rot:
+            needed_principles.append("rot_changer")
+        if saw_color:
+            needed_principles.append("color_changer")
+        if saw_shape:
+            needed_principles.append("shape_changer")
 
-        # --- Rule: target observation + win condition ----------------------
-        target_events = [e for e in events if e.get("key_hit") == "target"]
-        level_advance = [e for e in events if e.get("level_advanced")]
-        if level_advance:
-            adv = level_advance[0]
-            gx = adv.get("key_gx") or (meta["targets"][0]["x"] if meta["targets"] else "?")
-            gy = adv.get("key_gy") or (meta["targets"][0]["y"] if meta["targets"] else "?")
-            nb       = adv["neighbourhood"]
-            dominant = [_color_name(c) for c, _ in nb.most_common(3) if c != 3]
+        # --- Tier 1: emit general principle rules (once per mechanic type) ---
+        # Combine already-persisted principles with ones emitted this session.
+        existing_principles: set[tuple] = set(self._emitted_principles)
+        existing_principles |= {
+            tuple(sorted(r.get("tags", [])))
+            for r in self.engine.rules
+            if "mechanic-principle" in r.get("tags", [])
+        }
+        for mtype in needed_principles:
+            tags = self._PRINCIPLE_TAGS[mtype]
+            key  = tuple(sorted(tags))
+            if key not in existing_principles:
+                r = self._emit(
+                    self._PRINCIPLE_COND[mtype],
+                    self._PRINCIPLE_ACTION[mtype],
+                    level, ns, tags,
+                    scope="global",
+                )
+                rules.append(r)
+                existing_principles.add(key)
+                self._emitted_principles.add(key)
+                print(f"  [PRINCIPLE] {r.get('id','dry')}: {mtype}")
 
-            cond = (
-                f"In ls20 level {level}, the player piece is positioned at "
-                f"approximately game-coord (col {gx}, row {gy}) with the correct "
-                f"rotation/color/shape state (rot_idx={adv['rot_idx']}, "
-                f"color_idx={adv['color_idx']})"
-            )
-            action = (
-                f"The level advances — this is the WIN TARGET for level {level}. "
-                f"[OBSERVABLE: obs.levels_completed increments; "
-                f"frame colours near target: {', '.join(dominant[:2])}; "
-                f"visit rot_changer(s) first if start_rot != goal_rot]"
-            )
-            rules.append(self._emit(cond, action, level, ns,
-                                    ["win-condition", "target",
-                                     f"ls20", f"level-{level}"]))
-
-        # --- Rule: full navigation strategy --------------------------------
-        plan_step_types = Counter()
-        seq_parts = []
-        changers_visited = []
+        # --- Tier 2: game-level instance hints (position memory, not conditions)
+        # Collect positions where key events were observed.
+        changer_hints: list[str] = []
         for e in events:
             kh = e.get("key_hit")
             if kh:
-                changers_visited.append(
-                    f"visit {kh} at ({e['key_gx']},{e['key_gy']})"
+                px, py = e["key_gx"], e["key_gy"]
+                nb  = e["neighbourhood"]
+                col = [_color_name(c) for c, _ in nb.most_common(3)
+                       if c not in (3, 0)]  # skip green bg and black
+                changer_hints.append(
+                    f"{kh} last seen at approx (col {px}, row {py})"
+                    + (f" [nearby colours: {', '.join(col[:2])}]" if col else "")
                 )
-            plan_step_types[e["action"]] += 1
 
-        changer_str = (
-            f"First visit: {'; then '.join(changers_visited)}. "
-            if changers_visited else ""
-        )
-        action_summary = ", ".join(
-            f"{cnt}x{a[-1]}" for a, cnt in
-            sorted(plan_step_types.items(), key=lambda x: -x[1])
-        )
+        win_hint = ""
+        adv_events = [e for e in events if e.get("level_advanced")]
+        if adv_events:
+            adv = adv_events[0]
+            nb  = adv["neighbourhood"]
+            col = [_color_name(c) for c, _ in nb.most_common(3)
+                   if c not in (3, 0)]
+            win_hint = (
+                f"Win target last seen at approx "
+                f"(col {adv['player_x']}, row {adv['player_y']}) "
+                f"with rot_idx={adv['rot_idx']}, color_idx={adv['color_idx']}"
+                + (f" [nearby colours: {', '.join(col[:2])}]" if col else "")
+            )
+
         budget = meta["step_counter"]
         dec    = meta["steps_dec"]
 
-        cond = (
-            f"In ls20 level {level}, the episode starts and the goal is to "
-            f"advance to the next level (step budget: {budget}, "
-            f"decrements {dec}/step = {budget//dec} moves max)"
-        )
-        action = (
-            f"{changer_str}"
-            f"Optimal action sequence uses {len(events)} steps "
-            f"({action_summary}). "
-            f"[BOOTSTRAPPED from BFS — confirm through observation: "
-            f"orientation change at changer, levels_completed increment at target]"
-        )
-        rules.append(self._emit(cond, action, level, ns,
-                                ["strategy", "navigation",
-                                 f"ls20", f"level-{level}"]))
+        if changer_hints or win_hint:
+            cond = (
+                f"In {game} level {level}, navigating toward the win target"
+            )
+            action_parts = []
+            if changer_hints:
+                action_parts.append(
+                    "POSITION HINTS (from bootstrapped guided tour — confirm by "
+                    "observation; positions may shift between game instances): "
+                    + "; ".join(changer_hints)
+                )
+            if win_hint:
+                action_parts.append(win_hint)
+            action_parts.append(
+                f"Step budget: {budget} units, depletes {dec}/step "
+                f"= {budget // dec} actions max."
+            )
+            rules.append(self._emit(
+                cond,
+                "  ".join(action_parts),
+                level, ns,
+                ["instance-hint", "navigation", game, f"level-{level}"],
+                scope="dataset",
+            ))
 
         return rules
 
@@ -423,9 +525,11 @@ class BootstrapSession:
         level: int,
         ns: str,
         tags: list[str],
+        scope: str = "dataset",
     ) -> dict:
         if self.dry_run:
-            r = {"id": None, "condition": condition, "action": action, "tags": tags}
+            r = {"id": None, "condition": condition, "action": action,
+                 "tags": tags, "scope": scope}
             return r
         rule = self.engine.add_rule(
             condition=condition,
@@ -433,13 +537,14 @@ class BootstrapSession:
             source="bootstrap",
             source_task=f"ls20_bootstrap_l{level}",
             tags=tags,
+            scope=scope,
             lineage={
                 "type":       "bootstrap",
                 "parent_ids": [],
                 "reason":     (
                     "Derived from guided BFS tour with env._game peek. "
-                    "Expressed in observable terms; confirm through independent "
-                    "observation to promote to active."
+                    "Tier-1 principles use scope=global (apply to any game); "
+                    "tier-2 instance hints use scope=dataset (game-level memory)."
                 ),
             },
             status="candidate",
