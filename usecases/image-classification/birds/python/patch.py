@@ -57,7 +57,15 @@ for _p in (str(_KF_ROOT), str(_UC_DIR / "src"), str(_UC_DIR / "python"), str(_HE
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import agents
+# Explicitly load birds/python/agents.py via importlib to avoid shadowing by
+# usecases/image-classification/python/agents.py which also lives on sys.path.
+import importlib.util as _ilu
+_agents_spec = _ilu.spec_from_file_location(
+    "bird_agents", Path(__file__).resolve().parent / "agents.py"
+)
+agents = _ilu.module_from_spec(_agents_spec)
+_agents_spec.loader.exec_module(agents)  # type: ignore[union-attr]
+
 from dataset import load as load_cub, DEFAULT_DATA_DIR, CUBDataset
 
 from confusable_pairs import CONFUSABLE_PAIRS, ConfusablePair
@@ -889,6 +897,8 @@ def parse_args():
     p.add_argument("--dry-run",          action="store_true")
     p.add_argument("--output",           default="patch_session_birds.json")
     p.add_argument("--skip-rerun",       dest="skip_rerun", action="store_true")
+    p.add_argument("--rerun-only",       dest="rerun_only", action="store_true",
+                   help="Load --patch-rules and re-classify --failures-from; no patching.")
     return p.parse_args()
 
 
@@ -907,6 +917,40 @@ async def main() -> None:
 
     console.print(f"\n[dim]Loading CUB-200-2011 from {args.data_dir}...[/dim]")
     ds = load_cub(args.data_dir)
+
+    # --rerun-only: load rules + failures and just re-classify, no patching
+    if args.rerun_only:
+        if not args.failures_from:
+            console.print("[red]--rerun-only requires --failures-from[/red]")
+            sys.exit(1)
+        patch_rules_path = Path(_HERE) / args.patch_rules
+        if not patch_rules_path.exists():
+            console.print(f"[red]Rules file not found: {patch_rules_path}[/red]")
+            sys.exit(1)
+        with open(args.failures_from) as f:
+            prev = json.load(f)
+        all_tasks = prev.get("tasks", [])
+        with open(patch_rules_path) as f:
+            rules = json.load(f)
+        total = len(all_tasks)
+        failures = [t for t in all_tasks if not t["correct"]]
+        before_correct = total - len(failures)
+        console.print(f"\nBaseline: {before_correct}/{total} correct | {len(failures)} failure(s)")
+        console.print(f"Rules loaded: {len(rules)}")
+        console.rule("[bold]Rerun with patch rules[/bold]")
+        fixed = 0
+        for failure in failures:
+            rerun = await rerun_with_patch_rules(failure, rules, args.cheap_model)
+            tag = "FIXED" if rerun["correct"] else "STILL WRONG"
+            rule_tag = f" (rule: {rerun['rule_fired']})" if rerun.get("rule_fired") else ""
+            console.print(f"  {tag}  {Path(failure['image_path']).name}: "
+                          f"{failure['correct_label']} -> {rerun['predicted_label']}{rule_tag}")
+            if rerun["correct"]:
+                fixed += 1
+        after_correct = before_correct + fixed
+        console.print(f"\nAfter patching: {after_correct}/{total} correct "
+                      f"({after_correct/total*100:.1f}%) | +{fixed} fixed")
+        return
 
     # Select pairs to run
     if args.pair:

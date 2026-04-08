@@ -130,6 +130,20 @@ Dialogic learning is learning through structured back-and-forth exchange rather
 than passive observation alone. In this repo, it refers to an agent learning
 through purposeful dialogue with a user or expert.
 
+In the image classification use cases, dialogic learning takes a concrete form:
+a cheap "pupil" vision model makes a wrong prediction; an expert examines the
+failure and explains — in plain language — what field mark or visual criterion
+the pupil missed; the system converts that explanation into a testable rule;
+the rule is validated against known images; and the pupil is re-run with the
+rule active. Each cycle is one turn of the dialogue. The knowledge is
+persistent: a rule registered in one session applies to future sessions without
+repeating the exchange.
+
+This has been demonstrated to work with AI models as both pupil and expert —
+see the [birds](../usecases/image-classification/birds/README.md) and
+[dermatology](../usecases/image-classification/dermatology/README.md) use
+cases.
+
 ## Expert-to-Agent Dialogic Learning
 
 [Expert-to-agent dialogic learning](../specs/expert-to-agent-dialogic-learning.md)

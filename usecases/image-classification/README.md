@@ -3,9 +3,9 @@
 
 ---
 
-> **Status**: Research prototype — bird case study active; dermatology case study piloted across 4 iterations and 3 models; dialogic patching loop implemented and smoke-tested (2026-04-05)
+> **Status**: Research prototype — birds: dialogic loop validated (Cowbird 33%→67%, 2 rules registered); dermatology: dialogic loop completed (Mel/Nev 50%→100%, BCC/BKL 1 of 2 failures patched)
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) as a local-first knowledge authoring tool for domain experts with no AI expertise
-> **Last updated**: 2026.04.05
+> **Last updated**: 2026.04.09
 
 [Knowledge Fabric (KF)](../../docs/what-is-kf.md) treats expert input as a reusable [knowledge patch](../../docs/glossary.md#knowledge-patch): a domain expert can incrementally correct a pre-trained vision-language model in plain language, without fine-tuning the model or running an ML workflow. This README uses two reference domains to make the idea concrete: fine-grained bird identification and skin-lesion classification in dermatology.
 
@@ -90,18 +90,13 @@ It does not try to demonstrate every KF capability, such as long-term accumulati
 
 > **Full write-up**: [birds/README.md](birds/README.md) — includes representative images, pair-by-pair results, experiment design, and key lessons. Written for ornithologists and naturalists.
 
-Fine-grained bird species identification is the first and most fully evaluated KF use case. Two experiments have been completed.
+Fine-grained bird species identification is a clean proving ground for the KF thesis: species pairs are visually confusable, expert field-mark knowledge is publicly available, and the visual criteria are precise and testable.
 
-**The story in brief**: an ornithology professor sees an AI confuse a Bronzed Cowbird with a Shiny Cowbird. She explains that Bronzed has a ruff on the back of the neck and red eyes. KF turns that explanation into a rule, verifies it against known images, and applies it immediately — without retraining the model.
+**The story in brief**: an AI model (Qwen3-VL-8B) confuses every Bronzed Cowbird with a Shiny Cowbird. An ornithologist explains that Bronzed has a conspicuous red iris and a thick decurved bill — features Qwen wasn't checking. KF turns that explanation into explicit rules, validates them against known images, and injects them back into Qwen. Qwen is re-tested and correctly identifies the previously misclassified birds.
 
-**Results at a glance**:
+**Result**: Qwen3-VL-8B zero-shot **33%** → after KF dialogic patching **67%** (+33pp). 2 rules registered; both generalized to images they were not authored from.
 
-| Experiment | Model | Best pairs | Key lesson |
-|---|---|---|---|
-| Exp 1 — prompt injection | GPT-4o | Cormorant +10pp, Cowbird +10pp, Cuckoo +7pp | Correct rules help immediately; wrong rules cause systematic harm |
-| Exp 2 — structured observation | Claude Sonnet 4.6 | Brewer/Clay Sparrow 100%, Crow 83% | Making feature observations explicit before applying rules is the decisive step |
-
-For the full pair-by-pair breakdown, representative images, and technical architecture, see [birds/README.md](birds/README.md).
+For the step-by-step walkthrough, failure images, rule text, and full analysis, see [birds/README.md](birds/README.md).
 
 For the developer-facing implementation notes, see [DESIGN.md](DESIGN.md#2-bird-experiments-cub-200-2011).
 
@@ -161,7 +156,7 @@ Summary of current evidence:
 | Runtime patching value | Yes, on targeted confusable pairs | Pipeline overhead is net-negative for strong VLMs; dialogic loop is the right framing |
 | Need for expert verification | Yes, clearly | Pre-conditions as hard gates are essential in medicine — soft rules cause regressions |
 | Benefit of structured intermediate evidence | Suggested strongly by Brewer vs Clay-colored | Feature-level observation (OBSERVER stage) confirmed as valuable; cross-pair firing adds a new quality signal |
-| Portability across domains | Promising in principle | Architecture is domain-agnostic; confirmed by transferring bird pipeline to dermatology with only prompt changes |
+| Portability across domains | Promising in principle | Architecture is domain-agnostic; confirmed by transferring bird pipeline to dermatology with only prompt changes; bird dialogic loop (Exp 3) reuses exact same pipeline |
 
 ---
 

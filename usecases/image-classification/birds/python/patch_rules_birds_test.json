@@ -1,0 +1,40 @@
+[
+  {
+    "id": "r_001",
+    "condition": "[Patch rule \u2014 bronzed_cowbird_vs_shiny_cowbird] Bird is entirely or nearly entirely black-plumaged (male); Iris is visibly bright red or orange-red \u2014 not dark brown or black; Bill appears notably thick-based and slightly decurved (gonys curved downward), giving a heavier, almost grosbeak-like profile compared to Shiny Cowbird's slimmer, straighter bill; Body posture is compact and relatively heavy-bodied; No strong iridescent blue-green gloss is the dominant plumage impression (Bronzed shows bronzy/purple gloss, Shiny shows blue-green); Bird shows a visible ruff or hackle-like feathering on the neck/nape \u2014 an erectile ruff that males can flare during display, which is a distinctive structural feature of Bronzed Cowbird absent in Shiny Cowbird; Head appears proportionally large and rounded, with a high-crowned, almost bull-necked profile characteristic of Bronzed Cowbird; Bill length is moderate to short relative to head size \u2014 not elongated or spike-like as would be atypical for this species; No streaking, spotting, or brown tones visible on the plumage (ruling out females or immatures of either species, which would not support a confident ID on these marks alone)",
+    "action": "Classify as Bronzed Cowbird. Confidence: high. Rule: When a small, all-black cowbird shows a conspicuous bright red or orange-red iris that is clearly visible as a bold colored eye, combined with a distinctly thick-based, slightly decurved bill that appears heavier and more robust than a typical icterid bill, identify as Bronzed Cowbird.",
+    "favors": "Bronzed Cowbird",
+    "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+    "source": "expert:claude-sonnet-4-6",
+    "triggered_by": "bronzed_cowbird_vs_shiny_cowbird",
+    "preconditions": [
+      "Bird is entirely or nearly entirely black-plumaged (male)",
+      "Iris is visibly bright red or orange-red \u2014 not dark brown or black",
+      "Bill appears notably thick-based and slightly decurved (gonys curved downward), giving a heavier, almost grosbeak-like profile compared to Shiny Cowbird's slimmer, straighter bill",
+      "Body posture is compact and relatively heavy-bodied",
+      "No strong iridescent blue-green gloss is the dominant plumage impression (Bronzed shows bronzy/purple gloss, Shiny shows blue-green)",
+      "Bird shows a visible ruff or hackle-like feathering on the neck/nape \u2014 an erectile ruff that males can flare during display, which is a distinctive structural feature of Bronzed Cowbird absent in Shiny Cowbird",
+      "Head appears proportionally large and rounded, with a high-crowned, almost bull-necked profile characteristic of Bronzed Cowbird",
+      "Bill length is moderate to short relative to head size \u2014 not elongated or spike-like as would be atypical for this species",
+      "No streaking, spotting, or brown tones visible on the plumage (ruling out females or immatures of either species, which would not support a confident ID on these marks alone)"
+    ],
+    "rule_text": "When a small, all-black cowbird shows a conspicuous bright red or orange-red iris that is clearly visible as a bold colored eye, combined with a distinctly thick-based, slightly decurved bill that appears heavier and more robust than a typical icterid bill, identify as Bronzed Cowbird."
+  },
+  {
+    "id": "r_002",
+    "condition": "[Patch rule \u2014 bronzed_cowbird_vs_shiny_cowbird] Bird is entirely or predominantly black/dark-plumaged; Bill appears noticeably thick, deep-based, and heavy relative to head size \u2014 distinctly more robust than a typical icterid; Head appears large, rounded, and somewhat 'bull-necked' or hunched in posture; No strongly iridescent blue-green sheen visible across the entire body (Shiny Cowbird shows intense gloss); plumage may show some bronze/greenish gloss but appears more matte or dully glossed in typical light; Bird is cowbird-sized (smaller than a grackle, larger than a sparrow)",
+    "action": "Classify as Bronzed Cowbird. Confidence: high. Rule: When a black cowbird on the ground shows a visibly thick, heavy, conical bill with a distinctly rounded head profile (approaching a 'bull-necked' or large-headed appearance), and the plumage shows a dull-to-moderate gloss rather than intense iridescent sheen across the entire body, identify as Bronzed Cowbird.",
+    "favors": "Bronzed Cowbird",
+    "pair_id": "bronzed_cowbird_vs_shiny_cowbird",
+    "source": "expert:claude-sonnet-4-6",
+    "triggered_by": "bronzed_cowbird_vs_shiny_cowbird",
+    "preconditions": [
+      "Bird is entirely or predominantly black/dark-plumaged",
+      "Bill appears noticeably thick, deep-based, and heavy relative to head size \u2014 distinctly more robust than a typical icterid",
+      "Head appears large, rounded, and somewhat 'bull-necked' or hunched in posture",
+      "No strongly iridescent blue-green sheen visible across the entire body (Shiny Cowbird shows intense gloss); plumage may show some bronze/greenish gloss but appears more matte or dully glossed in typical light",
+      "Bird is cowbird-sized (smaller than a grackle, larger than a sparrow)"
+    ],
+    "rule_text": "When a black cowbird on the ground shows a visibly thick, heavy, conical bill with a distinctly rounded head profile (approaching a 'bull-necked' or large-headed appearance), and the plumage shows a dull-to-moderate gloss rather than intense iridescent sheen across the entire body, identify as Bronzed Cowbird."
+  }
+]
