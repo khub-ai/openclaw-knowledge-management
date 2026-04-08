@@ -563,8 +563,12 @@ Qwen3-VL-8B baseline on mel/nev: 3/6 (50%) — all three melanomas missed, all t
 | Failure | Correct label | Rule authored | Spectrum level selected | Held-out precision | Result |
 |---|---|---|---|---|---|
 | ISIC_0024315 | Melanoma | regression structures + irregular peripheral globules | **Level 1** (most_general, 2 preconditions) | 1.00 (0 FP) | ✓ FIXED |
-| ISIC_0024333 | Melanoma | diffuse regression + peppering + disorganized texture | in progress | — | — |
-| ISIC_0024400 | Melanoma | gray-blue structureless areas + multi-zone asymmetry | in progress | — | — |
+| ISIC_0024333 | Melanoma | diffuse regression + peppering + disorganized texture | **Level 2** (moderate) | 1.00 (0 FP) | ✓ FIXED |
+| ISIC_0024400 | Melanoma | gray-blue structureless areas + multi-zone asymmetry | ✗ all levels failed | — | ✓ FIXED via r_002 cross-pair |
+
+**Final session result: 6/6 (100%) — up from 3/6 (50%) zero-shot (+50pp).**  
+Rules: 3 authored, 2 accepted & registered (r_001 for ISIC_0024315, r_002 for ISIC_0024333).  
+ISIC_0024400's own rule was rejected at all 4 spectrum levels (precision=0.67 throughout — FP case was a deep nevus with Tyndall-effect gray-blue that the brightness-polarity condition could not reliably separate). ISIC_0024400 was nonetheless fixed when r_002 (regression/peppering rule from ISIC_0024333) fired on it and correctly predicted Melanoma — an in-session cross-pair generalization.
 
 Expert model: `claude-tutor` (human-in-the-loop via filesystem inbox/outbox).
 Validator model: `claude-sonnet-4-6` (API, handles all pool validation directly).
