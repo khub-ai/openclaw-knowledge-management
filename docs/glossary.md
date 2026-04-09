@@ -139,6 +139,26 @@ rule active. Each cycle is one turn of the dialogue. The knowledge is
 persistent: a rule registered in one session applies to future sessions without
 repeating the exchange.
 
+The current implementation supports **multi-round exchanges**: when the pupil
+still fails after round 1, the system assembles a context block (which rules
+were active, whether they fired, the pupil's stated reasoning, per-precondition
+validator observations on the failure image) and re-engages the expert for
+round 2. The expert's second response is shaped by the pupil's specific failure
+mode rather than just the original image. This is closer to dialogue than a
+single-pass injection.
+
+**The long-term goal is true dialogic learning**, where the pupil actively
+initiates questions, expresses degrees of uncertainty, and negotiates with the
+tutor over which features were ambiguous or not visible. In that mode the
+information flow is genuinely bidirectional: the pupil's expressed confusion
+drives the tutor's next explanation, and the tutor's explanation is evaluated
+against the pupil's actual reasoning gaps. Whether this is achievable depends
+significantly on the capability of the pupil model. A pupil that produces only
+a prediction and a brief justification gives the system little to work with.
+A pupil that can articulate *what it was looking for*, *what it found*, and
+*where its confidence broke down* — in enough detail for a tutor to respond
+usefully — is a prerequisite for genuine back-and-forth.
+
 This has been demonstrated to work with AI models as both pupil and expert —
 see the [birds](../usecases/image-classification/birds/README.md) and
 [dermatology](../usecases/image-classification/dermatology/README.md) use

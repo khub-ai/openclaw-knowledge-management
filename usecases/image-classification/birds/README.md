@@ -367,6 +367,14 @@ This shows both the value and the limit of multi-round dialogic exchange: the lo
 
 Shiny_0080 was never fixed by a dedicated Shiny Cowbird rule — every Shiny rule failed validation. It was fixed indirectly, by the accumulation of four Bronzed Cowbird rules that together made the alternative hypothesis too costly. When none of the Bronzed rules fire on a plain brown bird, the pupil correctly defaults to Shiny. This emergent effect was not designed in. It suggests that in binary classification, building a sufficiently rich rule set for one class may implicitly resolve failures in the other.
 
+### What this is — and what true dialogic learning would look like
+
+The round 2 exchange is closer to dialogic learning than a single-pass injection, but it is not yet the full vision. It is more accurately described as **structured tutoring with feedback**: the system assembles the pupil's failure record into a context block and presents it to the tutor; the tutor responds with a new rule; the pupil applies it. The information flow is real, but it is one-directional within each round. The pupil does not actually formulate a question. It does not say "I can see the bill looks thick, but I'm uncertain whether it's thick *enough* — can you give me a reference?" It does not push back, express partial understanding, or identify which precondition it found ambiguous. The "pupil question" is synthesized by the system from failure data, not expressed by the pupil in its own words.
+
+**The long-term goal is true dialogic learning** — an exchange where the pupil has a genuine first-class reasoning trace and can initiate questions, express degrees of uncertainty, and negotiate with the tutor over which features are visible or reliable in a given image. Whether that is achievable depends heavily on the pupil model's capability. A model that produces only a prediction and a one-sentence justification gives the system very little to work with. A model that can express *what it was looking for*, *what it found*, and *where its confidence broke down* gives the tutor a much richer target for correction — and opens the door to genuinely collaborative learning rather than repeated one-way instruction.
+
+The teachability test — verifying that a candidate pupil will follow injected rules at all — is a prerequisite for any of this. But teachability alone is not enough. The next level requires a pupil that can **express its own confusion clearly enough for a tutor to respond to it**.
+
 ---
 
 *For the technical architecture, pipeline design, and full implementation notes, see [DESIGN.md](../DESIGN.md).*
