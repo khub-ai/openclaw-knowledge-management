@@ -60,6 +60,11 @@ from agents import (
     _format_action_effects,
 )
 from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
+from nav_bfs import (
+    compute_navigation_plan,
+    find_player_position,
+    format_nav_plan,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -903,6 +908,108 @@ def _load_default_gk_registry() -> Optional[GameKnowledgeRegistry]:
     return _GK_REGISTRY_CACHE
 
 
+def _compute_bfs_nav_section(
+    frame: list[list[int]],
+    game_id: str,
+    level: int,
+    gk_registry: Optional[GameKnowledgeRegistry],
+    action_history: Optional[list[dict]] = None,
+) -> str:
+    """
+    Compute a BFS navigation path from the player's current position through
+    any unvisited waypoints (ROT_CHANGER → WIN_TARGET) and return a formatted
+    string suitable for injection into the MEDIATOR context.
+
+    Returns "" if any required data is missing or BFS fails.
+
+    rot_changer_visited detection: scan action_history for any UP step whose
+    cumulative-diff exceeds 80 — a heuristic for the colour-change event that
+    happens when the player walks over the ROT_CHANGER.
+    """
+    if gk_registry is None or not frame:
+        return ""
+
+    # Retrieve per-level entry
+    entry = gk_registry.get_level(game_id, level)
+    if not entry:
+        return ""
+
+    # Retrieve top-level game config keys (action_map, walkable_colors, etc.)
+    game_data = gk_registry._data.get(game_id, {})
+    action_map: dict[str, str] | None = game_data.get("action_map")
+    walkable_colors_raw = game_data.get("walkable_colors")
+    step_size: int = game_data.get("step_size", 5)
+    player_colors_raw = game_data.get("player_colors")
+
+    if not action_map or not walkable_colors_raw or not player_colors_raw:
+        return ""
+
+    walkable_colors: set[int] = set(walkable_colors_raw)
+    player_colors:   set[int] = set(player_colors_raw)
+
+    # Locate player in the frame (top-left corner of sprite bounding box)
+    player_pos = find_player_position(frame, player_colors)
+    if player_pos is None:
+        return ""
+
+    # Collect waypoints: rot_changers (if unvisited) then win_target
+    rot_changers = entry.get("rot_changers", [])
+    win_target   = entry.get("win_target")
+    if not win_target:
+        return ""
+
+    # Detect whether each rot_changer has already been visited.
+    # Heuristic: look for a step in action_history whose 'diff' value > 80
+    # A large pixel diff (> 80) on ANY movement action signals the ROT_CHANGER
+    # was triggered — regardless of direction.
+    rot_changer_visited = False
+    if action_history:
+        for step in action_history:
+            if step.get("diff", 0) > 80:
+                rot_changer_visited = True
+                break
+
+    # Build ordered waypoint list
+    waypoints: list[tuple[int, int]] = [player_pos]
+    extra_passable: set[tuple[int, int]] = set()
+
+    if rot_changers and not rot_changer_visited:
+        rc = rot_changers[0]
+        rc_pos = (rc["x"], rc["y"])
+        waypoints.append(rc_pos)
+        extra_passable.add(rc_pos)
+
+    wt_pos = (win_target["x"], win_target["y"])
+    waypoints.append(wt_pos)
+    extra_passable.add(wt_pos)
+    # Also mark the cells adjacent to win_target as passable — the approach
+    # cells may have a special non-color3 appearance (target border/overlay).
+    for _dc, _dr in [(0, step_size), (0, -step_size), (step_size, 0), (-step_size, 0)]:
+        extra_passable.add((wt_pos[0] + _dc, wt_pos[1] + _dr))
+
+    # Run BFS
+    actions = compute_navigation_plan(
+        frame=frame,
+        waypoints=waypoints,
+        walkable_colors=walkable_colors,
+        step_size=step_size,
+        action_map=action_map,
+        extra_passable=extra_passable,
+    )
+    if actions is None:
+        return (
+            f"## Computed navigation path\n"
+            f"  BFS found NO path from player {player_pos} to goal {wt_pos}."
+        )
+
+    formatted = format_nav_plan(actions)
+    total = len(actions)
+    return (
+        f"## Computed navigation path\n"
+        f"  Optimal path from current position: {formatted} ({total} total steps)"
+    )
+
+
 def _build_game_knowledge_section(gk_registry: Optional[GameKnowledgeRegistry],
                                   game_id: str, level: int) -> str:
     """Build a MEDIATOR-ready string with known positional facts for this level."""
@@ -1540,6 +1647,18 @@ async def run_episode(
         _game_knowledge_str = _build_game_knowledge_section(
             _gk, env_id, levels_now + 1
         )
+        _bfs_nav_str = _compute_bfs_nav_section(
+            frame=_curr_frame,
+            game_id=env_id,
+            level=levels_now + 1,
+            gk_registry=_gk,
+            action_history=action_history,
+        )
+        if _bfs_nav_str:
+            _game_knowledge_str = (
+                (_game_knowledge_str + "\n" if _game_knowledge_str else "")
+                + _bfs_nav_str
+            )
 
         action_plan, med_text, _med_ms = await run_mediator(
             obs_text,
