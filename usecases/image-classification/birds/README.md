@@ -12,7 +12,7 @@
 
 ## The One-Line Summary
 
-An AI model confused Bronzed Cowbirds with Shiny Cowbirds. An ornithologist explained, in plain language, the field marks that distinguish them. The system turned those explanations into explicit rules, tested them against known images, and applied them. When failures persisted, the pupil's confusion was fed back to the tutor for a second round. Accuracy improved from 33% to 83% without retraining the model.
+An AI model confused Bronzed Cowbirds with Shiny Cowbirds. An ornithologist explained, in plain language, the field marks that distinguish them. The system turned those explanations into explicit rules, tested them against known images, and applied them. When failures persisted, the pupil's confusion was fed back to the tutor for a second round. Accuracy improved from 33% to 83% without retraining the model. The fix is a written explanation. The result is instant and persistent.
 
 ---
 
@@ -97,6 +97,8 @@ Qwen misclassified every Bronzed Cowbird as a Shiny Cowbird, and one Shiny Cowbi
 
 The loop runs automatically once a failure case is identified. The expert's involvement is focused on high-value judgment calls; the mechanical work of validating rules against image pools is handled by the system automatically.
 
+Note that for this experiment, we used a higher-end model, Claude Sonnet 4.6, to serve the role of a domain expert (i.e., the ornithologist).
+
 ```
          ┌──────────────────────────────────────────────────────────┐
          │               FAILURE DETECTED                           │
@@ -114,9 +116,9 @@ The loop runs automatically once a failure case is identified. The expert's invo
                                 ▼
          ┌──────────────────────────────────────────────────────────┐
          │               RULE COMPLETION                            │
-         │   A second pass adds the implicit background conditions  │
-         │   the expert assumed but did not state —                 │
-         │   closing loopholes a naive system would exploit         │
+         │   Implicit background conditions the expert assumed      │
+         │   but did not state — closing loopholes a naive system   │
+         │   would exploit                                          │
          └──────────────────────┬───────────────────────────────────┘
                                 │
                                 ▼
@@ -142,13 +144,12 @@ The loop runs automatically once a failure case is identified. The expert's invo
                     ▼                       ▼
          ┌──────────────────┐   ┌──────────────────────────────────┐
          │ SPECTRUM SEARCH  │   │          RULE REGISTERED         │
-         │ Generate 4 rule  │   │                                  │
-         │ versions (more   │   │  Applied to Qwen on the          │
-         │ general to more  │   │  original failure image.         │
-         │ specific). Test  │   │  Verified: did Qwen flip         │
-         │ all four; keep   │   │  to the right answer?            │
-         │ tightest that    │   └──────────────────────────────────┘
-         │ passes.          │
+         │ Multiple rule    │   │                                  │
+         │ versions (fewer  │   │  Applied to Qwen on the          │
+         │ to more          │   │  original failure image.         │
+         │ conditions).     │   │  Verified: did Qwen flip         │
+         │ Tightest that    │   │  to the right answer?            │
+         │ passes is kept.  │   └──────────────────────────────────┘
          └──────────────────┘
 ```
 
@@ -156,9 +157,7 @@ The loop runs automatically once a failure case is identified. The expert's invo
 
 ## 5. The Expert's Role
 
-In this experiment, the expert role is played by an AI assistant (Claude Sonnet 4.6) instructed to act as a senior ornithologist. In production use, this role would be filled by a human expert. The interactive loop is identical — only the identity of the expert changes.
-
-The expert performs four distinct tasks:
+In this experiment, the expert role is played by Claude Sonnet 4.6 to simulate a senior ornithologist. The expert performs four distinct tasks, each represented by a named role in the system. In a production environment, a human expert generally performs only Role 1 for initial diagnosis, and KF takes over the rest:
 
 ### Role 1 — Rule Author
 

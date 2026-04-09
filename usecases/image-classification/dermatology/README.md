@@ -2,7 +2,9 @@
 
 > **For**: Clinicians, dermatologists, and medical educators curious about how AI can be corrected by domain experts without any programming or retraining.
 >
-> **Status**: Experiment completed. Pilot (6 images): Mel/Nev 50%→100% (+50pp); BCC/BKL 67%→83% (+16.7pp). Expanded (60 images, 30/class): Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp). See [Results](#7-results).
+> **Status**: Preliminary experiments completed.  
+>> **Pilot** (6 images): Mel/Nev 50%→100% (+50pp); BCC/BKL 67%→83% (+16.7pp).  
+>> **Expanded** (60 images, 30/class): Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp). See [Results](#7-results).
 >
 > **Dataset**: HAM10000 (ISIC archive), 10,015 dermoscopic images across 7 diagnostic categories.
 >
@@ -14,7 +16,7 @@
 
 An AI model was shown dermoscopic images of melanomas and called them benign moles. A clinician (the "Tutor") looked at each failure, explained in plain language *why* the image is a melanoma, and the system turned that explanation into a rule. The AI was then tested again — and correctly identified the lesion as melanoma.
 
-No retraining. No programming. No data labeling pipeline. The fix was a written explanation.
+No retraining. No programming. No data labeling pipeline. The fix is a written explanation. The result is instant and persistent.
 
 ---
 
@@ -37,20 +39,20 @@ No retraining. No programming. No data labeling pipeline. The fix was a written 
 
 Dermoscopy AI tools have been commercially available for years, and published studies show they can match or exceed average dermatologist accuracy on curated test sets. But in clinical practice, the failures that matter most are not random — they cluster. An AI system trained primarily on large general populations may systematically miss subtler presentations that a specialist sees regularly: early superficial spreading melanomas without the classic "ABCD" alarm features, lesions with unusual regression patterns, or cases where the color reading is technically correct but clinically misleading.
 
-The traditional fix for these failures is to collect more labeled examples and retrain. That means:
+The traditional fix for these failures is to collect more labeled examples and retrain the AI model. That means:
 
 - Weeks to months of turnaround time
 - ML engineering resources most clinicians do not have access to
 - Retraining that may fix one cluster of errors while introducing regressions elsewhere
 - A "black box" result — the expert still cannot see or review what the model actually learned
 
-**Knowledge Fabric (KF) proposes a different path**: the clinician describes, in ordinary clinical language, *why* a specific lesion is malignant and not benign. The system turns that description into an explicit, auditable rule with testable preconditions. The rule is checked against a set of known cases before it is trusted. From that point on, any new image that matches those preconditions gets the benefit of the clinician's insight — immediately, without retraining, and with the reasoning transparent and inspectable.
+**Knowledge Fabric (KF) proposes a different path**: the clinician describes, in ordinary clinical language, *why* a specific lesion is malignant and not benign. The system turns that description into an explicit, auditable rule with testable preconditions. The rule is checked against a set of known cases before it is trusted. From that point on, any new image that matches those preconditions gets the benefit of the clinician's insight — immediately, without AI model retraining, and with the reasoning transparent and inspectable.
 
 ---
 
 ## 2. The Problem in Plain Language
 
-We tested a state-of-the-art open-source vision-language model — **Qwen3-VL-8B** — on dermoscopic images drawn from the HAM10000 dataset, covering confusable lesion pairs. The experiment ran in two phases: a 6-image pilot (3 per class) for rule authoring, and a 60-image expanded test (30 per class) to validate generalization at scale.
+We tested a state-of-the-art open-source but relatively low-end vision-language model — **Qwen3-VL-8B** — on dermoscopic images drawn from the HAM10000 dataset, covering confusable lesion pairs. The experiment ran in two phases: a 6-image pilot (3 per class) for rule authoring, and a 60-image expanded test (30 per class) to validate generalization at scale.
 
 **Pilot pairs (6 images each):**
 
@@ -78,20 +80,22 @@ In each case, Qwen focused on features it recognized and ignored features it did
 
 The core idea is simple: **the AI has a gap in its knowledge, and a human expert fills it.**
 
-What makes KF different from just writing a better prompt is that the knowledge is:
+What makes KF different from just writing a better prompt is that we formulate domain knowledge into a rule form that is:
 
 - **Structured** — it has explicit preconditions that must be met before the rule fires, preventing it from misfiring on the wrong cases
 - **Validated** — the system checks the rule against a pool of known labeled images before accepting it, so bad rules are caught before they cause harm
 - **Auditable** — the rule is a readable text artifact, not a weight adjustment, so any clinician can read it, challenge it, or correct it
 - **Persistent** — the rule lives independently of the AI model, so it survives model upgrades, vendor changes, or deployment to a different system
 
-The process that extracts this knowledge is called the **dialogic patching loop**.
+The process that extracts this rule-based knowledge is called the **dialogic patching loop**.
 
 ---
 
 ## 4. The Dialogic Patching Loop — Step by Step
 
 The loop runs automatically once a failure case is identified. The human expert's involvement is focused on a small number of high-value judgment calls; the mechanical work of validating rules against image pools is handled by the system automatically.
+
+Note that for this experiment, we used a higher-end model, Claude Sonnet 4.6, to serve the role of a domain expert (i.e., the clinician).
 
 ```
          ┌──────────────────────────────────────────────────────────┐
@@ -110,9 +114,9 @@ The loop runs automatically once a failure case is identified. The human expert'
                                 ▼
          ┌──────────────────────────────────────────────────────────┐
          │               RULE COMPLETION                            │
-         │   A knowledge engineer adds the implicit background      │
-         │   conditions the clinician assumed but did not state —   │
-         │   closing loopholes a naive system would exploit         │
+         │   Implicit background conditions the clinician assumed   │
+         │   but did not state — closing loopholes a naive system   │
+         │   would exploit                                          │
          └──────────────────────┬───────────────────────────────────┘
                                 │
                                 ▼
@@ -148,8 +152,8 @@ The loop runs automatically once a failure case is identified. The human expert'
                   ▼
          ┌──────────────────────────────────────────────────────────┐
          │               SPECTRUM SEARCH                            │
-         │   Four versions of the rule are generated, from          │
-         │   most general (2 conditions) to most specific           │
+         │   Multiple versions of the rule are generated, from          │
+         │   most general (fewer conditions) to most specific           │
          │   (original + contrastive tightening condition).         │
          │   The tightest version that passes precision is kept.    │
          └──────────────────────────────────────────────────────────┘
@@ -159,7 +163,7 @@ The loop runs automatically once a failure case is identified. The human expert'
 
 ## 5. The Five Roles the Expert Plays
 
-In this experiment, the expert role is played by a senior dermoscopy clinician (the "Tutor"). The Tutor is asked to perform five distinct tasks, each represented by a named agent role in the system:
+In this experiment, the expert role is played by Claude Sonnet 4.6 to simulate a senior dermoscopy clinician (the "Tutor"). The Tutor is asked to perform up to five distinct tasks, each represented by a named agent role in the system. In a production environment, a human tutor generally performs only Role 1 for initial diagnosis, and KF takes over the rest:
 
 ### Role 1 — EXPERT_RULE_AUTHOR (initial diagnosis of the AI's mistake)
 
@@ -354,7 +358,7 @@ The system correctly refused to register the gray-blue rule for ISIC_0024400 bec
 
 ### After KF patching — expanded test (60 images per pair, 30 per class)
 
-The 2 mel/nev rules (r_001, r_002) and 1 bcc/bkl rule (r_001 — the BKL rule for ISIC_0024420) were applied without modification to all 60 images per pair:
+The 3 mel/nev rules (r_001, r_002, r_003) and 1 bcc/bkl rule (the BKL rule for ISIC_0024420) were applied without modification to all 60 images per pair:
 
 #### Melanoma vs Melanocytic Nevus (60 images)
 
@@ -506,9 +510,9 @@ When a model is fine-tuned on additional melanoma examples, the result is change
 
 ## 10. Limitations and Honest Caveats
 
-**This is a small experiment.** The results cover 18 images across three lesion pairs. This is sufficient to demonstrate proof of concept and observe failure modes, but not sufficient to make statistical claims about how KF would perform at clinical scale.
+**This is a small experiment.** The results cover 120 images across two lesion pairs (30 per class). This is sufficient to demonstrate proof of concept and observe failure modes, but not sufficient to make statistical claims about how KF would perform at clinical scale.
 
-**The "Tutor" is an AI assistant, not a live clinician.** In this experiment, the expert role is played by a large language model (Claude) acting as a senior dermoscopy consultant. In the intended production workflow, the expert would be a human clinician. The AI tutor is a simulation of that interaction. The interactive loop is the same — only the identity of the expert changes.
+**The "Tutor" is an AI assistant, not a live clinician.** In this experiment, the expert role is played by a large language model (Claude Sonnet 4.6) acting as a senior dermoscopy consultant. In the intended production workflow, the expert would be a human clinician. The AI tutor is a simulation of that interaction. The interactive loop is the same — only the identity of the expert changes.
 
 **Rules are not infallible.** A rule that passes the 75% precision gate may still fire incorrectly on edge cases. The validation pool is finite and may not cover all the ways a rule could misfire. Clinical deployment would require ongoing monitoring and rule review.
 
