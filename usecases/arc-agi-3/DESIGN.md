@@ -732,3 +732,390 @@ Below is a verification against the 8 deeply-analyzed games:
 The schema's open-ended key design (any string key in any namespace) means that
 unforeseen mechanics in the remaining 17 games can be added without schema changes —
 only new keys and relation types, which is purely additive.
+
+---
+
+## Cross-Domain Generalization: Home Robot Assessment
+
+The StateStore's core mechanisms — `StateFact`, `RelFact`, `Delta`, rules as
+`(condition, effect, confidence)` triples — are domain-agnostic by design.
+However, several concrete design choices bake in ARC-AGI-3 assumptions that
+would break when applied to a physical-world home robot. This section
+identifies each gap and proposes the minimal schema changes needed so that
+a single StateStore implementation serves both ARC games and physical robots
+(and any future domain).
+
+### Gap 1: Scope lifecycle is game-specific
+
+**Current:** `scope ∈ {"step", "level", "episode", "game"}` with hard-coded
+clear semantics tied to game progression.
+
+**Robot problem:** A home robot has no "levels." Its world is continuous.
+Facts persist for wildly different durations: "the cup is on the table" lasts
+minutes; "Alice prefers oat milk" lasts months; "the front door is locked"
+lasts until someone unlocks it. The four game scopes cannot express this.
+
+**Fix:** Replace the fixed scope enum with a two-field model:
+
+```python
+@dataclass
+class StateFact:
+    value:      Any
+    confidence: float
+    source:     str           # "prior" | "inferred" | "observed" | "rule" | "told"
+    scope:      str           # domain-defined, open-ended
+    ttl:        Optional[float]  # seconds until auto-expiry, None = permanent
+    timestamp:  float         # Unix epoch (replaces step_index)
+    evidence:   int
+```
+
+- `scope` becomes an open string: `"step"`, `"level"`, `"game"` for ARC;
+  `"moment"`, `"task"`, `"session"`, `"day"`, `"permanent"` for robot.
+- `ttl` (time-to-live) lets facts auto-expire: sensor readings expire in
+  seconds, task-local facts expire when the task ends, preferences never expire.
+- `timestamp` replaces `step_index` as the universal ordering key. In ARC,
+  `timestamp` can simply be set to `step_index` (integer time). In the robot,
+  it's `time.time()`.
+
+`clear_scope(scope)` still works — it deletes all facts with that scope label.
+Domain code defines which scopes exist and when to clear them.
+
+---
+
+### Gap 2: No real temporal model
+
+**Current:** `step_index` provides discrete ordering within an episode.
+No duration, no real-time clock, no temporal relations.
+
+**Robot problem:** "Alice left for work 30 minutes ago." "The oven has been
+preheating for 8 minutes." "Water the plants every Tuesday." These all require:
+- Real-time timestamps (already addressed by Gap 1's `timestamp` field)
+- Duration-aware facts
+- Temporal relations between events
+- Recurrence / schedule facts
+
+**Fix — temporal relation types** (added to RelFact vocabulary):
+
+```
+"before"          (E1, E2)  {"gap_sec": 120.0}
+"after"           (E1, E2)  {}
+"during"          (E1, E2)  {}       # E1 occurred while E2 was active
+"simultaneous"    (E1, E2)  {"tolerance_sec": 1.0}
+"caused_by"       (E1, E2)  {}       # E2 triggered E1
+"periodic"        (E,)      {"cron": "0 8 * * *", "next_at": 1712800000.0}
+```
+
+**Fix — duration attribute:**
+
+```
+("obj", <id>, "state_since")      → float   # timestamp when current state began
+("task", <id>, "started_at")      → float
+("task", <id>, "deadline")        → float
+("task", <id>, "duration_est")    → float   # seconds
+```
+
+---
+
+### Gap 3: 2D grid coordinates → 3D continuous space
+
+**Current:** All positions are `(col, row)` integer tuples on a pixel grid,
+with `step_size` defining the discrete cell spacing.
+
+**Robot problem:** Physical objects exist in continuous 3D space. A cup is
+at `(1.23, 0.87, 0.75)` meters in the kitchen reference frame. The robot's
+gripper has 6-DOF pose. Rooms are volumes, not grid cells.
+
+**Fix — coordinate model:**
+
+```
+("world", "coordinate_system")    → str   # "grid_2d" | "continuous_3d"
+("world", "reference_frame")      → str   # "pixel" | "room_kitchen" | "world"
+("world", "units")                → str   # "pixels" | "meters" | "cells"
+
+# Object position generalizes from (col, row) to:
+("obj", <id>, "position")         → tuple  # (x, y) for 2D, (x, y, z) for 3D
+("obj", <id>, "orientation")      → tuple  # (yaw,) for 2D, (roll, pitch, yaw) for 3D
+("obj", <id>, "dimensions")       → tuple  # (w, h) or (w, h, d)
+("obj", <id>, "reference_frame")  → str    # which frame this position is in
+```
+
+**Fix — 3D spatial relations** (extend existing vocabulary):
+
+```
+"on_top_of"       (A, B)  {"contact": True}     # A is resting on B
+"inside"          (A, B)  {}                     # A is contained within B
+"underneath"      (A, B)  {}                     # A is beneath B
+"behind"          (A, B)  {"from_viewpoint": "robot"}
+"in_front_of"     (A, B)  {}
+"near"            (A, B)  {"distance_m": 0.3}
+"far_from"        (A, B)  {"distance_m": 5.2}
+"in_room"         (A, R)  {}                     # A is located in room R
+"on_surface"      (A, S)  {}                     # A is on surface S (table, shelf)
+```
+
+The existing 2D relations (`same_row`, `adjacent`, `left_of`, `above`, etc.)
+remain valid for ARC's grid world. The 3D relations are additive.
+
+---
+
+### Gap 4: No entity type system
+
+**Current:** Everything is an "object" identified by integer ID, discovered
+via connected-component analysis or OBSERVER labeling.
+
+**Robot problem:** A home has fundamentally different entity categories —
+people, rooms, appliances, furniture, tools, consumables, pets — each with
+category-specific attributes. A person has a name, face embedding, and
+preferences. A room has a floor plan. An appliance has an operational state
+and a manual. These are not just "objects with extra keys."
+
+**Fix — namespace per entity category:**
+
+```
+# People (persistent across sessions)
+("person", <id>, "name")           → str         # "Alice"
+("person", <id>, "face_embedding") → ndarray     # for re-identification
+("person", <id>, "role")           → str         # "resident" | "guest" | "child"
+("person", <id>, "last_seen")      → float       # timestamp
+("person", <id>, "location")       → str         # room ID or "away"
+("person", <id>, "activity")       → str         # "sleeping" | "cooking" | "watching_tv"
+("person", <id>, "mood")           → str         # "calm" | "stressed" (if detectable)
+
+# Rooms / zones
+("room", <id>, "name")            → str         # "kitchen"
+("room", <id>, "floor_plan")      → Polygon     # walkable area boundary
+("room", <id>, "temperature")     → float       # Celsius
+("room", <id>, "lighting")        → str         # "bright" | "dim" | "off"
+("room", <id>, "occupancy")       → int         # number of people detected
+
+# Appliances / devices
+("device", <id>, "name")          → str         # "oven"
+("device", <id>, "type")          → str         # "cooking" | "cleaning" | "climate"
+("device", <id>, "power_state")   → str         # "on" | "off" | "standby"
+("device", <id>, "operational_state") → str     # "preheating" | "ready" | "error"
+("device", <id>, "target_temp")   → float
+("device", <id>, "current_temp")  → float
+
+# Task / goal (replaces game's "progress" namespace for robot)
+("task", <id>, "description")     → str
+("task", <id>, "status")          → str         # "pending" | "active" | "done" | "failed"
+("task", <id>, "parent_task")     → Optional[int]  # for hierarchical decomposition
+("task", <id>, "assigned_to")     → str         # "robot" | person ID
+("task", <id>, "priority")        → int         # 0 = urgent, 9 = low
+("task", <id>, "requester")       → int         # person ID who asked for it
+```
+
+The `("obj", ...)` namespace still exists for generic physical objects
+(cups, books, packages). Entity categories are just namespace conventions —
+the StateStore doesn't enforce type constraints. A domain can define any
+namespace it needs.
+
+---
+
+### Gap 5: No event / history log
+
+**Current:** Deltas are emitted and consumed within a single step. There is
+no persistent record of past events. ARC doesn't need one — each step is
+essentially Markovian with respect to the current frame.
+
+**Robot problem:** "When did Alice last take her medication?" "Has the front
+door been opened today?" "What happened while I was away?" All require a
+queryable event history that survives scope clears.
+
+**Fix — EventFact as a new fact type:**
+
+```python
+@dataclass
+class EventFact:
+    event_type: str           # "person_entered", "device_state_changed", etc.
+    subjects:   tuple[int,...]# entity IDs involved
+    properties: dict          # event-specific data
+    timestamp:  float         # when it happened
+    source:     str           # "observed" | "inferred" | "reported"
+    confidence: float
+```
+
+Stored as: `("event", <event_id>) → EventFact(...)`
+
+Events are **immutable** — once recorded, they are never modified (unlike
+state facts which are overwritten). They accumulate in an append-only log.
+Retention policy is domain-defined (e.g., keep 30 days of events, then
+archive or summarize).
+
+**Event type vocabulary (starter):**
+
+```
+"person_entered"       {"person": id, "room": id}
+"person_left"          {"person": id, "room": id}
+"object_moved"         {"object": id, "from": pos, "to": pos, "by": person_id}
+"device_state_changed" {"device": id, "old": "off", "new": "on"}
+"task_completed"       {"task": id, "duration_sec": 300}
+"utterance"            {"person": id, "text": "...", "intent": "request"}
+"anomaly"              {"description": "front door open past midnight"}
+"routine_triggered"    {"routine": "morning_lights", "trigger": "schedule"}
+```
+
+In ARC, the event log is optional (step-by-step replay can be reconstructed
+from deltas). In the robot, it's essential infrastructure.
+
+---
+
+### Gap 6: No social / functional / normative relations
+
+**Current:** Relation vocabulary covers spatial, structural, similarity,
+causal, attachment, selection, and constraint. These are all physical or
+logical relationships between objects in a game.
+
+**Robot problem:** Human environments are rich with non-physical relationships:
+- Social: "Alice is Bob's mother", "Charlie is a guest"
+- Functional: "the mug is for drinking", "the broom is stored in the closet"
+- Ownership: "this laptop belongs to Alice"
+- Normative: "don't vacuum while someone is sleeping", "knock before entering"
+- Preference: "Bob likes the thermostat at 72°F"
+
+**Fix — extended relation vocabulary:**
+
+```
+# Social
+"family_of"         (P1, P2)  {"relation": "parent"}
+"lives_with"        (P1, P2)  {}
+"caretaker_of"      (P1, P2)  {}   # P1 cares for P2 (child, elderly)
+"guest_of"          (P1, P2)  {"until": timestamp}
+
+# Functional / purpose
+"used_for"          (O, purpose)  {"purpose": "drinking"}
+"stored_in"         (O, L)     {}  # O's home location is L
+"part_of"           (O1, O2)   {}  # O1 is a component of O2
+"substitute_for"    (O1, O2)   {}  # O1 can replace O2 (oat milk for dairy)
+
+# Ownership
+"belongs_to"        (O, P)     {}
+"shared_by"         (O, [P1,P2]) {}
+
+# Normative (soft constraints on robot behavior)
+"prohibited_when"   (action, condition)  {"reason": "noise during sleep"}
+"required_before"   (A1, A2)   {}  # A1 must happen before A2
+"preferred_by"      (setting, P) {"value": 72, "unit": "°F"}
+"routine"           (sequence,) {"schedule": "0 7 * * 1-5", "steps": [...]}
+```
+
+---
+
+### Gap 7: Multi-modal source tracking
+
+**Current:** `source` is a simple string: `"prior" | "inferred" | "observed" | "rule"`.
+
+**Robot problem:** A robot derives facts from multiple sensor modalities —
+camera, LIDAR, microphone, touch, temperature, gas sensors — each with
+different noise characteristics and update rates. "I see a cup on the table"
+(camera, high confidence) vs "I heard something fall" (microphone, low
+position confidence). Sensor fusion requires knowing which modalities
+contributed to each fact.
+
+**Fix — structured source:**
+
+```python
+@dataclass
+class FactSource:
+    origin:     str           # "observed" | "inferred" | "told" | "rule" | "prior"
+    modality:   Optional[str] # "camera" | "lidar" | "microphone" | "touch" | "api" | None
+    sensor_id:  Optional[str] # specific sensor instance
+    model:      Optional[str] # ML model that produced inference, if any
+    told_by:    Optional[int] # person ID, if source is "told"
+```
+
+In ARC, `source` stays a simple string (modality is always "camera" —
+the game frame). The structured source is backward-compatible: ARC code
+only reads `source.origin`.
+
+---
+
+### Gap 8: Hierarchical goals and task decomposition
+
+**Current:** Goals are flat: `("progress", "goals_satisfied")` and
+`("progress", "goals_total")`. A rule at tier T9 says "go to the win gate."
+
+**Robot problem:** "Prepare dinner" decomposes into subtasks: check
+pantry → plan recipe → retrieve ingredients → cook → plate → set table.
+Each subtask may itself decompose. The robot must track which subtask is
+active, what's blocked, and what's done. This is hierarchical task
+network (HTN) planning.
+
+**Fix — task tree as facts:**
+
+```
+("task", <id>, "description")     → str
+("task", <id>, "status")          → str     # "pending" | "active" | "blocked" | "done" | "failed"
+("task", <id>, "parent_task")     → int     # parent task ID, None for root
+("task", <id>, "children")        → list[int]
+("task", <id>, "preconditions")   → list[tuple]  # StateStore keys that must be true
+("task", <id>, "postconditions")  → list[tuple]  # facts that should be true when done
+("task", <id>, "priority")        → int
+("task", <id>, "deadline")        → Optional[float]
+```
+
+**Task relations:**
+
+```
+"subtask_of"        (child, parent)  {"order": 2}
+"depends_on"        (T1, T2)         {}   # T1 cannot start until T2 is done
+"conflicts_with"    (T1, T2)         {}   # T1 and T2 cannot run simultaneously
+"interrupted_by"    (T1, T2)         {}   # T2 preempted T1
+```
+
+In ARC, the task hierarchy is shallow (one root goal: "advance the level,"
+maybe with sub-goals like "visit RC" and "reach win_gate"). The same
+`("task", ...)` namespace works for both.
+
+---
+
+### Gap 9: Persistent identity across sessions
+
+**Current:** Object IDs are assigned per level and may be reassigned on
+level advance. The entire StateStore can be cleared between episodes.
+
+**Robot problem:** People, rooms, and important objects persist indefinitely.
+Alice is always Alice. The kitchen is always the kitchen. The robot needs
+a persistent entity registry that survives restarts.
+
+**Fix — persistence tier:**
+
+Add a `persistence` field to StateFact:
+
+```python
+persistence: str   # "volatile" | "session" | "persistent"
+```
+
+- `"volatile"`: Cleared at scope boundary (same as current behavior).
+- `"session"`: Survives scope clears within a session, cleared on restart.
+- `"persistent"`: Written to disk, survives restarts. Used for people,
+  rooms, long-term preferences, learned routines.
+
+The StateStore serialization layer writes persistent facts to a backing
+store (JSON file, SQLite, etc.). On startup, persistent facts are loaded
+before any new observations arrive.
+
+In ARC, all facts are volatile or session-scoped. No change to game code.
+
+---
+
+### Summary of schema changes
+
+| Change | Affects | ARC impact |
+|--------|---------|------------|
+| `scope` → open string | StateFact, RelFact | ARC uses same values, no code change |
+| Add `ttl` field | StateFact | ARC sets `ttl=None` (no expiry), no code change |
+| `step_index` → `timestamp` (float) | StateFact, RelFact, Delta | ARC sets `timestamp=step_index`, no code change |
+| Add `persistence` field | StateFact | ARC uses "volatile", no code change |
+| Add `EventFact` type | StateStore | ARC doesn't use it, no code change |
+| Add entity namespaces (person, room, device, task) | Key conventions | ARC ignores them, no code change |
+| Add 3D spatial relations | RelFact vocabulary | ARC ignores them, no code change |
+| Add social/functional/normative relations | RelFact vocabulary | ARC ignores them, no code change |
+| Add temporal relation types | RelFact vocabulary | ARC ignores them, no code change |
+| Structured `FactSource` | StateFact.source | ARC uses string shorthand, no code change |
+| Task hierarchy facts | Key conventions | ARC optionally uses shallow tasks |
+
+**Design principle preserved:** Every change is additive. No existing ARC
+field is removed or renamed. The schema remains open-ended — any new
+namespace, key, or relation type can be introduced without modifying the
+StateStore implementation itself.
