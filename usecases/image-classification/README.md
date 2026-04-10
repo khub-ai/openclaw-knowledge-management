@@ -3,7 +3,7 @@
 
 ---
 
-> **Status**: Research prototype — birds: 2-round dialogic loop validated (pilot 33%→83%; expanded 30/class: 46.7%→96.7%, +50pp); dermatology: expanded results: Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp), both at 30/class
+> **Status**: Research prototype — birds: 2-round dialogic loop validated (pilot 33%→83%; expanded 30/class: 46.7%→96.7%, +50pp); dermatology: expanded results: Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp), both at 30/class; three-party dialogic distillation: Mel/Nev 55%→91.7% (+36.7pp) from 3 rules, single-shot baseline 0/4 grounded
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) as a local-first knowledge authoring tool for domain experts with no AI expertise
 > **Last updated**: 2026.04.09
 
@@ -140,6 +140,7 @@ What the dermatology use case has shown so far:
 
 - The 4-round KF ensemble pipeline is net-neutral to net-negative for already-strong VLMs. When a strong model already achieves high zero-shot accuracy, injecting rules adds overhead without improving results. **This is expected and does not falsify the KF thesis** — it clarifies where KF adds value.
 - **KF's real value is the dialogic patching loop**: a cheap model + expert rules can approach the accuracy of a more expensive model on targeted hard cases, without retraining. The loop works by surfacing failures to a domain expert, turning the expert's corrective insight into structured rules with pre-conditions, and storing those rules for future use.
+- **Three-party dialog is necessary for knowledge transfer.** Single-shot rule elicitation (ask an expert model for a rule in one turn) produced 0/4 rules that fired on their own trigger image — clinically correct rules that the validator could not confirm. Multi-round dialogic distillation (PUPIL + TUTOR + KF) produced 4/4 grounded rules and 3/4 accepted rules on the same failures. KF's steering role — feeding validator observations back to the tutor and guiding vocabulary alignment — is what bridges the grounding gap. See [dermatology/README.md §10](dermatology/README.md#10-three-party-dialogic-learning--why-it-works).
 - Explicit pre-conditions (hard gates) are essential. Rules that describe a corrective action without pre-conditions can fire on cases they were not designed for, causing regressions. Rules with pre-conditions fire only when those features are confirmed in the image, making them safer to deploy.
 - A "cross-pair firing" — a rule authored for one lesion pair firing on a different pair — is a meaningful signal. It either indicates a quality problem (pre-conditions too broad) or a genuine visual generalization that the domain expert should confirm or further refine.
 

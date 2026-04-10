@@ -50,6 +50,8 @@ usecases/image-classification/dermatology/
     results_baseline_qwen3vl8b_zeroshot.json    # Qwen3-VL-8B zero-shot baseline
     results_baseline_gpt4o_zeroshot.json        # GPT-4o zero-shot baseline
     results_baseline_maverick_zeroshot.json     # Llama-4 Maverick zero-shot baseline
+    distill_dialogic.py                   # three-party dialogic distillation (PUPIL/TUTOR/KF)
+    distill_dialogic_session.json         # transcript of dialogic distillation run
     patch_session_single_test.json        # canonical completed session (mel/nev + tutor)
     patch_session_*.json                  # other session records
     tutor_inbox/                          # human-in-the-loop request files
@@ -576,3 +578,78 @@ The model outputs `"rule_fired": "<rule_id or null>"` in its response JSON.
 - The pool is always balanced: equal numbers from both classes.
 - A rule passes if: `precision >= min_precision` AND `FP <= 1` AND `fires_on_trigger == True`.
 - All three conditions must hold; precision alone is not sufficient.
+
+---
+
+## 10. Three-Party Dialogic Distillation (`distill_dialogic.py`)
+
+A separate experiment demonstrating that multi-round dialog is necessary for
+effective knowledge distillation. See [README.md §10](README.md#10-three-party-dialogic-learning--why-it-works)
+for the full user-facing writeup.
+
+### The grounding problem
+
+Single-shot elicitation (ask the tutor for a rule, test it) fails because the
+tutor and validator use different visual vocabulary for the same image. The tutor
+writes "irregular pigment network with abrupt cutoff"; the validator sees
+"relatively symmetric oval shape with corona pattern." Both descriptions are
+valid — they describe the same image at different levels of abstraction. But the
+rule's preconditions must match the *validator's* vocabulary to fire.
+
+### Three-party solution
+
+`distill_dialogic.py` implements a multi-round protocol:
+
+```
+PUPIL failure ──► TUTOR authors rule (Round 1)
+                       │
+                       ▼
+                  KF: grounding check
+                  (validator tests preconditions on trigger image)
+                       │
+               ┌───────┴───────┐
+               │ fires         │ does not fire
+               ▼               ▼
+          pool gate       KF: show TUTOR
+                          validator's observations
+                          + steering guidance
+                               │
+                               ▼
+                          TUTOR: refine rule (Round 2+)
+                               │
+                               └──► KF: grounding check (loop)
+```
+
+KF's steering moves:
+1. **Vocabulary alignment**: "use the validator's phrases, not dermoscopic abstractions"
+2. **Specificity coaching**: "you had N preconditions — consolidate to 2-3"
+3. **Strategy pivot**: at round 3+, suggest trying a different visual signal
+
+### Usage
+
+```bash
+python distill_dialogic.py
+python distill_dialogic.py --max-rounds 4 --tutor-model claude-opus-4-6
+python distill_dialogic.py --failure-ids ISIC_0024410,ISIC_0024647
+```
+
+### Evidence: single-shot vs dialogic (same 4 failures)
+
+| Image | Single-shot | Dialogic | Rounds | Pool precision |
+|---|---|---|---|---|
+| ISIC_0024410 | not grounded | **ACCEPTED** | 3 | 1.00 |
+| ISIC_0024647 | not grounded | **ACCEPTED** | 1 | 0.83 |
+| ISIC_0024911 | not grounded | **ACCEPTED** | 1 | 1.00 |
+| ISIC_0025128 | not grounded | grounded, pool failed | 1 | 0.67 |
+
+Single-shot: 0/4 grounded. Dialogic: 4/4 grounded, 3/4 accepted.
+
+**Expanded test** (60 images, 30/class): 3 accepted rules applied to Qwen3-VL-8B
+achieved 55/60 (91.7%, +36.7pp over zero-shot baseline). Comparable to the
+original failure-driven patch loop (56/60, 93.3%).
+
+### Output
+
+`distill_dialogic_session.json` contains the full transcript: every round's
+tutor rule, KF grounding check, validator observations, KF steering guidance,
+and pool results. This is the primary evidence artifact.

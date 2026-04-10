@@ -1,0 +1,172 @@
+{
+  "baseline_correct": 33,
+  "baseline_total": 60,
+  "failures_tested": 27,
+  "fixed_by_rules": 13,
+  "after_correct": 46,
+  "after_accuracy": 0.7667,
+  "delta_pp": 21.7,
+  "per_image": [
+    {
+      "image_id": "ISIC_0024315",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0024333",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024400",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024410",
+      "fired_rules": [
+        "r_dialogic_001"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024482",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024571",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0024647",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024756",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024911",
+      "fired_rules": [
+        "r_dialogic_003"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024952",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0024967",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0024987",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025035",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025105",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0025128",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025155",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025195",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025248",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0025546",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025616",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025663",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0025708",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025744",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025791",
+      "fired_rules": [],
+      "fixed": false
+    },
+    {
+      "image_id": "ISIC_0025904",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0026094",
+      "fired_rules": [
+        "r_dialogic_002"
+      ],
+      "fixed": true
+    },
+    {
+      "image_id": "ISIC_0026369",
+      "fired_rules": [],
+      "fixed": false
+    }
+  ]
+}

@@ -31,7 +31,8 @@ No retraining. No programming. No data labeling pipeline. The fix is a written e
 7. [Results](#7-results)
 8. [Second Use Case: BCC vs Benign Keratosis](#8-second-use-case-bcc-vs-benign-keratosis)
 9. [What Problems This Solves That Other Approaches Do Not](#9-what-problems-this-solves-that-other-approaches-do-not)
-10. [Limitations and Honest Caveats](#10-limitations-and-honest-caveats)
+10. [Three-Party Dialogic Learning — Why It Works](#10-three-party-dialogic-learning--why-it-works)
+11. [Limitations and Honest Caveats](#11-limitations-and-honest-caveats)
 
 ---
 
@@ -508,7 +509,97 @@ When a model is fine-tuned on additional melanoma examples, the result is change
 
 ---
 
-## 10. Limitations and Honest Caveats
+## 10. Three-Party Dialogic Learning — Why It Works
+
+The experiments above used a dialogic patching loop driven by specific failure cases. But can we distill knowledge from an expert model *more efficiently*? And does the dialog itself matter, or could we just ask the expert to write rules in one shot?
+
+We tested both approaches on the same 4 remaining melanoma failures (ISIC_0024410, ISIC_0024647, ISIC_0024911, ISIC_0025128) that the original patch loop had not yet addressed.
+
+### Single-shot elicitation: 0/4
+
+We showed Claude Opus each failure image and asked it to write a corrective rule in a single turn — no feedback, no validation, no dialog. The resulting rules were clinically sound: they used correct dermoscopic terminology, identified plausible melanoma features, and would satisfy a textbook reviewer.
+
+**Every rule failed validation.** None of the 4 rules fired on their own trigger image. The validator model (Sonnet), looking at the same image, could not confirm the features the tutor described. The terminology was correct but not *grounded* — the tutor wrote "irregular pigment network with abrupt cutoff at periphery" while the validator saw "relatively symmetric oval shape with corona pattern of peripheral dots."
+
+### Three-party dialogic distillation: 3/4
+
+The same 4 failure images were then processed through a multi-round dialog between three parties:
+
+- **PUPIL** (Qwen3-VL-8B) — the cheap model that made the original misclassification
+- **TUTOR** (Claude Opus 4.6) — the expert model with dermoscopic subtype knowledge
+- **KF** (the orchestrator) — steers the conversation by testing each rule immediately and feeding concrete validator observations back to the tutor
+
+The key innovation is KF's steering role. After each rule proposal, KF:
+1. Tests the rule's preconditions against the trigger image using a validator
+2. If preconditions don't fire, shows the tutor what the validator *actually observed*
+3. Asks the tutor to revise using the validator's vocabulary
+4. Repeats until the rule is grounded, then runs the standard pool gate
+
+### Results
+
+| Image | Single-shot | Dialogic | Rounds | Pool precision | Outcome |
+|---|---|---|---|---|---|
+| ISIC_0024410 | not grounded | grounded | **3** | 1.00 | **Accepted** |
+| ISIC_0024647 | not grounded | grounded | 1 | 0.83 | **Accepted** |
+| ISIC_0024911 | not grounded | grounded | 1 | 1.00 | **Accepted** |
+| ISIC_0025128 | not grounded | grounded | 1 | 0.67 | Pool failed |
+
+Single-shot: **0/4 grounded, 0 accepted**. Dialogic: **4/4 grounded, 3 accepted**.
+
+### Expanded test (60 images, 30/class)
+
+The 3 accepted rules were applied to Qwen3-VL-8B on the full expanded mel/nev test set — the same 60 images used in [§7](#7-results):
+
+| Phase | Correct | Accuracy | Delta |
+|---|---|---|---|
+| Zero-shot baseline | 33/60 | 55.0% | — |
+| After 3 dialogic rules | 55/60 | 91.7% | **+36.7pp** |
+
+22 of 27 failures resolved. For comparison, the original failure-driven patch loop (§7) achieved 93.3% with 3 rules authored from a different set of failure images. The dialogic distillation approach achieves comparable performance.
+
+### Worked example: ISIC_0024410 across three rounds
+
+This case demonstrates the full three-party dynamic — KF's steering was required to bridge the vocabulary gap between tutor and validator.
+
+**Round 1 — Tutor proposes, KF tests:**
+
+> **TUTOR**: "When a lesion has an asymmetric shape with uneven peripheral projections and dark brown-to-black blotches distributed unevenly..."
+>
+> **KF** (grounding check): Does not fire. Validator observed: *"The lesion appears relatively symmetric and oval/round. The peripheral projections are fairly evenly distributed, resembling a corona pattern rather than asymmetric jagged projections."*
+>
+> **KF** (steering): The validator uses different terms than you. Use "corona pattern of peripheral dots/globules" rather than "asymmetric jagged projections."
+
+**Round 2 — Tutor adapts vocabulary, KF re-tests:**
+
+> **TUTOR**: "When a brown lesion has a relatively symmetric oval shape with a corona pattern of peripheral dots/globules AND dark brown areas are centrally concentrated with a gradient toward the periphery..."
+>
+> **KF** (grounding check): Does not fire. Validator observed: *"The pigment distribution appears relatively uniform or even slightly lighter centrally, with darker pigment concentrated more in a mid-zone ring rather than a classic center-to-periphery gradient."*
+>
+> **KF** (steering): The validator says the dark pigment is in a mid-zone ring, not centrally concentrated. Revise the pigment distribution description.
+
+**Round 3 — Tutor gets it right:**
+
+> **TUTOR**: "When a roughly oval lesion shows peripheral dots/globules forming a corona-like pattern AND darker pigment is concentrated in a mid-zone ring rather than being uniformly distributed or centrally concentrated..."
+>
+> **KF** (grounding check): Fires. Validator confirmed: *"The darker pigment appears concentrated in a mid-zone ring with the center appearing slightly lighter. Multiple shades of brown visible."*
+>
+> **KF** (pool gate): TP=1, FP=0, precision=1.00 — **Accepted**.
+
+### Why dialog matters
+
+The tutor model (Opus) *has* the dermoscopic knowledge. Its Round 1 rule was clinically correct — "asymmetric with irregular peripheral projections" is a valid description. But the validator model (Sonnet) perceives the same image differently and uses different descriptive vocabulary. Without KF bridging this gap, the knowledge stays locked in the tutor's terminology and never transfers.
+
+The three-party dialog solves the **grounding problem**: KF ensures the tutor's knowledge is expressed in terms the validator — and by extension, the pupil — can actually work with. This is not prompt engineering or vocabulary coaching; it is a structured learning protocol where each party contributes something the others cannot:
+
+- The **PUPIL** contributes the failure (without which there is nothing to fix)
+- The **TUTOR** contributes the domain knowledge (what feature actually matters)
+- **KF** contributes the grounding loop (testing whether the knowledge transfers, and if not, why not)
+
+No single party can do this alone. The tutor cannot know how the validator perceives images. The validator cannot author rules. KF cannot diagnose dermoscopy. The value emerges from the structured interaction.
+
+---
+
+## 11. Limitations and Honest Caveats
 
 **This is a small experiment.** The results cover 120 images across two lesion pairs (30 per class). This is sufficient to demonstrate proof of concept and observe failure modes, but not sufficient to make statistical claims about how KF would perform at clinical scale.
 

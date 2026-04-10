@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "rules": [
+    {
+      "id": "r_dialogic_001",
+      "condition": "[Patch rule — melanoma_vs_melanocytic_nevus] The lesion has a roughly oval shape with peripheral dots/globules forming a corona-like pattern around the border; Darker pigment is concentrated in a mid-zone ring rather than being uniformly distributed or centrally concentrated, creating an uneven pigment architecture; The lesion contains multiple shades of brown with areas that appear slightly lighter centrally compared to the mid-zone ring",
+      "action": "Classify as Melanoma. Confidence: medium. Rule: When a roughly oval brown lesion shows peripheral dots/globules forming a corona-like pattern around the border AND darker pigment is concentrated in a mid-zone ring rather than centrally, classify as Melanoma.",
+      "favors": "Melanoma",
+      "pair_id": "melanoma_vs_melanocytic_nevus",
+      "source": "dialogic_distillation:claude-opus-4-6",
+      "triggered_by": "ISIC_0024410",
+      "preconditions": [
+        "The lesion has a roughly oval shape with peripheral dots/globules forming a corona-like pattern around the border",
+        "Darker pigment is concentrated in a mid-zone ring rather than being uniformly distributed or centrally concentrated, creating an uneven pigment architecture",
+        "The lesion contains multiple shades of brown with areas that appear slightly lighter centrally compared to the mid-zone ring"
+      ],
+      "rule_text": "When a roughly oval brown lesion shows peripheral dots/globules forming a corona-like pattern around the border AND darker pigment is concentrated in a mid-zone ring rather than centrally, classify as Melanoma."
+    },
+    {
+      "id": "r_dialogic_002",
+      "condition": "[Patch rule — melanoma_vs_melanocytic_nevus] Numerous fine granular gray-brown dots and pepper-like specks scattered irregularly across the lesion, not forming any organized or repeating pattern; Multiple white-to-pink structureless patches (paler than surrounding skin) interspersed within the lesion, appearing as irregular pale islands among pigmented areas; At least 3 distinct color tones visible across the lesion — including tan/light brown, dark brown, gray, and white-pink — distributed in a disorganized, asymmetric arrangement",
+      "action": "Classify as Melanoma. Confidence: high. Rule: When a lesion shows scattered granular gray-brown dots and blotches distributed irregularly across the lesion, multiple white-pink structureless patches interspersed among pigmented areas, and an overall chaotic mix of at least 3 distinct color tones (tan, dark brown, gray, and white-pink), classify as Melanoma.",
+      "favors": "Melanoma",
+      "pair_id": "melanoma_vs_melanocytic_nevus",
+      "source": "dialogic_distillation:claude-opus-4-6",
+      "triggered_by": "ISIC_0024647",
+      "preconditions": [
+        "Numerous fine granular gray-brown dots and pepper-like specks scattered irregularly across the lesion, not forming any organized or repeating pattern",
+        "Multiple white-to-pink structureless patches (paler than surrounding skin) interspersed within the lesion, appearing as irregular pale islands among pigmented areas",
+        "At least 3 distinct color tones visible across the lesion — including tan/light brown, dark brown, gray, and white-pink — distributed in a disorganized, asymmetric arrangement"
+      ],
+      "rule_text": "When a lesion shows scattered granular gray-brown dots and blotches distributed irregularly across the lesion, multiple white-pink structureless patches interspersed among pigmented areas, and an overall chaotic mix of at least 3 distinct color tones (tan, dark brown, gray, and white-pink), classify as Melanoma."
+    },
+    {
+      "id": "r_dialogic_003",
+      "condition": "[Patch rule — melanoma_vs_melanocytic_nevus] The lesion contains a central zone that is gray-blue or gray-white (lighter than the surrounding pigmented rim), appearing as a pale area within the darker border — indicating regression or loss of pigment in the center; The brown pigment at the lesion periphery is unevenly distributed, with variable shades of dark brown to tan forming an asymmetric ring or partial ring around the central pale area; The surrounding skin shows signs of chronic sun damage: scattered faint tan-yellow patches (solar lentigines) and fine pink-red linear vessels visible in the background",
+      "action": "Classify as Melanoma. Confidence: high. Rule: When a small dark lesion shows a central gray-blue or gray-white structureless zone surrounded by an irregular brown rim, and the lesion sits on sun-damaged skin with scattered background solar lentigines, classify as Melanoma.",
+      "favors": "Melanoma",
+      "pair_id": "melanoma_vs_melanocytic_nevus",
+      "source": "dialogic_distillation:claude-opus-4-6",
+      "triggered_by": "ISIC_0024911",
+      "preconditions": [
+        "The lesion contains a central zone that is gray-blue or gray-white (lighter than the surrounding pigmented rim), appearing as a pale area within the darker border — indicating regression or loss of pigment in the center",
+        "The brown pigment at the lesion periphery is unevenly distributed, with variable shades of dark brown to tan forming an asymmetric ring or partial ring around the central pale area",
+        "The surrounding skin shows signs of chronic sun damage: scattered faint tan-yellow patches (solar lentigines) and fine pink-red linear vessels visible in the background"
+      ],
+      "rule_text": "When a small dark lesion shows a central gray-blue or gray-white structureless zone surrounded by an irregular brown rim, and the lesion sits on sun-damaged skin with scattered background solar lentigines, classify as Melanoma."
+    }
+  ]
+}
