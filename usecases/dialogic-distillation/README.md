@@ -4,7 +4,7 @@
 
 ---
 
-> **Status**: Research — two reference domains validated (image classification: dermatology +38pp, ornithology +50pp); ARC-AGI-3 competition mode: planned
+> **Status**: Active research — initial results are encouraging (image classification: dermatology +38pp, ornithology +50pp at 30/class); expanding test coverage and continuing to refine the distillation mechanism; ARC-AGI-3 competition mode: planned
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) as a distillation layer between a capable expert model and a constrained deployment model
 
 ---
@@ -99,7 +99,7 @@ The key tradeoff: DeepSeek-style distillation can transfer broader, more implici
 
 The image classification use case is the original home of Dialogic Distillation. A cheap vision-language model (Qwen3-VL-8B) fails on specific confusable class pairs — melanoma vs. benign mole, basal cell carcinoma vs. benign keratosis, Brown-headed Cowbird vs. similar species. The expert model (Claude) analyzes each failure, proposes a discriminative visual rule, and KF validates it through the grounding check and pool gate before registering it.
 
-**Results:**
+**Initial results** (research ongoing — test coverage is being expanded and the distillation mechanism continues to be refined):
 
 | Domain | Pair | Zero-shot | With distilled rules | Gain |
 |---|---|---|---|---|
@@ -155,8 +155,8 @@ The closest published work:
 
 | Sub-domain | Status |
 |---|---|
-| Image classification — dermatology | ✅ Validated (30/class expanded test) |
-| Image classification — ornithology | ✅ Validated (30/class expanded test) |
+| Image classification — dermatology | 🔬 Initial results positive (+38pp at 30/class); expanding coverage and refining protocol |
+| Image classification — ornithology | 🔬 Initial results positive (+50pp at 30/class); expanding coverage and refining protocol |
 | ARC-AGI-3 competition mode | Planned |
 
 ---
