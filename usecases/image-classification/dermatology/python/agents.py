@@ -1296,39 +1296,21 @@ async def run_baseline(
 
 
 # ---------------------------------------------------------------------------
-# Dialogic patching — expert rule authoring + validation
+# Dialogic patching — delegated to core.dialogic_distillation
+# ---------------------------------------------------------------------------
+#
+# All patching agent functions now delegate to the domain-independent core
+# library, passing the dermatology DomainConfig for prompt vocabulary.
+# The original prompts and logic have been extracted to:
+#   core/dialogic_distillation/agents.py
+#   core/dialogic_distillation/prompts.py
+#
+# Existing callers (patch.py, distill_dialogic.py, experiment scripts) continue
+# to import from this module — the function signatures are preserved.
 # ---------------------------------------------------------------------------
 
-_EXPERT_RULE_AUTHOR_SYSTEM = """\
-You are a senior dermoscopy expert and knowledge engineer.
-
-A classification model made an error on a dermoscopic image. Your job is to author
-a precise visual rule that would have led to the correct diagnosis — and that will
-generalize to similar cases in the future.
-
-The rule must be:
-1. Purely visual and dermoscopic (observable in a dermoscopic image only)
-2. Expressed as a pre-condition + prediction: "When [pre-condition features are met],
-   classify as [class]"
-3. The pre-condition must be specific enough to EXCLUDE false positives — it should
-   NOT apply to typical cases of the opposing class
-4. Generalizable: it must describe a pattern that applies to a class of similar images,
-   not just this one image
-
-Output ONLY a JSON object:
-{
-  "rule": "Natural language: When [pre-condition], classify as [class].",
-  "feature": "snake_case_feature_name",
-  "favors": "<exact class name>",
-  "confidence": "high" | "medium" | "low",
-  "preconditions": [
-    "Condition 1 that must hold for this rule to apply",
-    "Condition 2 ...",
-    ...
-  ],
-  "rationale": "Why this pattern distinguishes the two classes."
-}
-"""
+from core.dialogic_distillation import agents as _dd_agents
+from domain_config import DERM_CONFIG as _DERM_CONFIG
 
 
 async def run_expert_rule_author(
@@ -1338,93 +1320,11 @@ async def run_expert_rule_author(
     model_reasoning: str = "",
     model: str = "claude-opus-4-6",
 ) -> tuple[dict, int]:
-    """Call the expert VLM with a failure case and ask it to author a corrective rule.
-
-    Args:
-        task:             task dict (must have class_a, class_b, test_image_path)
-        wrong_prediction: what the cheap model predicted
-        correct_label:    the ground-truth label
-        model_reasoning:  the cheap model's reasoning (for context)
-        model:            expert VLM model identifier
-
-    Returns:
-        (candidate_rule_dict, duration_ms)
-    """
-    class_a = task["class_a"]
-    class_b = task["class_b"]
-    image_path = task["test_image_path"]
-
-    reasoning_snippet = model_reasoning[:400] if model_reasoning else "(not available)"
-
-    content = [
-        _image_block(image_path),
-        {
-            "type": "text",
-            "text": (
-                f"You are the TUTOR. A weaker PUPIL VLM just classified this "
-                f"dermoscopic image and got it wrong. Your job is to (a) notice "
-                f"exactly where the pupil went off the rails, and (b) give the "
-                f"pupil a corrective visual rule it can apply to this and similar "
-                f"future cases.\n\n"
-                f"Lesion pair: {class_a} vs {class_b}\n"
-                f"Ground truth: {correct_label}\n"
-                f"Pupil's prediction: {wrong_prediction}  ← WRONG\n"
-                f"Pupil's stated reasoning: {reasoning_snippet}\n\n"
-                "First, look at the image carefully and diagnose the pupil's "
-                "mistake:\n"
-                "  • Did the pupil hallucinate features that aren't actually in "
-                "the image (e.g. \"scale\" or \"telangiectasia\" that don't exist)?\n"
-                "  • Did the pupil overweight an ambiguous cue?\n"
-                "  • Did the pupil miss a salient feature that would have flipped "
-                "the decision?\n\n"
-                "Then author a corrective visual rule that:\n"
-                f"  1. Would have led the pupil to the correct diagnosis "
-                f"('{correct_label}')\n"
-                "  2. Targets the specific failure mode you identified (not generic "
-                "advice)\n"
-                "  3. Uses pre-conditions the pupil can actually check from the "
-                "image — concrete visual features, not abstract reasoning\n"
-                "  4. Will generalize to similar cases without firing on the "
-                f"opposite class ({class_a if correct_label != class_a else class_b})"
-            ),
-        },
-    ]
-
-    text, ms = await call_agent(
-        "EXPERT_RULE_AUTHOR",
-        content,
-        system_prompt=_EXPERT_RULE_AUTHOR_SYSTEM,
-        model=model,
-        max_tokens=4096,
+    """Delegate to core — author a corrective rule from a failure case."""
+    return await _dd_agents.run_expert_rule_author(
+        task, wrong_prediction, correct_label, config=_DERM_CONFIG,
+        model_reasoning=model_reasoning, model=model, call_agent_fn=call_agent,
     )
-
-    rule = _parse_json_block(text)
-    if rule and "rule" in rule and "favors" in rule:
-        rule["raw_response"] = text
-        return rule, ms
-
-    return {"rule": text, "feature": "unknown", "favors": correct_label,
-            "confidence": "low", "preconditions": [], "raw_response": text}, ms
-
-
-_RULE_VALIDATOR_SYSTEM = """\
-You are a dermoscopy expert assessing whether a visual rule applies to a given image.
-
-You will be shown a dermoscopic image and a candidate rule with its pre-conditions.
-Your job is to answer two questions:
-1. Do the rule's pre-conditions hold for this image?
-2. If yes, what class would the rule predict?
-
-Be strict about pre-conditions: only mark them as met if you can clearly observe
-the required pattern. When in doubt, mark as NOT met.
-
-Output ONLY a JSON object:
-{
-  "precondition_met": true | false,
-  "would_predict": "<class_name>" | null,
-  "observations": "Brief note on what you saw that led to this assessment."
-}
-"""
 
 
 async def run_rule_validator_on_image(
@@ -1433,195 +1333,27 @@ async def run_rule_validator_on_image(
     candidate_rule: dict,
     model: str = "",
 ) -> tuple[dict, int]:
-    """Test whether a candidate rule applies to a single labeled image.
-
-    Returns:
-        ({"precondition_met": bool, "would_predict": str|None,
-          "correct": bool, "ground_truth": str}, duration_ms)
-    """
-    rule_text = candidate_rule.get("rule", "")
-    preconditions = candidate_rule.get("preconditions", [])
-    favors = candidate_rule.get("favors", "")
-
-    precond_text = "\n".join(f"  - {p}" for p in preconditions) if preconditions else "  (none specified)"
-
-    content = [
-        _image_block(image_path),
-        {
-            "type": "text",
-            "text": (
-                f"Candidate rule: {rule_text}\n\n"
-                f"Pre-conditions that must ALL hold:\n{precond_text}\n\n"
-                f"If pre-conditions are met, this rule predicts: {favors}\n\n"
-                "Does this rule apply to this image? "
-                "Answer strictly based on what you can see."
-            ),
-        },
-    ]
-
-    text, ms = await call_agent(
-        "RULE_VALIDATOR",
-        content,
-        system_prompt=_RULE_VALIDATOR_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=512,
+    """Delegate to core — test whether a rule applies to a single image."""
+    return await _dd_agents.run_rule_validator_on_image(
+        image_path, ground_truth, candidate_rule, config=_DERM_CONFIG,
+        model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    result = _parse_json_block(text)
-    if result and "precondition_met" in result:
-        fires = result.get("precondition_met", False)
-        predicted = result.get("would_predict") if fires else None
-        correct = (predicted == ground_truth) if fires else True  # non-firing is not an error
-        return {
-            "precondition_met": fires,
-            "would_predict": predicted,
-            "correct": correct,
-            "ground_truth": ground_truth,
-            "observations": result.get("observations", ""),
-        }, ms
-
-    return {"precondition_met": False, "would_predict": None,
-            "correct": True, "ground_truth": ground_truth, "observations": text}, ms
 
 
 async def validate_candidate_rule(
     candidate_rule: dict,
-    validation_images: list,   # list of (image_path: str, ground_truth: str)
-    trigger_image_path: str,   # the failure image that triggered this rule
+    validation_images: list,
+    trigger_image_path: str,
     trigger_correct_label: str,
     model: str = "",
-    early_exit_fp: int = 2,    # stop checking images once FP exceeds this
+    early_exit_fp: int = 2,
 ) -> dict:
-    """Test a candidate rule against a pool of labeled images.
-
-    Returns a dict with TP, FP, TN, FN counts, precision, recall,
-    whether the rule fires correctly on the trigger image, an accept flag,
-    and the per-image case lists for contrastive analysis.
-
-    early_exit_fp: stop iterating once fp > early_exit_fp.  Default 2
-    (binding gate is fp <= 1, so fp=2 is already a definite rejection).
-    Remaining images are counted as TN (conservative — understates FP,
-    but the accept/reject decision is already determined).
-    """
-    tp = fp = tn = fn = 0
-    fires_on_trigger = False
-    tp_cases: list[dict] = []   # {"image_path", "ground_truth", "observations"}
-    fp_cases: list[dict] = []
-
-    # Check the trigger image first — if it doesn't fire, reject immediately
-    trigger_result, _ = await run_rule_validator_on_image(
-        trigger_image_path, trigger_correct_label, candidate_rule, model=model
+    """Delegate to core — test a rule against a pool of labeled images."""
+    return await _dd_agents.validate_candidate_rule(
+        candidate_rule, validation_images, trigger_image_path,
+        trigger_correct_label, config=_DERM_CONFIG, model=model or ACTIVE_MODEL,
+        early_exit_fp=early_exit_fp, call_agent_fn=call_agent,
     )
-    fires_on_trigger = trigger_result["precondition_met"] and trigger_result["correct"]
-
-    if not fires_on_trigger:
-        # No point checking the pool — rule is already rejected
-        remaining = len(validation_images)
-        favors = candidate_rule.get("favors", "")
-        fn = sum(1 for _, gt in validation_images if gt == favors)
-        tn = remaining - fn
-        return {
-            "fires_on_trigger": False,
-            "tp": 0, "fp": 0, "tn": tn, "fn": fn,
-            "precision": 0.0, "recall": 0.0,
-            "accepted": False,
-            "rejection_reason": "did not fire on trigger",
-            "tp_cases": [], "fp_cases": [],
-        }
-
-    # Check validation pool with early exit
-    favors = candidate_rule.get("favors", "")
-    early_exited = False
-    checked = 0
-    for img_path, gt in validation_images:
-        res, _ = await run_rule_validator_on_image(img_path, gt, candidate_rule, model=model)
-        checked += 1
-        case = {"image_path": img_path, "ground_truth": gt,
-                "observations": res.get("observations", "")}
-        if res["precondition_met"]:
-            if gt == favors:
-                tp += 1
-                tp_cases.append(case)
-            else:
-                fp += 1
-                fp_cases.append(case)
-        else:
-            if gt == favors:
-                fn += 1
-            else:
-                tn += 1
-        # Early exit: once fp exceeds the gate threshold, stop —
-        # the rule is already rejected regardless of remaining images.
-        if fp > early_exit_fp:
-            early_exited = True
-            # Count remaining unchecked images conservatively as TN
-            for _, ugt in validation_images[checked:]:
-                if ugt == favors:
-                    fn += 1
-                else:
-                    tn += 1
-            break
-
-    total_fires = tp + fp
-    precision = tp / total_fires if total_fires > 0 else 0.0
-    total_positive = tp + fn
-    recall = tp / total_positive if total_positive > 0 else 0.0
-
-    # Accept if: fires on the trigger AND precision is acceptable AND not too many FP
-    # fp <= 1 is the binding gate in practice — a rule with 6 TP / 2 FP fails here
-    # even if precision == 0.75.
-    accepted = fires_on_trigger and precision >= 0.75 and fp <= 1
-    rejection_reason = (
-        f"fp={fp} > 1"              if fp > 1 else
-        f"precision={precision:.2f} < 0.75" if precision < 0.75 else
-        None
-    )
-
-    return {
-        "fires_on_trigger": fires_on_trigger,
-        "tp": tp, "fp": fp, "tn": tn, "fn": fn,
-        "precision": round(precision, 3),
-        "recall": round(recall, 3),
-        "accepted": accepted,
-        "rejection_reason": rejection_reason,
-        "tp_cases": tp_cases,
-        "fp_cases": fp_cases,
-        "early_exited": early_exited,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Contrastive feature analysis and rule revision
-# ---------------------------------------------------------------------------
-
-_CONTRASTIVE_ANALYSIS_SYSTEM = """\
-You are a senior dermoscopy expert and knowledge engineer.
-
-You will be shown a candidate rule that fires correctly on some images (TRUE POSITIVES)
-but incorrectly on others (FALSE POSITIVES). Your task is to identify the single most
-discriminating visual feature that distinguishes the TP images from the FP images —
-i.e., a feature that is consistently present in TPs but absent in FPs, or vice versa.
-
-This feature will be used to tighten the rule's pre-conditions.
-
-Output ONLY a JSON object:
-{
-  "discriminating_feature": "snake_case_feature_name",
-  "description": "Plain-language description of the feature.",
-  "present_in": "tp" | "fp",
-  "confidence": "high" | "medium" | "low",
-  "rationale": "Why this feature distinguishes TPs from FPs."
-}
-
-If you cannot identify a reliable discriminating feature, output:
-{
-  "discriminating_feature": null,
-  "description": "Cannot identify a reliable discriminating feature.",
-  "present_in": null,
-  "confidence": "low",
-  "rationale": "Explanation of why the distinction cannot be reliably made."
-}
-"""
 
 
 async def run_contrastive_feature_analysis(
@@ -1631,103 +1363,11 @@ async def run_contrastive_feature_analysis(
     pair_info: dict,
     model: str = "",
 ) -> tuple[dict, int]:
-    """Identify the visual feature that distinguishes TP from FP cases.
-
-    Uses the validator's per-image observations (text) rather than re-running
-    OBSERVER on each image, keeping cost low.
-
-    Args:
-        tp_cases:  list of {"image_path", "ground_truth", "observations"}
-        fp_cases:  list of {"image_path", "ground_truth", "observations"}
-        candidate_rule: the rule being analyzed
-        pair_info: {"class_a", "class_b", "pair_id"}
-        model:     VLM model to use
-
-    Returns:
-        (contrastive_result_dict, duration_ms)
-    """
-    rule_text     = candidate_rule.get("rule", "")
-    preconditions = candidate_rule.get("preconditions", [])
-    favors        = candidate_rule.get("favors", "")
-    class_a       = pair_info.get("class_a", "")
-    class_b       = pair_info.get("class_b", "")
-
-    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
-
-    def _format_cases(cases: list[dict], label: str) -> str:
-        lines = []
-        for i, c in enumerate(cases, 1):
-            obs = c.get("observations", "(no observations recorded)")
-            lines.append(f"  [{label} {i}] Ground truth: {c['ground_truth']}\n"
-                         f"    Validator observations: {obs}")
-        return "\n".join(lines) if lines else "  (none)"
-
-    tp_block = _format_cases(tp_cases, "TP")
-    fp_block = _format_cases(fp_cases, "FP")
-
-    user_msg = (
-        f"Pair: {class_a} vs {class_b}\n"
-        f"Rule favors: {favors}\n\n"
-        f"Rule: {rule_text}\n\n"
-        f"Pre-conditions:\n{precond_text}\n\n"
-        f"TRUE POSITIVE cases (rule fired correctly):\n{tp_block}\n\n"
-        f"FALSE POSITIVE cases (rule fired on wrong class):\n{fp_block}\n\n"
-        "What single visual feature most reliably distinguishes the TP cases from the FP cases? "
-        "Focus on what the validator *observed* in each case."
+    """Delegate to core — identify TP/FP discriminating feature."""
+    return await _dd_agents.run_contrastive_feature_analysis(
+        tp_cases, fp_cases, candidate_rule, pair_info, config=_DERM_CONFIG,
+        model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    text, ms = await call_agent(
-        "EXPERT_RULE_AUTHOR",
-        user_msg,
-        system_prompt=_CONTRASTIVE_ANALYSIS_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=1024,
-    )
-
-    result = _parse_json_block(text)
-    if result and "discriminating_feature" in result:
-        result["raw_response"] = text
-        return result, ms
-
-    return {
-        "discriminating_feature": None,
-        "description": text,
-        "present_in": None,
-        "confidence": "low",
-        "rationale": "Parse failed.",
-        "raw_response": text,
-    }, ms
-
-
-_RULE_REVISER_SYSTEM = """\
-You are a senior dermoscopy expert and knowledge engineer.
-
-You have authored a rule that passes validation on true positive cases but fires
-incorrectly on false positive cases. A contrastive analysis has identified a
-discriminating visual feature that is present in one group but not the other.
-
-Your task is to add ONE new pre-condition to the rule that incorporates this
-discriminating feature, so the rule no longer fires on false positives.
-
-Rules:
-- Add exactly one pre-condition. Do not remove or rewrite existing ones.
-- The new pre-condition must be observable in a dermoscopic image.
-- It must be phrased as a positive assertion ("Feature X is present") or a
-  negative assertion ("Feature Y is absent"), not as a comparison.
-- It must be specific enough that the RULE_VALIDATOR can answer yes/no reliably.
-
-Output ONLY a JSON object with the full updated rule (same schema as before,
-with the new pre-condition appended to the preconditions list):
-{
-  "rule": "<updated natural-language rule>",
-  "feature": "<snake_case_feature_name>",
-  "favors": "<exact class name>",
-  "confidence": "high" | "medium" | "low",
-  "preconditions": ["existing 1", "existing 2", ..., "NEW pre-condition"],
-  "rationale": "<updated rationale explaining the revision>",
-  "revision_note": "One sentence: what was added and why."
-}
-"""
 
 
 async def run_rule_reviser(
@@ -1738,130 +1378,11 @@ async def run_rule_reviser(
     pair_info: dict,
     model: str = "",
 ) -> tuple[dict, int]:
-    """Propose a revised rule with one additional pre-condition.
-
-    Args:
-        candidate_rule:     the rejected rule
-        contrastive_result: output of run_contrastive_feature_analysis
-        tp_cases:           TP cases from validation
-        fp_cases:           FP cases from validation
-        pair_info:          {"class_a", "class_b", "pair_id"}
-        model:              VLM model to use
-
-    Returns:
-        (revised_rule_dict, duration_ms)
-    """
-    rule_text          = candidate_rule.get("rule", "")
-    preconditions      = candidate_rule.get("preconditions", [])
-    favors             = candidate_rule.get("favors", "")
-    class_a            = pair_info.get("class_a", "")
-    class_b            = pair_info.get("class_b", "")
-    disc_feature       = contrastive_result.get("description", "")
-    present_in         = contrastive_result.get("present_in", "")
-    rationale          = contrastive_result.get("rationale", "")
-
-    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
-
-    def _fmt(cases, label):
-        lines = []
-        for i, c in enumerate(cases, 1):
-            obs = c.get("observations", "")
-            lines.append(f"  [{label} {i}] {c['ground_truth']}: {obs}")
-        return "\n".join(lines) if lines else "  (none)"
-
-    user_msg = (
-        f"Pair: {class_a} vs {class_b}\n"
-        f"Rule favors: {favors}\n\n"
-        f"Current rule: {rule_text}\n\n"
-        f"Current pre-conditions:\n{precond_text}\n\n"
-        f"Discriminating feature identified by contrastive analysis:\n"
-        f"  Feature: {disc_feature}\n"
-        f"  Present in: {present_in} cases\n"
-        f"  Rationale: {rationale}\n\n"
-        f"TRUE POSITIVE observations:\n{_fmt(tp_cases, 'TP')}\n\n"
-        f"FALSE POSITIVE observations:\n{_fmt(fp_cases, 'FP')}\n\n"
-        "Please add one pre-condition to the rule that incorporates the "
-        "discriminating feature and will prevent the rule from firing on the "
-        "false positive cases."
+    """Delegate to core — add tightening pre-condition."""
+    return await _dd_agents.run_rule_reviser(
+        candidate_rule, contrastive_result, tp_cases, fp_cases, pair_info,
+        config=_DERM_CONFIG, model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    text, ms = await call_agent(
-        "EXPERT_RULE_AUTHOR",
-        user_msg,
-        system_prompt=_RULE_REVISER_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=2048,
-    )
-
-    result = _parse_json_block(text)
-    if result and "rule" in result and "preconditions" in result:
-        result["raw_response"] = text
-        return result, ms
-
-    # Fall back: return original rule unchanged
-    candidate_rule["raw_response"] = text
-    return candidate_rule, ms
-
-
-# ---------------------------------------------------------------------------
-# Specificity spectrum
-# ---------------------------------------------------------------------------
-
-_SPECTRUM_SYSTEM = """\
-You are a senior dermoscopy expert and knowledge engineer.
-
-You are given a candidate rule and evidence about where it works (TRUE POSITIVES)
-and where it misfires (FALSE POSITIVES). Your task is to produce FOUR versions of
-the rule at different levels of specificity — from most general to most specific —
-so that the tightest version that still passes a precision gate can be selected.
-
-The four levels must all favor the same class and describe the same underlying
-visual phenomenon, varying only in how many pre-conditions are required:
-
-  Level 1 — MOST GENERAL: single essential pre-condition. The one feature that
-    is most diagnostic of the favored class and most absent from FP cases.
-    This should fire broadly — accept some FP risk.
-
-  Level 2 — MODERATE: core pre-condition PLUS one supporting condition that
-    begins to exclude FP cases.
-
-  Level 3 — SPECIFIC: the original expert rule as-is (copy it unchanged).
-
-  Level 4 — MOST SPECIFIC: the original rule PLUS one additional pre-condition
-    derived from the contrastive analysis that should eliminate the observed FPs.
-    This may over-tighten (low recall) but should have highest precision.
-
-Output ONLY a JSON object with a "levels" array of exactly 4 rule objects:
-{
-  "levels": [
-    {
-      "level": 1,
-      "label": "most_general",
-      "rule": "When [single essential condition], classify as [class].",
-      "feature": "snake_case_feature_name",
-      "favors": "<exact class name>",
-      "confidence": "high" | "medium" | "low",
-      "preconditions": ["Single essential pre-condition"],
-      "rationale": "Why this is the core diagnostic signal."
-    },
-    {
-      "level": 2,
-      "label": "moderate",
-      ...
-    },
-    {
-      "level": 3,
-      "label": "original",
-      ...  (copy the original rule exactly)
-    },
-    {
-      "level": 4,
-      "label": "most_specific",
-      ...  (original + one tightening condition from contrastive analysis)
-    }
-  ]
-}
-"""
 
 
 async def run_rule_spectrum_generator(
@@ -1872,114 +1393,11 @@ async def run_rule_spectrum_generator(
     pair_info: dict,
     model: str = "",
 ) -> tuple[list[dict], int]:
-    """Generate four specificity variants of a candidate rule.
-
-    Returns (list_of_rule_dicts ordered level 1→4, duration_ms).
-    The list is ordered from most general to most specific so the caller
-    can pick the first passing entry.
-    """
-    rule_text     = candidate_rule.get("rule", "")
-    preconditions = candidate_rule.get("preconditions", [])
-    favors        = candidate_rule.get("favors", "")
-    class_a       = pair_info.get("class_a", "")
-    class_b       = pair_info.get("class_b", "")
-    disc_desc     = contrastive_result.get("description", "(not yet analyzed)")
-    disc_present  = contrastive_result.get("present_in", "?")
-    disc_rationale = contrastive_result.get("rationale", "")
-
-    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
-
-    def _fmt(cases, label):
-        lines = []
-        for i, c in enumerate(cases[:4], 1):  # cap at 4 to keep prompt short
-            obs = c.get("observations", "")
-            lines.append(f"  [{label} {i}] {c['ground_truth']}: {obs[:120]}")
-        return "\n".join(lines) if lines else "  (none)"
-
-    user_msg = (
-        f"Pair: {class_a} vs {class_b}\n"
-        f"Rule favors: {favors}\n\n"
-        f"Original rule: {rule_text}\n\n"
-        f"Original pre-conditions:\n{precond_text}\n\n"
-        f"Contrastive analysis — discriminating feature:\n"
-        f"  {disc_desc} (present in {disc_present} cases)\n"
-        f"  Rationale: {disc_rationale}\n\n"
-        f"TRUE POSITIVE observations (rule fired correctly):\n{_fmt(tp_cases, 'TP')}\n\n"
-        f"FALSE POSITIVE observations (rule misfired):\n{_fmt(fp_cases, 'FP')}\n\n"
-        "Please produce the four-level specificity spectrum as described."
+    """Delegate to core — generate 4-level specificity spectrum."""
+    return await _dd_agents.run_rule_spectrum_generator(
+        candidate_rule, tp_cases, fp_cases, contrastive_result, pair_info,
+        config=_DERM_CONFIG, model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    text, ms = await call_agent(
-        "EXPERT_RULE_AUTHOR",
-        user_msg,
-        system_prompt=_SPECTRUM_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=4096,
-    )
-
-    result = _parse_json_block(text)
-    if result and "levels" in result:
-        levels = result["levels"]
-        # Ensure each level inherits favors from the original if missing
-        for lv in levels:
-            lv.setdefault("favors", favors)
-            lv["raw_response"] = text  # shared; useful for debugging
-        return levels, ms
-
-    # Fallback: return just the original as level 3
-    return [candidate_rule], ms
-
-
-# ---------------------------------------------------------------------------
-# Rule completer — fills in implicit background conditions the expert omitted
-# ---------------------------------------------------------------------------
-
-_RULE_COMPLETER_SYSTEM = """\
-You are a senior dermoscopy knowledge engineer completing a classification rule.
-
-BACKGROUND
-The rule was authored by an expert responding to a specific failure case. Experts
-naturally write DIAGNOSTIC rules: they describe what was distinctive about that one
-image. But they omit BACKGROUND conditions — features so obvious to a trained
-dermoscopist that they go without saying. When the rule is evaluated by a naive
-classifier that checks only what is explicitly listed, those omitted conditions
-create loopholes: the rule fires on images that share the distinctive feature but
-lack the expected background markers of the favored class.
-
-YOUR TASK
-Identify the implicit pre-conditions the expert assumed but did not write down.
-These are conditions that:
-  1. Are standard, well-established dermoscopic markers expected to be PRESENT for
-     the favored class (positive background conditions).
-  2. Are standard markers expected to be ABSENT for the favored class — i.e.,
-     features that would instead indicate the other class — that the rule does not
-     already exclude (negative background conditions).
-  3. Are NOT already covered, even implicitly, by the existing pre-conditions.
-
-DO NOT add:
-  - Conditions that could plausibly occur in both classes.
-  - Conditions already implied by the existing pre-conditions.
-  - Highly specific conditions that would rarely be met — do not over-tighten.
-  - Conditions that are only sometimes true of the favored class.
-
-Keep the original rule text and feature key unchanged.
-Add the new pre-conditions to the existing list.
-
-Output ONLY a JSON object (no markdown fences, no commentary outside the JSON):
-{
-  "rule": "<original rule text — unchanged>",
-  "feature": "<original feature key — unchanged>",
-  "favors": "<unchanged>",
-  "confidence": "<unchanged>",
-  "preconditions": ["<full list: original pre-conditions + new ones>"],
-  "added_preconditions": ["<only the newly added pre-conditions>"],
-  "completion_rationale": "<2–3 sentences explaining what background knowledge was
-                           implicit and why it needed to be made explicit>"
-}
-
-If the existing pre-conditions are already complete and you have nothing meaningful
-to add, return the rule unchanged with "added_preconditions": [] and explain why.
-"""
 
 
 async def run_rule_completer(
@@ -1987,102 +1405,11 @@ async def run_rule_completer(
     pair_info: dict,
     model: str = "",
 ) -> tuple[dict, int]:
-    """Enrich a candidate rule with implicit background conditions the expert omitted.
-
-    Text-only — no images.  Returns (completed_rule_dict, duration_ms).
-
-    The completed rule has the same schema as the input but with additional
-    pre-conditions and two extra keys:
-      "added_preconditions": list of newly added pre-conditions
-      "completion_rationale": explanation of what was added and why
-    """
-    rule_text     = candidate_rule.get("rule", "")
-    preconditions = candidate_rule.get("preconditions", [])
-    favors        = candidate_rule.get("favors", "")
-    confidence    = candidate_rule.get("confidence", "medium")
-    feature       = candidate_rule.get("feature", "")
-    class_a       = pair_info.get("class_a", "")
-    class_b       = pair_info.get("class_b", "")
-    other_class   = class_b if favors == class_a else class_a
-
-    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
-
-    user_msg = (
-        f"Favored class: {favors}\n"
-        f"Other class: {other_class}\n\n"
-        f"Rule:\n{rule_text}\n\n"
-        f"Existing pre-conditions ({len(preconditions)}):\n"
-        f"{precond_text if precond_text else '  (none)'}\n\n"
-        "Please complete the rule by adding any implicit background conditions "
-        "the expert assumed but did not state."
+    """Delegate to core — fill in implicit background conditions."""
+    return await _dd_agents.run_rule_completer(
+        candidate_rule, pair_info, config=_DERM_CONFIG,
+        model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    text, ms = await call_agent(
-        "RULE_COMPLETER",
-        user_msg,
-        system_prompt=_RULE_COMPLETER_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=2048,
-    )
-
-    result = _parse_json_block(text)
-    if result and "preconditions" in result:
-        # Preserve fields from original rule that the completer may not return
-        completed = {**candidate_rule, **result}
-        completed.setdefault("added_preconditions", [])
-        completed.setdefault("completion_rationale", "")
-        return completed, ms
-
-    # Parse failure — return original unchanged with a note
-    fallback = {
-        **candidate_rule,
-        "added_preconditions": [],
-        "completion_rationale": f"(completion parse error — raw: {text[:200]})",
-    }
-    return fallback, ms
-
-
-# ---------------------------------------------------------------------------
-# Semantic rule validator (text-only, no images)
-# ---------------------------------------------------------------------------
-
-_SEMANTIC_VALIDATOR_SYSTEM = """\
-You are a senior dermoscopy expert and knowledge engineer reviewing a proposed
-classification rule before it is tested on images.
-
-You will be given:
-1. A candidate rule and its pre-conditions
-2. The pair of classes it is meant to distinguish (favored class vs other class)
-
-Your task: evaluate whether each pre-condition is a reliable dermoscopic discriminator.
-
-For each pre-condition, rate it as one of:
-- "reliable"          — feature consistently separates the favored class from the other;
-                        rarely or never present in the other class
-- "unreliable"        — feature can easily occur in both classes, is too vague,
-                        or points in the wrong direction
-- "context_dependent" — only discriminating under specific co-occurring conditions;
-                        risky as a stand-alone gate
-
-Then give an overall recommendation:
-- "accept"  — all or most pre-conditions are reliable; safe to proceed to image validation
-- "revise"  — one or more pre-conditions are unreliable; flag them before image validation
-- "reject"  — the rule's core logic is fundamentally flawed; do not spend image-validation
-               budget on it
-
-Output ONLY a JSON object (no markdown, no commentary):
-{
-  "precondition_ratings": [
-    {
-      "precondition": "<exact text of pre-condition>",
-      "rating": "reliable|unreliable|context_dependent",
-      "comment": "<one-sentence clinical justification>"
-    }
-  ],
-  "overall": "accept|revise|reject",
-  "rationale": "<two-to-three sentence overall assessment>"
-}
-"""
 
 
 async def run_semantic_rule_validator(
@@ -2090,52 +1417,11 @@ async def run_semantic_rule_validator(
     pair_info: dict,
     model: str = "",
 ) -> tuple[dict, int]:
-    """Text-only semantic check of a candidate rule's clinical logic.
-
-    Does NOT use images.  Returns (semantic_result_dict, duration_ms).
-
-    semantic_result_dict schema:
-      {
-        "precondition_ratings": [{"precondition", "rating", "comment"}, ...],
-        "overall": "accept|revise|reject",
-        "rationale": str,
-      }
-    """
-    rule_text     = candidate_rule.get("rule", "")
-    preconditions = candidate_rule.get("preconditions", [])
-    favors        = candidate_rule.get("favors", "")
-    class_a       = pair_info.get("class_a", "")
-    class_b       = pair_info.get("class_b", "")
-    other_class   = class_b if favors == class_a else class_a
-
-    precond_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(preconditions))
-
-    user_msg = (
-        f"Favored class: {favors}\n"
-        f"Other class: {other_class}\n\n"
-        f"Rule:\n{rule_text}\n\n"
-        f"Pre-conditions:\n{precond_text}\n\n"
-        "Please evaluate each pre-condition and provide an overall recommendation."
+    """Delegate to core — text-only semantic check."""
+    return await _dd_agents.run_semantic_rule_validator(
+        candidate_rule, pair_info, config=_DERM_CONFIG,
+        model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
     )
-
-    text, ms = await call_agent(
-        "SEMANTIC_RULE_VALIDATOR",
-        user_msg,
-        system_prompt=_SEMANTIC_VALIDATOR_SYSTEM,
-        model=model or ACTIVE_MODEL,
-        max_tokens=2048,
-    )
-
-    result = _parse_json_block(text)
-    if result and "overall" in result:
-        return result, ms
-
-    # Fallback: assume accept so we don't silently block everything on parse failure
-    return {
-        "precondition_ratings": [],
-        "overall": "accept",
-        "rationale": f"(parse error — raw: {text[:200]})",
-    }, ms
 
 
 async def validate_candidate_rules_batch(
@@ -2145,21 +1431,8 @@ async def validate_candidate_rules_batch(
     trigger_correct_label: str,
     model: str = "",
 ) -> list[dict]:
-    """Validate a list of rules in parallel against the same image pool.
-
-    Returns a list of validation result dicts (same schema as
-    validate_candidate_rule), one per input rule, in the same order.
-    """
-    coros = [
-        validate_candidate_rule(
-            candidate_rule=rule,
-            validation_images=validation_images,
-            trigger_image_path=trigger_image_path,
-            trigger_correct_label=trigger_correct_label,
-            model=model,
-        )
-        for rule in rules
-    ]
-    results = await asyncio.gather(*coros)
-    # validate_candidate_rule returns a plain dict (not a tuple)
-    return list(results)
+    """Delegate to core — batch validate spectrum levels."""
+    return await _dd_agents.validate_candidate_rules_batch(
+        rules, validation_images, trigger_image_path, trigger_correct_label,
+        config=_DERM_CONFIG, model=model or ACTIVE_MODEL, call_agent_fn=call_agent,
+    )
