@@ -34,6 +34,9 @@ __pycache__/
 # Local ARC-AGI ensemble workspace
 arc-agi-ensemble/
 
+# Transient working files (experiment scratch, caches, superseded iterations)
+.tmp/
+
 # Generated ARC-AGI-3 run artifacts
 tests/arc-agi-3/logs/
 tests/arc-agi-3/playlogs/
