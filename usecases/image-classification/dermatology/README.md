@@ -4,7 +4,8 @@
 >
 > **Status**: Preliminary experiments completed.  
 >> **Pilot** (6 images): Mel/Nev 50%→100% (+50pp); BCC/BKL 67%→83% (+16.7pp).  
->> **Expanded** (60 images, 30/class): Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp). See [Results](#7-results).
+> **Expanded** (60 images, 30/class): Mel/Nev 55%→93.3% (+38.3pp), BCC/BKL 56.7%→75% (+18.3pp). See [Results](#7-results).  
+>> **Dialogic distillation** (60 images): Mel/Nev 55%→91.7% (+36.7pp) using 3 rules auto-distilled from a tutor model — no human in the loop. See [Three-Party Dialogic Learning](#10-three-party-dialogic-learning--why-it-works).
 >
 > **Dataset**: HAM10000 (ISIC archive), 10,015 dermoscopic images across 7 diagnostic categories.
 >
