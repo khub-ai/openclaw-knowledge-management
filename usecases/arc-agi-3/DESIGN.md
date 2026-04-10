@@ -1,7 +1,7 @@
-# ARC-AGI-3 Ensemble — Design Decisions
+# ARC-AGI-3 Solver — Design Decisions
 
-> Status: working document, not for publication yet.
-> Private companion: `.private/DESIGN_PRIVATE.md` (gitignored) — LLM architecture, air-gap strategy.
+> **Status**: working document, not for publication yet.  
+> **Private companion**: `.private/DESIGN_PRIVATE.md` (gitignored) — LLM architecture, air-gap strategy.
 
 ## Overview
 
@@ -248,6 +248,140 @@ for: size, width, height, orientation.
 
 **Future extension point:** `match_cross_color=False` parameter for color-changing objects —
 deferred until evidence of this in any game.
+
+---
+
+## Dynamic Discovery — Design Principles
+
+### P1 — No hardcoded game knowledge
+
+Everything in `game_knowledge.json` — `player_colors`, `walkable_colors`, `step_size`,
+`action_map` — is an **initial hypothesis**, not a fact. These values may be wrong for a
+different game (or even a slightly altered version of the same game). They serve only as
+starting guesses until the system has gathered enough observations to replace them.
+
+**Implementation:** `GameHypothesis` dataclass holds `prior_*` (from game_knowledge.json)
+and `obs_*` (filled by inference functions at runtime). `effective_*` properties return
+the observed value when available, falling back to the prior. All downstream code
+uses `effective_*`, never the raw priors.
+
+**Corollary:** Any hardcoded filter, threshold, or heuristic that assumes specific
+properties of a particular game is a design violation. If the system relies on
+"max_sprite_pixels=12" or "ignore the most common color" or "HUD is at y≥58", it
+will break on a different game that doesn't match those assumptions.
+
+---
+
+### P2 — The OBSERVER identifies objects, not the Python code
+
+The OBSERVER (LLM) looks at the game frame with human-like vision and common sense.
+It identifies what objects exist, what they look like, and what role they may play (toggle,
+changer, wall, player, status bar, etc.). It writes these identifications to
+`concept_bindings`. These are to be treated as initial hypotheses, since they could be wrong.
+
+The Python frame analysis code (`find_sprite_cells`, `build_level_model`) only does
+**position mapping**: given a color that the OBSERVER says is interesting, where does
+that color appear on the game grid? The Python code may override or
+second-guess the OBSERVER's object identification with sufficient evidence.
+
+**Division of labor:**
+
+| Responsibility                        | Who does it       |
+|---------------------------------------|-------------------|
+| "The yellow ring is a step-counter"     | OBSERVER (LLM)    |
+| "The yellow rings appears near cells (19,30) and (34,15)" | Python frame scan |
+| "Those are ring_positions in the model"| `build_level_model` (joins the above) |
+| "The yellow bar at the bottom is the HUD, not a ring" | OBSERVER (LLM) |
+
+Python code may not
+filter, exclude, or re-classify candidates
+based on heuristics (dominant color frequency, pixel count thresholds, screen
+region). These are the MEDIATOR and OBSERVER's job.
+
+---
+
+### P3 — Object discovery is behavioral, not static
+
+Objects are discovered by **what happens when you interact with them**, not by
+how they look in a single frame.
+
+| Observation                                        | Classification    |
+|----------------------------------------------------|-------------------|
+| Large pixel diff at position, no level advance     | State changer (RC, color-changer, etc.) |
+| Level advance while standing at position           | Win gate           |
+| Object disappears from frame after being visited   | Consumable (ring)  |
+| Step counter bar grows after visiting position     | Step-counter reset |
+| Player didn't move despite taking an action        | Wall / blocked     |
+
+A single frame can identify *candidates* (non-floor, non-player pixels), but
+classification requires observing behavior over time. The system should never
+assume an object's role from its color or appearance alone — it must confirm
+through interaction.
+
+---
+
+### P4 — Continuous frame comparison, not one-shot initial scan
+
+The current frame should always be compared to the previous frame — not just to
+the level's initial frame. Things can appear, change, and disappear at any time
+during gameplay (animations, moving platforms, consumables, state changes).
+
+The system should detect:
+- **Appeared:** pixels/objects present now but absent in the previous frame
+- **Disappeared:** pixels/objects absent now but present in the previous frame
+- **Changed:** same position, different color or shape
+
+This continuous diff model generalizes beyond the current "compare initial vs
+current to find consumed rings" approach, which misses objects that appear
+mid-level or change state dynamically.
+
+---
+
+### P5 — Player state tracking must be adaptive
+
+The player's visual appearance (color, shape, rotation) changes during gameplay
+as the player visits state-changers. The system must track these changes and
+update its internal model accordingly — it cannot assume the player always looks
+the same as it did at level start.
+
+**Current implementation:** `_tracked_player_colors` starts from the
+game_knowledge prior and updates whenever `find_player_position` fails but a
+frame diff reveals a new moving cluster. Resets to prior on level advance.
+
+**General principle:** Any game property that can change during play (player
+color, player shape, walkable set, action semantics) must be tracked as a
+mutable variable, not stored as a constant.
+
+---
+
+### P6 — Inference functions are independent and fallible
+
+Each inference function (`infer_step_size`, `infer_action_directions`,
+`infer_walkable_from_visits`, `infer_player_colors_from_diff`) operates
+independently. Each can fail (return `None`) without affecting the others.
+When an inference fails, the system falls back to the prior hypothesis
+from game_knowledge.json.
+
+This means the system degrades gracefully: on the first step with no history,
+all inferences fail and the system runs entirely on priors. As history
+accumulates, inferences override priors one by one. There is no single
+point of failure.
+
+Hard-coded inference functions should be considered as temporary measures, since later we would want to allow such functions to be learned as well. 
+
+---
+
+### P7 — discovered_knowledge.json persists cross-episode facts
+
+Facts confirmed through successful gameplay (e.g., "level 1 requires 2 RC
+visits", "color 3 = rotation_changer") persisted to
+`discovered_knowledge.json` so future episodes don't have to re-discover them.
+
+The matching with previous facts must be fuzzy, so that the persisted facts can be generalized appropriately to cover similar (but not exactly matched) situations. Generalized and validated "facts" are also registered in the `discovered_knowledge.json`. There should be suitable triggering mechanism not only to allow fuzzy matching, but also support efficient triggering of very large knowledge store.
+
+This is complementary to concept_bindings (which are episode-local and proposed
+by the OBSERVER). Discovered knowledge is **confirmed** — it came from a
+successful level completion, not from unconfirmed hypotheses.
 
 ---
 
