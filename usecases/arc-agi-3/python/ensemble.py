@@ -60,6 +60,7 @@ from agents import (
     _format_action_effects,
 )
 from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
+from state_store import StateStore
 from nav_bfs import (
     compute_navigation_plan,
     find_player_position,
@@ -1789,6 +1790,7 @@ async def run_episode(
     task_id = f"{env_id}_ep{episode_num}"
     state_manager = StateManager(task_id=task_id, dataset_tag="arc-agi-3")
     goal_manager  = GoalManager(task_id=task_id, dataset_tag="arc-agi-3")
+    store         = StateStore()  # unified fact store (parallel to state_manager)
 
     # -- Inject initial goals ------------------------------------------------
     # Load bootstrap-derived goal template if available (gt_registry),
@@ -1929,6 +1931,24 @@ async def run_episode(
     # P1: seed from game_knowledge prior — no hardcoded color fallback.
     _gk_init = _load_default_gk_registry()._data.get(env_id, {})
     _tracked_player_colors: set[int] = set(_gk_init.get("player_colors") or [])
+
+    # Seed StateStore with game_knowledge priors (low confidence)
+    if _gk_init:
+        if _gk_init.get("player_colors"):
+            store.set(("world", "player_colors"), set(_gk_init["player_colors"]),
+                      confidence=0.3, source="prior", scope="episode")
+        if _gk_init.get("walkable_colors"):
+            store.set(("world", "walkable_colors"), set(_gk_init["walkable_colors"]),
+                      confidence=0.3, source="prior", scope="game")
+        if _gk_init.get("step_size"):
+            store.set(("world", "step_size"), _gk_init["step_size"],
+                      confidence=0.3, source="prior", scope="game")
+        if _gk_init.get("action_map"):
+            store.set(("world", "action_map"), _gk_init["action_map"],
+                      confidence=0.3, source="prior", scope="game")
+        store.set(("world", "input_model"),
+                  _gk_init.get("input_model", "keyboard"),
+                  confidence=0.3, source="prior", scope="game")
 
     # Running OBSERVER/MEDIATOR outputs for playlog (reset each cycle)
     _obs_text_current   = ""
@@ -2076,11 +2096,14 @@ async def run_episode(
         # State / goal context
         _gc = goal_manager.format_for_prompt()
         _sc = state_manager.format_for_prompt()
+        _store_str = store.format_for_prompt(max_lines=30)
         _gs = ""
         if _gc and _gc != "Goals: (none)":
             _gs += f"\n{_gc}"
         if _sc and _sc not in ("Current state: (empty)", ""):
             _gs += f"\n{_sc}"
+        if _store_str:
+            _gs += f"\n{_store_str}"
 
         # ------------------------------------------------------------------
         # Round 1: OBSERVER
@@ -2350,6 +2373,8 @@ async def run_episode(
                         changed = True
             if changed:
                 state_manager._data["concept_bindings"] = merged
+                # Mirror into StateStore
+                store.import_concept_bindings(merged)
                 # Log only color-keyed bindings in a readable form
                 summary = {
                     f"color{k}": (
@@ -2674,6 +2699,23 @@ async def run_episode(
                 frame_after=curr_frame,
             )
 
+            # Mirror action effects into StateStore
+            _ae = state_manager._data.get("action_effects")
+            if _ae:
+                store.import_action_effects(_ae)
+
+            # Log step event in StateStore
+            store.log_event(
+                "action_taken",
+                properties={
+                    "action": action_name,
+                    "diff": _step_diff,
+                    "player_pos": _ppos2,
+                    "levels_after": levels_after,
+                },
+            )
+            store.advance_step()
+
             # Object-level summary for the log
             obj_diff = diff_objects(frame_before, curr_frame)
             obj_summary = format_object_diff(obj_diff)
@@ -2719,6 +2761,14 @@ async def run_episode(
                             "delta":         delta,
                         }
                         contact_events.append(event)
+                        # Mirror into StateStore event log
+                        store.log_event(
+                            "contact",
+                            properties={
+                                "touched_color": touched_color,
+                                "any_change": delta.get("any_change", False),
+                            },
+                        )
                         if delta["any_change"]:
                             appeared_desc = ", ".join(
                                 f"color{a['color']} appeared"
@@ -2775,6 +2825,8 @@ async def run_episode(
                             f" n={suggestion['observations']})",
                         )
                 state_manager.update({"concept_bindings": cb_merged})
+                # Mirror auto-detected concepts into StateStore
+                store.import_concept_bindings(cb_merged)
 
             # --- Co-occurrence observation -----------------------------------
             concept_bindings_now = state_manager._data.get("concept_bindings") or {}
@@ -2849,7 +2901,11 @@ async def run_episode(
                             known_walls.update(new_walls)
                             bindings["wall_colors"] = sorted(known_walls)
                             state_manager._data["concept_bindings"] = bindings
+                            # Mirror wall roles into StateStore
                             for wc in new_walls:
+                                store.set(("obj", f"color_{wc}", "role"), "wall",
+                                          confidence=0.8, source="inferred",
+                                          scope="level")
                                 ep_log._write(
                                     f"  [CONCEPTS] wall candidate added: "
                                     f"color{wc} ({color_name(wc)}) "
@@ -2904,6 +2960,12 @@ async def run_episode(
                 _level_just_changed = True  # next cycle: skip stale transition frame
                 log(f"  [ACTOR] Level advanced: {levels_before} -> {levels_after}")
                 ep_log.level_advance(levels_before, levels_after)
+                # StateStore: log event and clear level-scoped facts
+                store.log_event(
+                    "level_advanced",
+                    properties={"from": levels_before, "to": levels_after},
+                )
+                store.clear_scope("level")
                 # Persist discovered knowledge for this level (RC visits, color roles).
                 # This allows future episodes to navigate without hardcoded data.
                 try:
@@ -3046,6 +3108,7 @@ async def run_episode(
         f"levels={final_levels} state={final_state} "
         f"steps={step_count} cycles={cycle_count} "
         f"cost=${meta.cost_usd:.4f}")
+    log(f"  [STORE] {store}")
 
     # Update rule stats based on episode outcome
     for m in last_matched:
