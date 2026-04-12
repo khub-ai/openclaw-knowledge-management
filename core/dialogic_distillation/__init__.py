@@ -28,6 +28,19 @@ Public API:
   parse_json_block          — extract JSON from LLM output
 
   DEFAULT_PRECISION_GATE, DEFAULT_MAX_FP, DEFAULT_MAX_TIGHTENING_ROUNDS
+
+  --- PUPIL Domain Readiness Probe ---
+  probe                 — async pre-flight capability assessment for a PUPIL model
+  ProbeImage            — labeled image dataclass with image_hash property
+  ProbeRoleCosts        — per-role token usage and cost dataclass
+  VERDICT_GO            — "go" readiness verdict constant
+  VERDICT_PARTIAL       — "partial" readiness verdict constant
+  VERDICT_NO_GO         — "no-go" readiness verdict constant
+  get_probe_costs       — return accumulated per-role cost summaries
+  reset_probe_costs     — reset per-role cost accumulators
+  clear_probe_cache     — clear in-memory (and optionally disk) probe cache
+  save_report           — save probe report dict to JSON file
+  load_report           — load probe report dict from JSON file
 """
 
 # Protocols and types
@@ -58,4 +71,19 @@ from .agents import (
     image_block,
     encode_image_b64,
     parse_json_block,
+)
+
+# PUPIL Domain Readiness Probe
+from .probe import (
+    probe,
+    ProbeImage,
+    ProbeRoleCosts,
+    VERDICT_GO,
+    VERDICT_PARTIAL,
+    VERDICT_NO_GO,
+    get_probe_costs,
+    reset_probe_costs,
+    clear_probe_cache,
+    save_report,
+    load_report,
 )
