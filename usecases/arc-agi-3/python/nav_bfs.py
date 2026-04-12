@@ -113,16 +113,33 @@ def compute_navigation_plan(
     Returns list of ACTION names, or None if any segment has no path.
 
     blocked_positions: cells the player has empirically failed to enter
-    (walls between grid cells).  These are subtracted from the walkable set
-    so BFS routes around them.
+    (walls between grid cells).  These are subtracted from both the walkable
+    set and extra_passable so BFS routes around them.  blocked_positions
+    takes priority over extra_passable; waypoint goals are still reachable
+    because bfs_path unconditionally adds the goal to passable.
     """
     walkable = extract_walkable_grid(frame, walkable_colors, step_size)
     if blocked_positions:
         walkable -= blocked_positions
+        # Also remove blocked cells from extra_passable so they don't get
+        # re-added via the union in bfs_path (walkable | extra_passable).
+        # Actual waypoint goals are safe: bfs_path unconditionally adds goal
+        # to passable, so we can always reach the target even if it's not
+        # in a walkable color.
+        if extra_passable:
+            extra_passable = extra_passable - blocked_positions
+    # The initial player position shows as the player's color in the frame
+    # (not a walkable color), so BFS segments AFTER the first cannot route
+    # through it.  But once the player moves away in segment 1, that cell is
+    # clear again.  Adding waypoints[0] (the start) to extra_passable lets
+    # later segments route through the player's departure cell if needed.
+    ep = set(extra_passable) if extra_passable else set()
+    if waypoints:
+        ep.add(waypoints[0])
     full_actions = []
     for i in range(len(waypoints) - 1):
         seg_path = bfs_path(waypoints[i], waypoints[i + 1], walkable,
-                            step_size, extra_passable)
+                            step_size, ep)
         if seg_path is None:
             return None
         full_actions.extend(directions_to_actions(seg_path, action_map))

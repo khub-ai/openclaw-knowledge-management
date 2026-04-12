@@ -44,6 +44,13 @@ for _p in (str(_KF_ROOT), str(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+# Enable persistent LLM disk cache before importing agents (which reads the env
+# var at module load time).  Cached responses survive between runs, cutting
+# re-run costs to near zero for identical prompts.
+_LLM_CACHE_DIR = _HERE.parent / ".tmp" / "llm_cache"
+_LLM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("LLM_CACHE_DIR", str(_LLM_CACHE_DIR))
+
 import arc_agi
 import ensemble as ens
 from ensemble import run_episode, EpisodeMetadata, MAX_STEPS, MAX_CYCLES

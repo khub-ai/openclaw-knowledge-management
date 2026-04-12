@@ -193,6 +193,25 @@ The closest published work:
 
 ---
 
+## Try It on Your PUPIL Model
+
+The dermatology and ornithology benchmarks are designed to be reproducible with any vision-capable model as the PUPIL. If you run the benchmark against a model we haven't tested, we'd like to know the results.
+
+**What to do:**
+1. Pick a PUPIL model — any vision-capable model smaller or cheaper than Claude Sonnet.
+2. Run the baseline evaluation (zero-shot, no injected rules) on the held-out image pool.
+3. Run the dialogic distillation loop (TUTOR = Claude Sonnet 4.6, PUPIL = your model).
+4. Re-evaluate the PUPIL on the same pool with the accepted rules injected.
+5. Report the before/after accuracy and which PUPIL model you used.
+
+See [usecases/image-classification/README.md](../image-classification/README.md) for the evaluation harness and step-by-step instructions.
+
+**Report results:** Open an issue at [khub-knowledge-fabric](https://github.com/kaihuchen/khub-knowledge-fabric/issues) with the tag `benchmark-result`. Include your PUPIL model name, domain (dermatology / ornithology / other), dataset size, baseline accuracy, and post-distillation accuracy.
+
+Results from the community will be aggregated into the Status table above.
+
+---
+
 ## Navigation
 
 - [DESIGN.md](DESIGN.md) — developer-facing spec: three-party protocol, grounding mechanics, domain adaptations, differences across knowledge types

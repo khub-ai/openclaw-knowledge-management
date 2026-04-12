@@ -24,8 +24,12 @@ Provides:
 
 from __future__ import annotations
 import asyncio
+import hashlib
+import json
 import os
+import pickle
 import time
+from pathlib import Path
 from typing import Optional, Union
 
 import anthropic
@@ -190,6 +194,81 @@ class CostTracker:
 _cost_tracker = CostTracker()
 
 
+# ---------------------------------------------------------------------------
+# LLM call cache — two layers:
+#   1. In-memory (per process): eliminates cost for identical calls within a run.
+#   2. Disk (persistent across runs): opt-in via LLM_CACHE_DIR env var.
+#      Set LLM_CACHE_DIR to a writable directory path to enable.
+# ---------------------------------------------------------------------------
+
+_IN_MEM_CACHE: dict[str, tuple[str, int]] = {}
+
+_DISK_CACHE_DIR: Optional[Path] = (
+    Path(d) if (d := os.environ.get("LLM_CACHE_DIR", "")) else None
+)
+
+
+def _cache_key(model: str, system: str, user_message) -> str:
+    """SHA-256 key over (model, system, user_message)."""
+    if isinstance(user_message, str):
+        content_repr = user_message
+    elif isinstance(user_message, list):
+        # For multimodal blocks: hash text verbatim; hash image data separately
+        # so we don't embed MBs of base64 into the key string.
+        parts: list[str] = []
+        for blk in user_message:
+            if isinstance(blk, dict):
+                if blk.get("type") == "text":
+                    parts.append(blk.get("text", ""))
+                elif blk.get("type") == "image":
+                    img_data = blk.get("source", {}).get("data", "")
+                    img_hash = hashlib.md5(
+                        img_data.encode() if isinstance(img_data, str) else img_data
+                    ).hexdigest()
+                    parts.append(f"[img:{img_hash}]")
+                else:
+                    parts.append(json.dumps(blk, default=str))
+            else:
+                parts.append(str(blk))
+        content_repr = "\n".join(parts)
+    else:
+        content_repr = str(user_message)
+
+    raw = f"{model}\x00{system}\x00{content_repr}"
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _cache_get(key: str) -> Optional[tuple[str, int]]:
+    if key in _IN_MEM_CACHE:
+        return _IN_MEM_CACHE[key]
+    if _DISK_CACHE_DIR is not None:
+        path = _DISK_CACHE_DIR / f"{key}.pkl"
+        if path.exists():
+            try:
+                result = pickle.loads(path.read_bytes())
+                _IN_MEM_CACHE[key] = result  # promote to memory
+                return result
+            except Exception:
+                pass
+    return None
+
+
+def _cache_put(key: str, result: tuple[str, int]) -> None:
+    _IN_MEM_CACHE[key] = result
+    if _DISK_CACHE_DIR is not None:
+        _DISK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path = _DISK_CACHE_DIR / f"{key}.pkl"
+        try:
+            path.write_bytes(pickle.dumps(result))
+        except Exception:
+            pass
+
+
+def clear_llm_cache() -> None:
+    """Flush the in-memory cache (disk cache is not cleared)."""
+    _IN_MEM_CACHE.clear()
+
+
 def reset_cost_tracker() -> None:
     _cost_tracker.reset()
 
@@ -275,15 +354,34 @@ async def _call_anthropic(
     max_tokens: int,
     max_retries: int,
 ) -> tuple[str, int]:
+    # --- Check local cache (in-memory then disk) ---
+    _ck = _cache_key(model, system_prompt, user_message)
+    _cached = _cache_get(_ck)
+    if _cached is not None:
+        print(f"  [{agent_id}] LLM cache hit (0 tokens billed)", flush=True)
+        return _cached
+
     client = get_client()
     t0 = time.time()
+
+    # --- Enable Anthropic's built-in prompt caching on the system prompt ---
+    # When the same system prompt is reused within 5 minutes, Anthropic serves
+    # it from cache at 0.1x the normal input-token cost (vs 1.25x to create).
+    # Requires the system prompt to be ≥1024 tokens to activate.
+    if system_prompt:
+        system_param: Union[str, list] = [
+            {"type": "text", "text": system_prompt,
+             "cache_control": {"type": "ephemeral"}}
+        ]
+    else:
+        system_param = system_prompt
 
     for attempt in range(max_retries):
         try:
             response = await client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=system_prompt,
+                system=system_param,
                 messages=[{"role": "user", "content": user_message}],
             )
             duration_ms = int((time.time() - t0) * 1000)
@@ -296,7 +394,9 @@ async def _call_anthropic(
                     cache_creation=getattr(u, "cache_creation_input_tokens", 0) or 0,
                     cache_read=getattr(u, "cache_read_input_tokens", 0) or 0,
                 )
-            return text, duration_ms
+            result = (text, duration_ms)
+            _cache_put(_ck, result)
+            return result
         except anthropic.RateLimitError:
             if attempt < max_retries - 1:
                 wait = 60 * (attempt + 1)
@@ -325,6 +425,13 @@ async def _call_together(
     max_tokens: int,
     max_retries: int,
 ) -> tuple[str, int]:
+    # --- Check local cache ---
+    _ck = _cache_key(model, system_prompt, user_message)
+    _cached = _cache_get(_ck)
+    if _cached is not None:
+        print(f"  [{agent_id}] LLM cache hit (0 tokens billed)", flush=True)
+        return _cached
+
     client = _get_together_client()
     t0 = time.time()
 
@@ -373,7 +480,9 @@ async def _call_together(
                     response.usage.completion_tokens or 0,
                     model,
                 )
-            return text, duration_ms
+            result = (text, duration_ms)
+            _cache_put(_ck, result)
+            return result
         except Exception as e:
             err_str = str(e)
             is_rate_limit = "rate" in err_str.lower() or "429" in err_str

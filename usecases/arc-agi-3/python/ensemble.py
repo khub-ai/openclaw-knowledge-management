@@ -123,6 +123,11 @@ SKIP_OBSERVER_FOR_PUZZLES = True
 # layer under development.
 COMPETITION_MODE = True
 
+# DEV_FAST_SKIP: when True, run the BFS pre-solver for ls20 even in
+# COMPETITION_MODE, skipping levels the solver can already handle.
+# Saves ~$0.33/run by not using LLM on L1.  Set False before real benchmarks.
+DEV_FAST_SKIP = True
+
 # In competition mode, execute at most this many actions per MEDIATOR plan
 # before breaking and letting the MEDIATOR re-evaluate with fresh observations.
 # Keeps the MEDIATOR from committing to a long wrong plan without feedback.
@@ -1070,14 +1075,29 @@ def _compute_bfs_nav_dynamic(
     for _dir, _aname in action_map.items():
         _action_to_dir[_aname] = _dir_deltas.get(_dir, (0, 0))
 
+    # For blocked detection we use the last RC visit (maze rotation) as the gate,
+    # NOT the last level reset.  Level resets (counter exhaustion) keep the same
+    # maze layout — walls don't change.  Only RC visits rotate the maze and
+    # invalidate previously-discovered wall positions.
+    _last_rc_visit_idx = -1
+    for _ri_b, _rs_b in enumerate(action_history):
+        _rd_b = _rs_b.get("diff", 0)
+        if 300 < _rd_b < 3000:  # RC visit = maze rotation event (diff > 300)
+            _last_rc_visit_idx = _ri_b           # ring refills ~ 80-200, excluded
+
     _prev_pos_b: tuple | None = None
     for _bi, _bs in enumerate(action_history):
-        if _bi <= _last_reset_idx:
+        if _bi <= _last_rc_visit_idx:
             _prev_pos_b = None
             continue
-        # Large diff = maze rotation (RC visit).  Previously blocked cells
-        # may no longer be walls in the new maze state, so reset.
-        if _bs.get("diff", 0) > 80:
+        _bs_diff = _bs.get("diff", 0)
+        if _bs_diff >= 3000:
+            # Level reset: player teleports back to start but maze walls unchanged.
+            # Reset _prev_pos_b so we don't compute wrong deltas across the teleport.
+            _prev_pos_b = None
+            continue
+        if 300 < _bs_diff < 3000:
+            # Shouldn't happen (already past last RC visit), but guard anyway.
             _blocked.clear()
         _pp_b = _bs.get("player_pos")
         if _pp_b is not None:
@@ -1090,7 +1110,11 @@ def _compute_bfs_nav_dynamic(
                     _blocked.add(_attempted)
             _prev_pos_b = _ppt
 
-    # Build the level model
+    # Build the level model.
+    # start_levels = level-1 so that prev_levels is correctly initialised even
+    # when presolve steps are not recorded in action_history (the presolve runs
+    # outside the main cycle loop and does not append to action_history, leaving
+    # it empty while obs already shows levels_completed = level-1).
     model = build_level_model(
         initial_frame=level_initial_frame,
         current_frame=frame,
@@ -1103,6 +1127,7 @@ def _compute_bfs_nav_dynamic(
         history_start_idx=history_start_idx,
         last_reset_idx=_last_reset_idx,
         blocked_positions=_blocked,
+        start_levels=level - 1,
     )
     print(f"  [DYN] {model}  blocked={len(_blocked)}"
           + (f" {_blocked}" if _blocked else ""), flush=True)
@@ -1119,6 +1144,13 @@ def _compute_bfs_nav_dynamic(
             continue
         _pp = _s.get("player_pos")
         if _pp is not None:
+            # Skip restore frames (diff >= 3000, pos != None): the player was
+            # teleported to this position by the game restore, not deliberately
+            # navigated there.  Counting it as "visited" would prevent the agent
+            # from returning to explore it (e.g., a PUSH_PAD that the restore
+            # happened to land on).
+            if _s.get("diff", 0) >= 3000:
+                continue
             visited.add(tuple(_pp))
     # Also add blocked positions to visited so exploration skips them
     visited.update(_blocked)
@@ -1134,9 +1166,17 @@ def _compute_bfs_nav_dynamic(
         _obs_wc -= _known_walls
         if _obs_wc:
             hypothesis.obs_walkable_colors = _obs_wc
-            walkable_colors = _obs_wc
+            # Use merged prior | observed — inferred colors CONFIRM walkability
+            # but do NOT restrict below the prior.  Colors in the prior that
+            # haven't been walked on yet remain candidate-walkable until a wall
+            # contact removes them.  Using only _obs_wc would make BFS too
+            # restrictive when the player has visited very few tiles.
+            walkable_colors = hypothesis.effective_walkable_colors
+            # Also strip any colors confirmed as walls by wall contact detection.
+            walkable_colors = walkable_colors - _known_walls
             wset = extract_walkable_grid(frame, walkable_colors, step_size) - _blocked
-            print(f"  [HYP] inferred walkable_colors={_obs_wc}", flush=True)
+            print(f"  [HYP] inferred walkable_colors={_obs_wc} "
+                  f"(effective={walkable_colors})", flush=True)
 
     # Validate win_gate reachability: if it was set by concept_bindings
     # pre-classification (not action history), verify BFS can reach it.
@@ -1155,6 +1195,182 @@ def _compute_bfs_nav_dynamic(
                   flush=True)
             model.win_gate = None
 
+    # --- Provisional ring detection ----------------------------------------
+    # ring_positions is empty when the step-counter reset tiles share the same
+    # color as the HUD step-counter bar (e.g. color11 in ls20).  build_level_model
+    # correctly refuses to classify step_counter-role objects as rings, but that
+    # leaves ring_positions empty even though there are real reset tiles on the map.
+    #
+    # Design: ring tiles are SMALL sprites (≤25px) of the step_counter color.
+    # The HUD bar is LARGE (≥40px).  Scan the CURRENT frame (not initial_frame)
+    # because ring tiles often only appear after the first RC visit (maze rotation).
+    # Map each small object's centroid to the player-grid coordinate system.
+    # Scan every cycle for provisional ring candidates — new tiles may appear
+    # after each RC visit (maze rotation), so we can't gate on model.ring_positions.
+    # The deduplication block below prevents adding the same candidate twice.
+    _prov_sc_color = next(
+        (k for k, v in (concept_bindings or {}).items()
+         if isinstance(k, int) and isinstance(v, dict)
+         and v.get("role") == "step_counter"),
+        None,
+    )
+    if _prov_sc_color is not None and player_pos is not None:
+            from object_tracker import detect_objects as _do_prov
+            _x_off_prov = player_pos[0] % step_size
+            _y_off_prov = player_pos[1] % step_size
+            # Adaptive size threshold: the HUD bar is the LARGEST object of the
+            # step_counter color.  Ring tiles are those significantly smaller
+            # (< 25% of the largest).  This adapts to any game's sprite sizes.
+            _all_sc_objs = [_o for _o in _do_prov(frame) if _o.color == _prov_sc_color]
+            _largest_sc = max((_o.size for _o in _all_sc_objs), default=0)
+            _ring_size_thresh = _largest_sc / 4 if _largest_sc > 0 else 0
+            _prov_rings = []
+            for _po in _all_sc_objs:
+                if _ring_size_thresh == 0 or _po.size >= _ring_size_thresh:
+                    continue  # too large — likely the HUD bar itself
+                # Map centroid (row, col) → player-grid position (col, row)
+                _gc_col = (
+                    (int(_po.centroid[1]) - _x_off_prov) // step_size
+                ) * step_size + _x_off_prov
+                _gc_row = (
+                    (int(_po.centroid[0]) - _y_off_prov) // step_size
+                ) * step_size + _y_off_prov
+                _gpos_prov = (_gc_col, _gc_row)
+                if _gpos_prov not in visited:
+                    _prov_rings.append(_gpos_prov)
+            if _prov_rings:
+                # Store as provisional candidates — not yet empirically confirmed.
+                # Do NOT extend model.ring_positions yet; only confirmed positions go there.
+                _existing_prov = {
+                    tuple(p) for p in (concept_bindings or {}).get("provisional_ring_candidates", [])
+                }
+                _new_prov = [p for p in _prov_rings if p not in _existing_prov]
+                if _new_prov and concept_bindings is not None:
+                    concept_bindings.setdefault("provisional_ring_candidates", []).extend(
+                        [list(p) for p in _new_prov]
+                    )
+                print(
+                    f"  [RING] Provisional candidates: {len(_prov_rings)} small "
+                    f"color{_prov_sc_color} objects (thresh<{_ring_size_thresh:.0f}px): {_prov_rings}",
+                    flush=True,
+                )
+
+    # --- Empirical ring validation -------------------------------------------
+    # Provisional candidates (from size heuristic) are promoted to confirmed
+    # once we observe that visiting one caused the step-counter bar to GROW.
+    # Bar growth is stored in action_history entries via the steps_dec inference
+    # block in the step loop (which tracks _sz_b_sd / _sz_a_sd per step).
+    # Here we scan action_history pairs: if player_pos[i] was a provisional
+    # candidate and the bar grew at step[i+1], it is confirmed.
+    if concept_bindings is not None:
+        _prov_cands_ev = [
+            tuple(p) for p in concept_bindings.get("provisional_ring_candidates", [])
+        ]
+        _confirmed_ev = {
+            tuple(p) for p in concept_bindings.get("confirmed_ring_positions", [])
+        }
+        _sc_col_ev = next(
+            (k for k, v in concept_bindings.items()
+             if isinstance(k, int) and isinstance(v, dict)
+             and v.get("role") == "step_counter"),
+            None,
+        )
+        if _prov_cands_ev and _sc_col_ev is not None:
+            _prov_set_ev = set(_prov_cands_ev)
+            for _vi in range(max(1, _last_reset_idx + 2), len(action_history)):
+                _prev_s = action_history[_vi - 1]
+                _curr_s = action_history[_vi]
+                # Pattern A: player ARRIVES at ring this step — ring-range diff (80-300)
+                # signals step-counter refill on the exact arrival step.
+                _curr_pp = _curr_s.get("player_pos")
+                _curr_diff = _curr_s.get("diff", 0)
+                if (_curr_pp is not None
+                        and tuple(_curr_pp) in _prov_set_ev
+                        and tuple(_curr_pp) not in _confirmed_ev
+                        and 80 <= _curr_diff < 300):
+                    _conf_pt = tuple(_curr_pp)
+                    _confirmed_ev.add(_conf_pt)
+                    concept_bindings.setdefault("confirmed_ring_positions", []).append(
+                        list(_conf_pt)
+                    )
+                    print(f"  [RING] CONFIRMED ring at {_conf_pt} "
+                          f"(diff={_curr_diff})", flush=True)
+                    continue
+                # Pattern B: player WAS at ring last step, bar grew next step.
+                # Kept as backup for alternate ring-trigger timings.
+                _prev_pp = _prev_s.get("player_pos")
+                if _prev_pp is None or tuple(_prev_pp) not in _prov_set_ev:
+                    continue
+                _prev_pt = tuple(_prev_pp)
+                if _prev_pt in _confirmed_ev:
+                    continue
+                _bar_after  = _curr_s.get("step_bar_size_after",  0) or 0
+                _bar_before = _curr_s.get("step_bar_size_before", 0) or 0
+                if _bar_after > _bar_before > 0:
+                    _confirmed_ev.add(_prev_pt)
+                    concept_bindings.setdefault("confirmed_ring_positions", []).append(
+                        list(_prev_pt)
+                    )
+                    print(f"  [RING] CONFIRMED ring at {_prev_pt} "
+                          f"(bar grew {_bar_before}→{_bar_after})", flush=True)
+        # Promote confirmed positions into model.ring_positions
+        _model_rings_set = {tuple(p) for p in model.ring_positions}
+        for _cp_ev in _confirmed_ev:
+            if _cp_ev not in _model_rings_set:
+                model.ring_positions.append(list(_cp_ev))
+                _model_rings_set.add(_cp_ev)
+
+    # --- Budget calculation + ring mechanic (from confirmed positions only) --
+    # Done BEFORE the is_navigable gate so rings are used even in exploration mode.
+    _step_budget_raw_g: int = game_data.get("step_budget", 42)
+    _steps_dec_g = max(1, int((concept_bindings or {}).get("steps_dec", 1)))
+    _step_budget_g = max(1, _step_budget_raw_g // _steps_dec_g)
+    _valid_hist_g = [s for i, s in enumerate(action_history) if i > _last_reset_idx]
+
+    # Routing set: confirmed rings PLUS unconfirmed provisional candidates.
+    # We route to provisionals so the player can visit and empirically test them.
+    # steps_since_reset tracks only CONFIRMED resets (actual counter jumps),
+    # not mere visits to candidates.
+    _confirmed_set_g = {tuple(p) for p in (concept_bindings or {}).get("confirmed_ring_positions", [])}
+    _prov_set_g = {
+        tuple(p) for p in (concept_bindings or {}).get("provisional_ring_candidates", [])
+        if tuple(p) not in _confirmed_set_g
+    }
+    _ring_pos_set_g = _confirmed_set_g | _prov_set_g  # routing targets
+    _sc_resets_g: set[tuple] = set()  # visited candidates (confirmed or tested)
+    for _s_g in _valid_hist_g:
+        _pp_g = _s_g.get("player_pos")
+        if _pp_g is not None and tuple(_pp_g) in _ring_pos_set_g:
+            _sc_resets_g.add(tuple(_pp_g))
+    # steps_since_reset: count from last CONFIRMED reset (bar grew), not just any visit.
+    _last_confirmed_step_g = -1
+    for _j_g, _s_g in enumerate(_valid_hist_g):
+        _pp_g = _s_g.get("player_pos")
+        if _pp_g is not None and tuple(_pp_g) in _confirmed_set_g:
+            _last_confirmed_step_g = _j_g
+    _steps_since_reset_g = len(_valid_hist_g) - (_last_confirmed_step_g + 1)
+    if _steps_dec_g > 1:
+        print(f"  [COUNTER] steps_dec={_steps_dec_g} → effective_budget={_step_budget_g} "
+              f"(raw={_step_budget_raw_g}, steps_since_reset={_steps_since_reset_g})",
+              flush=True)
+
+    # Build ring_refill_mechanic string ONLY from empirically confirmed positions.
+    # Provisional candidates are listed separately so MEDIATOR knows they are unconfirmed.
+    _confirmed_rings_g = [
+        tuple(p) for p in (concept_bindings or {}).get("confirmed_ring_positions", [])
+    ]
+    if _confirmed_rings_g and concept_bindings is not None:
+        concept_bindings["ring_refill_mechanic"] = (
+            f"Tiles at {_confirmed_rings_g} are step-counter REFILL tiles "
+            f"(empirically confirmed — visiting one reset the counter). "
+            f"Stepping on one resets the counter back to {_step_budget_raw_g}, "
+            f"allowing {_step_budget_g} more moves. "
+            f"They are MANDATORY waypoints when the direct path to RC/WIN "
+            f"exceeds the remaining move budget."
+        )
+        print(f"  [COUNTER] Ring refill mechanic injected for confirmed {_confirmed_rings_g}",
+              flush=True)
+
     # If model is incomplete, explore nearest unclassified candidate.
     # Special case: if we have RCs but no win_gate, and blocked positions
     # overlap with win_gate-color candidates, the player needs to visit
@@ -1162,62 +1378,214 @@ def _compute_bfs_nav_dynamic(
     # candidates so we systematically try new RC combinations.
     if not model.is_navigable:
         _explore_rc = False
-        if model.has_rc and not model.has_win_gate and _blocked:
-            # Check if any blocked position has win_gate color
-            _has_blocked_wg = False
-            if _cb_enriched:
-                _wg_colors_chk: set[int] = set()
-                for _cc, _cv in _cb_enriched.items():
-                    if not isinstance(_cc, int):
+        # --- Ring detour in exploration mode ---
+        # Trigger based on actual path cost, not an arbitrary budget percentage.
+        # When win gate is known: detour if BFS distance to win > steps remaining.
+        # When win gate unknown: detour if remaining budget < safe exploration reserve
+        # (25% of effective budget), so we always have enough to navigate back to a ring.
+        _unvisited_rings_g = [r for r in _ring_pos_set_g if r not in _sc_resets_g]
+        _ring_detour = False
+        if _unvisited_rings_g:
+            _steps_remaining_g = max(0, _step_budget_g - _steps_since_reset_g)
+            _trigger_ring_detour = False
+            if model.win_gate is not None:
+                # Win gate known: detour if we can't reach it directly.
+                _wg_t = tuple(model.win_gate)
+                _wg_extra_t = {_wg_t}
+                for _dc_t, _dr_t in [(0, step_size), (0, -step_size),
+                                      (step_size, 0), (-step_size, 0)]:
+                    _wg_extra_t.add((_wg_t[0] + _dc_t, _wg_t[1] + _dr_t))
+                _wg_path_t = _bfs_path(player_pos, _wg_t, wset, step_size, _wg_extra_t)
+                _dist_to_win = len(_wg_path_t) if _wg_path_t is not None else _step_budget_g + 1
+                if _steps_remaining_g < _dist_to_win:
+                    _trigger_ring_detour = True
+                    print(
+                        f"  [RING] Win needs {_dist_to_win} steps, only {_steps_remaining_g} "
+                        f"remain — detour to ring first",
+                        flush=True,
+                    )
+            else:
+                # Win gate unknown — detour based on reachability:
+                # Use BFS to check if the nearest ring is reachable AND the
+                # remaining budget is too tight to afford exploration first.
+                # Safe reserve = 50% of effective budget so we always have
+                # enough moves to reach and confirm a ring before exhaustion.
+                _safe_reserve = max(5, _step_budget_g // 2)
+                # Priority: confirm rings before exploration.
+                # If no ring has been empirically confirmed yet, always route to
+                # the nearest provisional ring candidate (as long as we have budget).
+                # Once a ring is confirmed we switch to path-cost-based gating.
+                _no_confirmed_rings = not bool(
+                    (concept_bindings or {}).get("confirmed_ring_positions")
+                )
+                if _steps_remaining_g < _safe_reserve:
+                    _trigger_ring_detour = True
+                    print(
+                        f"  [RING] Exploration reserve low ({_steps_remaining_g} < "
+                        f"{_safe_reserve}) — detour to ring",
+                        flush=True,
+                    )
+                elif _no_confirmed_rings and _steps_remaining_g > 3:
+                    _trigger_ring_detour = True
+                    print(
+                        f"  [RING] No confirmed rings yet — prioritising ring visit "
+                        f"({_steps_remaining_g} steps remaining)",
+                        flush=True,
+                    )
+            if _trigger_ring_detour:
+                _ring_cands_g = sorted(
+                    _unvisited_rings_g,
+                    key=lambda r: abs(r[0] - player_pos[0]) + abs(r[1] - player_pos[1])
+                )
+                for _rc_g in _ring_cands_g:
+                    _rg_extra = {_rc_g}
+                    for _dc_g, _dr_g in [(0, step_size), (0, -step_size),
+                                          (step_size, 0), (-step_size, 0)]:
+                        _rg_extra.add((_rc_g[0] + _dc_g, _rc_g[1] + _dr_g))
+                    _rg_path = _bfs_path(player_pos, _rc_g, wset, step_size, _rg_extra)
+                    if _rg_path is not None:
+                        waypoints = [player_pos, _rc_g]
+                        extra_passable = _rg_extra
+                        _ring_detour = True
+                        print(f"  [RING] Detour to ring {_rc_g} "
+                              f"({_steps_remaining_g} steps remaining)", flush=True)
+                        break
+        if not _ring_detour:
+            if model.has_rc and not model.has_win_gate:
+                # RC found but no win gate yet — visit untriggered RCs to rotate
+                # maze further.  "Triggered" means a diff>300 step already occurred
+                # at that position (maze rotated).  Spawning at the RC (diff~4)
+                # does NOT count as triggered, so we will route back to it.
+                _triggered_rc_positions: set[tuple] = set()
+                _prev_pos_trig: tuple | None = None
+                for _si_rc, _s_rc in enumerate(action_history):
+                    if _si_rc <= _last_reset_idx:
+                        _prev_pos_trig = None
                         continue
-                    _cr = (_cv.get("role", "") if isinstance(_cv, dict)
-                           else str(_cv)).lower()
-                    if any(k in _cr for k in ("win", "target", "goal",
-                                               "objective", "finish")):
-                        _wg_colors_chk.add(_cc)
-                for _bp in _blocked:
-                    _bx, _by = _bp
-                    if (0 <= _by < len(level_initial_frame)
-                            and 0 <= _bx < len(level_initial_frame[0])):
-                        if level_initial_frame[_by][_bx] in _wg_colors_chk:
-                            _has_blocked_wg = True
-                            break
-            if _has_blocked_wg:
-                # Find unvisited RCs reachable from current position
-                _rc_set = {tuple(p) for p in model.rc_positions}
-                _unvisited_rcs = [p for p in _rc_set if p not in visited]
-                if _unvisited_rcs:
-                    # Navigate to the nearest unvisited RC
-                    _unvisited_rcs.sort(
+                    _pp_rc = _s_rc.get("player_pos")
+                    if 300 < _s_rc.get("diff", 0) < 3000:
+                        # Add both the landing position AND the trigger position
+                        # (prev_pos = the PUSH_PAD cell the player stood on before
+                        # the push fired).  RC positions are recorded at prev_pos,
+                        # so we must check prev_pos here to correctly mark them triggered.
+                        if _pp_rc is not None:
+                            _triggered_rc_positions.add(tuple(_pp_rc))
+                        if _prev_pos_trig is not None:
+                            _triggered_rc_positions.add(_prev_pos_trig)
+                        _prev_pos_trig = None  # reset after trigger event
+                    else:
+                        if _pp_rc is not None:
+                            _prev_pos_trig = tuple(_pp_rc)
+                _rc_set_expl = {tuple(p) for p in model.rc_positions}
+                _untriggered_rcs = [
+                    p for p in _rc_set_expl if p not in _triggered_rc_positions
+                ]
+                if _untriggered_rcs:
+                    _untriggered_rcs.sort(
                         key=lambda p: abs(p[0] - player_pos[0]) + abs(p[1] - player_pos[1]))
                     _explore_rc = True
-                    _rc_target = _unvisited_rcs[0]
-                    print(f"  [DYN] Win gate blocked — visiting unvisited RC {_rc_target}",
+                    _rc_target = _untriggered_rcs[0]
+                    print(f"  [DYN] RC found, no win gate — routing to untriggered RC {_rc_target}",
                           flush=True)
+            if not _explore_rc and _blocked:
+                # Fallback: check if any blocked cell has win_gate color (original logic)
+                _has_blocked_wg = False
+                if _cb_enriched:
+                    _wg_colors_chk: set[int] = set()
+                    for _cc, _cv in _cb_enriched.items():
+                        if not isinstance(_cc, int):
+                            continue
+                        _cr = (_cv.get("role", "") if isinstance(_cv, dict)
+                               else str(_cv)).lower()
+                        if any(k in _cr for k in ("win", "target", "goal",
+                                                   "objective", "finish")):
+                            _wg_colors_chk.add(_cc)
+                    for _bp in _blocked:
+                        _bx, _by = _bp
+                        if (0 <= _by < len(level_initial_frame)
+                                and 0 <= _bx < len(level_initial_frame[0])):
+                            if level_initial_frame[_by][_bx] in _wg_colors_chk:
+                                _has_blocked_wg = True
+                                break
+                if _has_blocked_wg:
+                    # Find unvisited RCs reachable from current position
+                    _rc_set = {tuple(p) for p in model.rc_positions}
+                    _unvisited_rcs = [p for p in _rc_set if p not in visited]
+                    if _unvisited_rcs:
+                        # Navigate to the nearest unvisited RC
+                        _unvisited_rcs.sort(
+                            key=lambda p: abs(p[0] - player_pos[0]) + abs(p[1] - player_pos[1]))
+                        _explore_rc = True
+                        _rc_target = _unvisited_rcs[0]
+                        print(f"  [DYN] Win gate blocked — visiting unvisited RC {_rc_target}",
+                              flush=True)
 
-        if not _explore_rc:
-            print(f"  [DYN] Model incomplete — exploring nearest candidate", flush=True)
-        waypoints, extra_passable = nearest_exploration_waypoint(
-            model=model,
-            player_pos=player_pos,
-            visited=visited,
-            walkable_set=wset,
-            step_size=step_size,
-            extra_passable=set(),
-        )
-        # Override exploration target with unvisited RC if applicable
-        if _explore_rc:
-            _rc_extra = set()
-            _rc_extra.add(_rc_target)
-            for _dc, _dr in [(0, step_size), (0, -step_size),
-                             (step_size, 0), (-step_size, 0)]:
-                _rc_extra.add((_rc_target[0] + _dc, _rc_target[1] + _dr))
-            waypoints = [player_pos, _rc_target]
-            extra_passable = _rc_extra
+            if not _explore_rc:
+                print(f"  [DYN] Model incomplete — exploring nearest candidate", flush=True)
+            waypoints, extra_passable = nearest_exploration_waypoint(
+                model=model,
+                player_pos=player_pos,
+                visited=visited,
+                walkable_set=wset,
+                step_size=step_size,
+                extra_passable=set(),
+            )
+            # Override exploration target with unvisited RC if applicable
+            if _explore_rc:
+                _rc_extra = set()
+                _rc_extra.add(_rc_target)
+                for _dc, _dr in [(0, step_size), (0, -step_size),
+                                 (step_size, 0), (-step_size, 0)]:
+                    _rc_extra.add((_rc_target[0] + _dc, _rc_target[1] + _dr))
+                if player_pos == _rc_target:
+                    # Already AT the RC (e.g., spawned there) but it wasn't triggered.
+                    # Bounce: move to a walkable neighbor then come back to trigger it.
+                    _nb_cells_rc = [
+                        (_rc_target[0] + _dc2, _rc_target[1] + _dr2)
+                        for _dc2, _dr2 in [(0, step_size), (0, -step_size),
+                                           (step_size, 0), (-step_size, 0)]
+                        if (_rc_target[0] + _dc2, _rc_target[1] + _dr2) in wset
+                    ]
+                    if _nb_cells_rc:
+                        _nb_rc = _nb_cells_rc[0]
+                        waypoints = [player_pos, _nb_rc, _rc_target]
+                        extra_passable = _rc_extra | {_nb_rc}
+                        print(f"  [DYN] At RC {_rc_target} — bounce via {_nb_rc} to re-trigger",
+                              flush=True)
+                    else:
+                        waypoints = [player_pos, _rc_target]
+                        extra_passable = _rc_extra
+                else:
+                    waypoints = [player_pos, _rc_target]
+                    extra_passable = _rc_extra
 
         if len(waypoints) <= 1:
-            print(f"  [DYN] No exploration candidate reachable", flush=True)
-            return ""
+            # All model candidates exhausted — flood-fill to nearest unvisited reachable cell
+            _ff_reachable: set = set()
+            _ff_queue: list = [player_pos]
+            _ff_seen: set = {player_pos}
+            _all_passable = wset | extra_passable
+            while _ff_queue:
+                _ff_p = _ff_queue.pop(0)
+                _ff_reachable.add(_ff_p)
+                for _ff_dc, _ff_dr in [(step_size, 0), (-step_size, 0),
+                                        (0, step_size), (0, -step_size)]:
+                    _ff_np = (_ff_p[0] + _ff_dc, _ff_p[1] + _ff_dr)
+                    if _ff_np not in _ff_seen and _ff_np in _all_passable:
+                        _ff_seen.add(_ff_np)
+                        _ff_queue.append(_ff_np)
+            _ff_unvisited = _ff_reachable - visited - _blocked
+            if _ff_unvisited:
+                _ff_target = min(_ff_unvisited,
+                                 key=lambda p: abs(p[0] - player_pos[0]) + abs(p[1] - player_pos[1]))
+                waypoints = [player_pos, _ff_target]
+                extra_passable = {_ff_target}
+                print(f"  [DYN] Flood-fill exploration to unvisited cell {_ff_target} "
+                      f"({len(_ff_unvisited)} reachable unvisited cells)", flush=True)
+            else:
+                print(f"  [DYN] No exploration candidate reachable (flood-fill exhausted "
+                      f"{len(_ff_reachable)} cells)", flush=True)
+                return ""
         goal = waypoints[-1]
         actions = compute_navigation_plan(
             frame=frame,
@@ -1256,8 +1624,11 @@ def _compute_bfs_nav_dynamic(
         _at_rc = _pp is not None and tuple(_pp) in rc_pos_set
         if _at_rc and not _prev_at_rc:
             rc_visits_done += 1
-        # Large diff with unknown position also signals an RC visit
-        elif not _at_rc and _pp is None and _s.get("diff", 0) > 80 and not _prev_at_rc:
+        # Diff-based fallback: a maze-rotation event (diff 300-3000) always signals
+        # an RC visit even when the player's post-step position doesn't match the
+        # current rc_pos_set (RC moves after rotation, so the recorded position is
+        # the POST-rotation RC, not the cell the player stepped on).
+        elif not _at_rc and 300 < _s.get("diff", 0) < 3000 and not _prev_at_rc:
             rc_visits_done += 1
             _at_rc = True  # treat as at-RC for transition tracking
         _prev_at_rc = _at_rc
@@ -1270,20 +1641,33 @@ def _compute_bfs_nav_dynamic(
     # attempt, not after each RC visit).
     n_rc_needed = get_n_rc_visits(_dk, game_id, level)
     if n_rc_needed is None:
+        # Count distinct TRANSITIONS to win gate (not every step there).
+        # Multiple consecutive steps at win gate = 1 failure, not N.
         _win_failures = 0
         if model.win_gate:
             _wg_pos = tuple(model.win_gate)
+            _prev_at_wg = False
             for _wi in range(history_start_idx, len(action_history)):
                 _ws = action_history[_wi]
                 _wpp = _ws.get("player_pos")
-                if _wpp is not None and tuple(_wpp) == _wg_pos:
+                _at_wg = _wpp is not None and tuple(_wpp) == _wg_pos
+                if _at_wg and not _prev_at_wg:
                     if _ws.get("levels", 0) <= _current_levels:
                         _win_failures += 1
+                _prev_at_wg = _at_wg
         n_rc_needed = _win_failures + 1
     print(f"  [DYN] rc_visits_done={rc_visits_done} n_rc_needed={n_rc_needed}", flush=True)
 
-    # Rings collected since last game reset
-    ring_pos_set = {tuple(p) for p in model.ring_positions}
+    # Rings: confirmed positions (model.ring_positions) plus unconfirmed provisional
+    # candidates — we route to provisionals so they can be empirically tested.
+    # steps_since_reset uses only CONFIRMED resets (actual bar-growth events).
+    _cb_dyn = concept_bindings or {}
+    _confirmed_set_dyn = {tuple(p) for p in model.ring_positions}
+    _prov_set_dyn = {
+        tuple(p) for p in _cb_dyn.get("provisional_ring_candidates", [])
+        if tuple(p) not in _confirmed_set_dyn
+    }
+    ring_pos_set = _confirmed_set_dyn | _prov_set_dyn  # routing targets
     sc_resets_done: set[tuple] = set()
     for _si, _s in enumerate(action_history):
         if _si <= _last_reset_idx:
@@ -1294,15 +1678,37 @@ def _compute_bfs_nav_dynamic(
 
     # Steps since last ring (or level start / game reset)
     _valid_hist = [s for i, s in enumerate(action_history) if i > _last_reset_idx]
+    # Use only confirmed resets for steps_since_reset tracking.
     _last_ring_step = -1
     for _j, _s in enumerate(_valid_hist):
         _pp = _s.get("player_pos")
-        if _pp is not None and tuple(_pp) in ring_pos_set:
+        if _pp is not None and tuple(_pp) in _confirmed_set_dyn:
             _last_ring_step = _j
-    _step_budget: int = game_data.get("step_budget", 42)
+    _step_budget_raw: int = game_data.get("step_budget", 42)
     _steps_since_reset = len(_valid_hist) - (_last_ring_step + 1)
 
-    # Compute dynamic ordered waypoints
+    # Effective step budget: counter units divided by steps_dec gives the
+    # maximum number of MOVES before the counter hits zero.  With steps_dec=1
+    # this is the same as the counter value; with steps_dec=2 it's halved.
+    _steps_dec = max(1, int((concept_bindings or {}).get("steps_dec", 1)))
+    _step_budget = max(1, _step_budget_raw // _steps_dec)
+    if _steps_dec > 1:
+        print(f"  [COUNTER] steps_dec={_steps_dec} → effective_budget={_step_budget} "
+              f"(raw={_step_budget_raw}, steps_since_reset={_steps_since_reset})",
+              flush=True)
+
+    # (Ring mechanic already injected in the global pre-navigability block above.)
+
+    # Inject provisional ring candidates into model.ring_positions so that
+    # compute_dynamic_waypoints can plan budget-aware ring detours even before
+    # empirical confirmation.  model is ephemeral (created fresh each cycle).
+    _plan_ring_set = {tuple(p) for p in model.ring_positions}
+    for _pr_g in _prov_set_dyn:
+        if _pr_g not in _plan_ring_set:
+            model.ring_positions.append(list(_pr_g))
+            _plan_ring_set.add(_pr_g)
+
+    # Compute dynamic ordered waypoints (budget-aware: inserts ring if needed)
     waypoints, extra_passable = compute_dynamic_waypoints(
         model=model,
         player_pos=player_pos,
@@ -1408,12 +1814,48 @@ def _compute_bfs_nav_section(
         return ""  # Can't navigate without player colors
 
     if not walkable_colors_raw:
-        # Default walkable: colors 3 (dark-grey) and 5 (black) are common
-        # arena/walkable colors in ARC games.  Remove any known wall colors.
+        # Derive walkable colors from OBSERVER's concept_bindings roles.
+        # Floor/walkable roles → include.  Obstacle roles → exclude.
+        # If OBSERVER hasn't classified anything yet, use all colors minus
+        # known obstacles so BFS can still attempt navigation.  infer_walkable_from_visits
+        # will narrow this down once the player starts moving.
         _cb_walk = concept_bindings or {}
+        _obstacle_roles = {"wall", "step_counter", "player", "hud"}
+        _floor_roles    = {"floor", "walkable", "background", "arena"}
+        _floor_cols: set[int]    = set()
+        _obstacle_cols: set[int] = set()
+        for _ck, _cv in _cb_walk.items():
+            if not isinstance(_ck, int):
+                continue
+            _role = (_cv.get("role", "") if isinstance(_cv, dict) else str(_cv)).lower()
+            if any(r in _role for r in _floor_roles):
+                _floor_cols.add(_ck)
+            elif any(r in _role for r in _obstacle_roles):
+                _obstacle_cols.add(_ck)
+        # Collect all colors present in the current frame.
+        # We start from the full frame palette and subtract known obstacles.
+        # This is the "assume everything might be walkable unless proven otherwise"
+        # hypothesis — infer_walkable_from_visits and detect_wall_contacts will
+        # narrow it down as the player moves and hits walls.
+        _frame_colors: set[int] = set()
+        for _row_wk in frame:
+            _frame_colors.update(_row_wk)
+        # Remove player colors — the player sprite is not a walkable tile.
+        _player_cols_wk: set[int] = set(player_colors_raw) if player_colors_raw else set()
+        _frame_colors -= _player_cols_wk
+        if _floor_cols:
+            # OBSERVER explicitly labeled floor colors — use exactly those.
+            _default_walkable = _floor_cols
+        else:
+            # No explicit floor labels yet — use all frame colors minus known obstacles.
+            # The walkable set will be refined by infer_walkable_from_visits each cycle.
+            _default_walkable = _frame_colors - _obstacle_cols
+        # Also strip any explicit wall_colors list
         _wall_cols = set(_cb_walk.get("wall_colors") or [])
-        _default_walkable = {3, 5} - _wall_cols
-        walkable_colors_raw = list(_default_walkable) if _default_walkable else [3, 5]
+        _default_walkable -= _wall_cols
+        # Always strip labeled obstacle colors (step_counter HUD bar, etc.)
+        _default_walkable -= _obstacle_cols
+        walkable_colors_raw = list(_default_walkable) if _default_walkable else []
 
     walkable_colors: set[int] = set(walkable_colors_raw)
     # tracked_player_colors (from step loop) takes precedence over game_knowledge
@@ -1880,14 +2322,16 @@ async def run_episode(
     # execute the resulting action sequence. The planner is invoked again after
     # every level advance. We solve all the way to WIN, not just up to start_level.
     _levels_after_reset = obs_levels_completed(obs)
-    if env_id == "ls20" and _game is not None and not COMPETITION_MODE:
+    if env_id == "ls20" and _game is not None and (not COMPETITION_MODE or DEV_FAST_SKIP):
         from ls20_solver import plan_ls20_level
         log(f"[LS20-PLAN] Currently at level {_levels_after_reset + 1}/{_win_levels}. "
             f"Running per-level BFS planner.")
         AS = {a.name: a for a in env.action_space}
         _hard_step_cap = max_steps  # respect outer budget
         _local_steps = 0
-        while obs_levels_completed(obs) < _win_levels and _local_steps < _hard_step_cap:
+        # DEV_FAST_SKIP: only pre-solve up to level 1 (skip L1, hand L2+ to agent)
+        _presolver_target = 1 if (COMPETITION_MODE and DEV_FAST_SKIP) else _win_levels
+        while obs_levels_completed(obs) < _presolver_target and _local_steps < _hard_step_cap:
             cur_lvl_idx = obs_levels_completed(obs)
             try:
                 plan = plan_ls20_level(_game, cur_lvl_idx)
@@ -1961,6 +2405,9 @@ async def run_episode(
     _level_initial_frame: list = [row[:] for row in obs_frame(obs)]
     # Index in action_history where the current level started.
     _level_history_start: int = 0
+    # Index of the last maze-rotation event (diff 300-3000) that caused
+    # _level_initial_frame to be refreshed.  Starts at -1 (no rotation yet).
+    _level_initial_frame_rotation_idx: int = -1
     # Adaptive player color tracking: starts from game_knowledge.json prior but
     # updates if color-changers modify the player sprite color mid-level.
     # P1: seed from game_knowledge prior — no hardcoded color fallback.
@@ -2015,6 +2462,9 @@ async def run_episode(
     _blocked_actions: dict[tuple, set[str]] = {}  # pos → {action_name, ...}
     _last_player_pos: tuple | None = None
     _consecutive_skipped_cycles: int = 0  # dead-spin detection
+    # Counter management
+    _inferred_steps_dec: int = 1          # how much counter decrements per step
+    _counter_exhaustion_observed: bool = False  # rule observed flag
 
     log(f"\n{'-' * 50}")
     log(f"Episode {episode_num}  env={env_id}  model={DEFAULT_MODEL}")
@@ -2097,6 +2547,7 @@ async def run_episode(
                     # dynamic object discovery to detect consumed objects).
                     _level_initial_frame = [row[:] for row in obs_frame(obs)]
                     _level_history_start = len(action_history)
+                    _level_initial_frame_rotation_idx = -1  # no rotations yet
                     # Reset adaptive player color tracking for the new level —
                     # the player state (color, rotation) resets on level advance.
                     # P1: use game_knowledge prior, no hardcoded color fallback.
@@ -2172,6 +2623,61 @@ async def run_episode(
                 f"You MUST try DIFFERENT unblocked actions NOW."
             )
 
+        # --- Counter status block for MEDIATOR ----------------------------
+        # Inject step-counter budget awareness so the MEDIATOR understands
+        # the resource constraint and the ring refill mechanic.
+        _cb_gs = state_manager._data.get("concept_bindings") or {}
+        _gs_steps_dec = _inferred_steps_dec
+        if _gs_steps_dec >= 1:
+            # Estimate current counter from steps taken since last ring/reset.
+            # steps_since_reset is computed each cycle inside _compute_bfs_nav_dynamic;
+            # here we use a local estimate from action_history.
+            _levels_now_gs = obs_levels_completed(obs)
+            _lhs = _level_history_start
+            _hist_since_level = action_history[_lhs:] if _lhs < len(action_history) else []
+            # Read ring positions from structured fields, not from regex on prose.
+            _ring_positions_gs = [
+                tuple(p) for p in _cb_gs.get("confirmed_ring_positions", [])
+            ]
+            _prov_cands_gs = [
+                tuple(p) for p in _cb_gs.get("provisional_ring_candidates", [])
+                if tuple(p) not in set(_ring_positions_gs)
+            ]
+            # Read step_budget from concept_bindings (written by DYN), or game_knowledge.
+            _gk_gs = _load_default_gk_registry()
+            _gd_gs = (_gk_gs._data.get(env_id, {}) if _gk_gs is not None else {})
+            _step_budget_gs = (
+                _cb_gs.get("step_budget")
+                or _gd_gs.get("step_budget")
+                or 42
+            )
+            _steps_used_gs = len(_hist_since_level)
+            _moves_remaining_gs = max(0, (_step_budget_gs // _gs_steps_dec) - _steps_used_gs)
+            _counter_rule = _cb_gs.get("counter_exhaustion_rule")
+            _gs_ctr_lines = [
+                f"## Step Counter Status",
+                f"  steps_dec = {_gs_steps_dec}  "
+                f"(counter decrements by {_gs_steps_dec} per move)",
+                f"  moves_used_this_level ≈ {_steps_used_gs}  "
+                f"  moves_remaining ≈ {_moves_remaining_gs}",
+            ]
+            if _ring_positions_gs:
+                _gs_ctr_lines.append(
+                    f"  ring (counter-refill) tiles [CONFIRMED]: {list(_ring_positions_gs)} — "
+                    f"stepping on one resets counter to full ({_step_budget_gs} "
+                    f"= {_step_budget_gs // _gs_steps_dec} more moves)"
+                )
+            if _prov_cands_gs:
+                _gs_ctr_lines.append(
+                    f"  ring candidates [PROVISIONAL — visiting to confirm]: {list(_prov_cands_gs)}"
+                )
+            if _counter_rule:
+                _gs_ctr_lines.append(
+                    f"  ⚠ RULE (observed): counter=0 → level resets. "
+                    f"Ring tiles are MANDATORY waypoints when direct path > budget."
+                )
+            _gs += "\n" + "\n".join(_gs_ctr_lines)
+
         # ------------------------------------------------------------------
         # Round 1: OBSERVER
         # ------------------------------------------------------------------
@@ -2235,6 +2741,51 @@ async def run_episode(
         _bfs_direct_actions: list = []
         _bfs_direct_nav_str: str  = ""
         _bfs_direct_gk_str:  str  = ""
+        # Detect the most recent game reset (flash) and restore events.
+        # A game reset has two frames:
+        #   Flash  (pos=None, diff>=3000): maze is wiped/all-white.
+        #   Restore(pos≠None, diff>=3000): maze is restored to rotation-0.
+        # We capture _level_initial_frame at the RESTORE frame (not flash),
+        # because _curr_frame at the flash cycle is the all-white flash image
+        # which yields zero candidates.
+        _main_last_reset_idx: int = -1   # flash frame idx (for loop skip)
+        _main_last_restore_idx: int = -1  # restore frame idx (for capture)
+        _main_current_levels: int = obs_levels_completed(obs)
+        for _ri_mr, _rs_mr in enumerate(action_history):
+            if _ri_mr < _level_history_start:
+                continue
+            if (_rs_mr.get("diff", 0) >= 3000
+                    and _rs_mr.get("levels", 0) == _main_current_levels):
+                if _rs_mr.get("player_pos") is None:
+                    _main_last_reset_idx = _ri_mr   # flash
+                else:
+                    _main_last_restore_idx = _ri_mr  # restore
+        # On a new restore (more recent than the last rotation refresh),
+        # capture the current frame (which is the rotation-0 maze) as
+        # _level_initial_frame so build_level_model gets correct candidates.
+        if (_main_last_restore_idx >= 0
+                and _main_last_restore_idx > _level_initial_frame_rotation_idx):
+            _level_initial_frame = [row[:] for row in _curr_frame]
+            _level_initial_frame_rotation_idx = _main_last_restore_idx
+            print(f"  [DYN] Game restore at idx {_main_last_restore_idx}; "
+                  f"reset level_initial_frame to rotation-0 frame", flush=True)
+        # After a maze rotation (diff 300-3000), refresh _level_initial_frame
+        # to the current frame so that build_level_model computes candidates
+        # from the rotated maze layout.  Without this, candidates reflect the
+        # pre-rotation configuration and miss new PUSH_PAD positions.
+        # Skip events at or before the last game reset flash to avoid
+        # re-applying pre-reset rotations to the now-restored rotation-0 maze.
+        for _ri_rot, _rs_rot in enumerate(action_history):
+            if _ri_rot < _level_history_start:
+                continue
+            if _ri_rot <= _main_last_reset_idx:
+                continue  # skip pre-reset rotation events
+            if 300 < _rs_rot.get("diff", 0) <= 3000:
+                if _ri_rot > _level_initial_frame_rotation_idx:
+                    _level_initial_frame = [row[:] for row in _curr_frame]
+                    _level_initial_frame_rotation_idx = _ri_rot
+                    print(f"  [DYN] Refreshed level_initial_frame after rotation "
+                          f"at history idx {_ri_rot}", flush=True)
         if COMPETITION_MODE:
             _gk_pre = _load_default_gk_registry()
             _bfs_direct_nav_str = _compute_bfs_nav_section(
@@ -2774,6 +3325,40 @@ async def run_episode(
                 _consecutive_stuck_steps = 0
                 _last_stuck_actions = []
 
+            # --- Counter management: infer steps_dec + detect exhaustion ----
+            # 1) Infer steps_dec from the step-counter bar's size change.
+            #    The bar color is the concept with role="step_counter".
+            #    Each step: bar_size decreases by bar_height × steps_dec ≈ 2×steps_dec.
+            _cb_ctr = state_manager._data.get("concept_bindings") or {}
+            _sc_color_ctr = next(
+                (k for k, v in _cb_ctr.items()
+                 if isinstance(k, int) and isinstance(v, dict)
+                 and v.get("role") == "step_counter"),
+                None,
+            )
+            # steps_dec inference moved to after obj_diff (see below)
+
+            # 2) Detect counter exhaustion: large diff (level restart) at same
+            #    level means counter hit 0.  Inject rule into goals once.
+            if _step_diff >= 3000 and levels_after == levels_before:
+                if not _counter_exhaustion_observed:
+                    _counter_exhaustion_observed = True
+                    log("    [COUNTER] Rule observed: step_counter=0 → level_reset")
+                    _exc_g = goal_manager.push(
+                        description=(
+                            "⚠ OBSERVED RULE: When the step counter reaches 0 the "
+                            "level RESETS — all progress lost, player returns to "
+                            "start. To complete the level you MUST prevent counter "
+                            "exhaustion. Ring (refill) tiles reset the counter back "
+                            "to full — treat them as MANDATORY waypoints when the "
+                            "direct path to RC/WIN exceeds the remaining budget."
+                        ),
+                        priority=1,
+                        parent_id=top_goal_id,
+                    )
+                    goal_manager.activate(_exc_g.id)
+                    ep_log._write("  [COUNTER] counter_exhaustion_rule observed and injected as goal")
+
             # Always-on progress line: step / action / diff / player pos / levels.
             # P1: use _tracked_player_colors (adaptive), not re-read from gk.
             try:
@@ -2855,6 +3440,75 @@ async def run_episode(
             obj_diff = diff_objects(frame_before, curr_frame)
             obj_summary = format_object_diff(obj_diff)
 
+            # --- steps_dec inference: use THIS step's attribute_changes only ---
+            # Reading from obj_diff avoids mixing L1/L2 historical data that
+            # caused flip-flopping when iterating all action_effects.
+            # Skip inference on large-diff steps (RC visits/maze rotations) — the
+            # bar can GROW after a rotation (counter replenished), which would give
+            # a negative delta and confuse the formula.
+
+            # Auto-detect step_counter color when not yet labeled by OBSERVER.
+            # A step_counter is a HUD bar that shrinks by a consistent small
+            # amount on every normal step (diff < 80).  Detect it from obj_diff
+            # attribute_changes and write to concept_bindings so the next cycle
+            # can use it for provisional ring detection.
+            if _sc_color_ctr is None and _step_diff < 80:
+                for _ac_auto in obj_diff.attribute_changes:
+                    if "size" not in (_ac_auto.changed or []):
+                        continue
+                    _sz_b_auto = getattr(_ac_auto.before, "size", 0)
+                    _sz_a_auto = getattr(_ac_auto.after,  "size", 0)
+                    # Bar shrank by a small consistent amount → likely step counter.
+                    # Must be sizeable (> 20px) to exclude noise, and shrink by 1-10px.
+                    if _sz_b_auto > 20 and 1 <= (_sz_b_auto - _sz_a_auto) <= 10:
+                        _cb_auto = state_manager._data.setdefault("concept_bindings", {})
+                        if not isinstance(_cb_auto.get(_ac_auto.color), dict):
+                            _cb_auto[_ac_auto.color] = {}
+                        if _cb_auto[_ac_auto.color].get("role") != "step_counter":
+                            _cb_auto[_ac_auto.color]["role"] = "step_counter"
+                            _sc_color_ctr = _ac_auto.color  # use immediately this step
+                            log(f"    [COUNTER] Auto-detected step_counter = color{_ac_auto.color} "
+                                f"(size {_sz_b_auto}→{_sz_a_auto})")
+                        break
+
+            if _sc_color_ctr is not None:
+                for _ac_sd in obj_diff.attribute_changes:
+                    if _ac_sd.color == _sc_color_ctr and "size" in (_ac_sd.changed or []):
+                        _sz_b_sd = getattr(_ac_sd.before, "size", 0)
+                        _sz_a_sd = getattr(_ac_sd.after,  "size", 0)
+                        if _sz_b_sd > _sz_a_sd > 0:
+                            # Bar SHRANK → normal step; infer steps_dec.
+                            _d_sd = max(1, round((_sz_b_sd - _sz_a_sd) / 2))
+                            if _d_sd != _inferred_steps_dec:
+                                _inferred_steps_dec = _d_sd
+                                log(f"    [COUNTER] steps_dec={_d_sd} "
+                                    f"(bar {_sz_b_sd}→{_sz_a_sd}, current step only)")
+                            # Persist to concept_bindings so _compute_bfs_nav_dynamic
+                            # uses the correct effective budget on the next cycle.
+                            _cb_sd = state_manager._data.setdefault("concept_bindings", {})
+                            _cb_sd["steps_dec"] = _inferred_steps_dec
+                        elif _sz_a_sd > _sz_b_sd > 0:
+                            # Bar GREW → counter was refilled.  The ring tile is the
+                            # position the player JUST stepped onto (current position),
+                            # not the previous position.  Confirm it empirically.
+                            _cb_sd = state_manager._data.setdefault("concept_bindings", {})
+                            _prov_sd = [tuple(p) for p in _cb_sd.get("provisional_ring_candidates", [])]
+                            _conf_sd = {tuple(p) for p in _cb_sd.get("confirmed_ring_positions", [])}
+                            # Use current player position (where player IS now = where ring is)
+                            _ring_pos_sd = _ppos2
+                            # Fallback: previous position if current is unavailable
+                            if _ring_pos_sd is None and action_history:
+                                _ring_pos_sd = action_history[-1].get("player_pos")
+                            if _ring_pos_sd is not None:
+                                _ring_pt_sd = tuple(_ring_pos_sd)
+                                if _ring_pt_sd in set(_prov_sd) and _ring_pt_sd not in _conf_sd:
+                                    _cb_sd.setdefault("confirmed_ring_positions", []).append(
+                                        list(_ring_pt_sd)
+                                    )
+                                    log(f"    [RING] CONFIRMED ring at {_ring_pt_sd} "
+                                        f"(bar grew {_sz_b_sd}→{_sz_a_sd})")
+                        break  # only one step_counter object per frame
+
             # Track which colors have ever moved (used by structural context)
             known_dynamic_colors.update(
                 m.obj.color for m in obj_diff.moved if not m.obj.is_background
@@ -2864,7 +3518,10 @@ async def run_episode(
             # After first moves, use moved objects as candidates. Filter out
             # step_counter and stationary objects (which change size but don't
             # translate). Also corrects bad inferences that include background.
-            if _step_diff > 20:
+            # Skip inference on large-diff steps (maze rotation / RC visit):
+            # during maze rotation ALL objects appear to move, making uniqueness
+            # filtering unreliable — don't override a known good prior.
+            if _step_diff > 20 and _step_diff < 300:
                 # Collect moved objects that look like player pieces
                 _player_candidates: list[tuple[int, int]] = []  # (color, obj_size)
                 for m in obj_diff.moved:
@@ -3133,6 +3790,53 @@ async def run_episode(
                         log(f"    [GOAL] urgency goal pushed: {pred[:80]}")
                         ep_log._write(f"  [GOAL URGENT] {pred}")
 
+            # --- Counter-management subgoal --------------------------------
+            # Goal chain: "complete level" requires "level must not end"
+            # requires "counter must not reach 0" requires "visit ring if
+            # direct path exceeds budget".  Push this as an explicit subgoal
+            # when the budget is critically low and ring positions are known.
+            _cb_cmg = state_manager._data.get("concept_bindings") or {}
+            _ring_mech = _cb_cmg.get("ring_refill_mechanic")
+            if _ring_mech and _inferred_steps_dec > 1:
+                # Estimate moves remaining at this cycle
+                _lhs_cmg = _level_history_start
+                _steps_so_far_cmg = len(action_history) - _lhs_cmg
+                _eff_budget_cmg = 42 // _inferred_steps_dec
+                _moves_left_cmg = max(0, _eff_budget_cmg - _steps_so_far_cmg)
+                # Push counter-management subgoal when < 60% budget remains
+                # and it hasn't been pushed yet this cycle
+                _ctr_mgmt_threshold = max(3, _eff_budget_cmg * 2 // 5)
+                _ctr_goal_desc_prefix = "COUNTER BUDGET:"
+                _already_ctr = any(
+                    _ctr_goal_desc_prefix in g.description
+                    for g in goal_manager._goals
+                    if g.status in ("active", "pending")
+                )
+                if _moves_left_cmg <= _ctr_mgmt_threshold and not _already_ctr:
+                    import re as _re2
+                    _ring_coords_cmg = _re2.findall(r'\((\d+),\s*(\d+)\)', _ring_mech)
+                    _ring_coords_cmg = [(int(c), int(r)) for c, r in _ring_coords_cmg]
+                    _cmg = goal_manager.push(
+                        description=(
+                            f"COUNTER BUDGET: Only ~{_moves_left_cmg} moves remain "
+                            f"(steps_dec={_inferred_steps_dec}, budget={_eff_budget_cmg}). "
+                            f"Direct path to RC/WIN likely exceeds budget. "
+                            f"SUBGOAL: Navigate to ring (counter-refill) tile at "
+                            f"{_ring_coords_cmg} BEFORE the counter hits 0. "
+                            f"The BFS computed path already routes via the ring — "
+                            f"FOLLOW IT EXACTLY."
+                        ),
+                        priority=1,
+                        parent_id=top_goal_id,
+                    )
+                    goal_manager.activate(_cmg.id)
+                    log(f"    [GOAL] counter-management goal pushed "
+                        f"({_moves_left_cmg} moves left, ring={_ring_coords_cmg})")
+                    ep_log._write(
+                        f"  [GOAL COUNTER] budget critical: {_moves_left_cmg} moves "
+                        f"left, ring={_ring_coords_cmg}"
+                    )
+
             _step_proc_ms = int((time.time() - _step_t0) * 1000)
 
             data_str = f" {data}" if data else ""
@@ -3203,6 +3907,7 @@ async def run_episode(
                         concept_bindings=_cb_uc,
                         history_start_idx=_level_history_start,
                         last_reset_idx=-1,
+                        start_levels=_completed_level - 1,
                     )
                     # Count confirmed RC visits in this level cycle
                     _rc_set_uc = {tuple(p) for p in _model_uc.rc_positions}

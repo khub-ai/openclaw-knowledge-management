@@ -1099,16 +1099,14 @@ def detect_arena_delta(
                 "color": color,
                 "size": aft.size,
                 "centroid": aft.centroid,
-                "bbox": {"r_min": aft.r_min, "r_max": aft.r_max,
-                         "c_min": aft.c_min, "c_max": aft.c_max},
+                "bbox": aft.bbox,
             })
         elif bef is not None and aft is None:
             disappeared.append({
                 "color": color,
                 "size": bef.size,
                 "centroid": bef.centroid,
-                "bbox": {"r_min": bef.r_min, "r_max": bef.r_max,
-                         "c_min": bef.c_min, "c_max": bef.c_max},
+                "bbox": bef.bbox,
             })
         elif bef is not None and aft is not None:
             delta = aft.size - bef.size

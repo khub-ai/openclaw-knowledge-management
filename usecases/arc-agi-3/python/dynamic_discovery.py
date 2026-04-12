@@ -621,6 +621,7 @@ def build_level_model(
     history_start_idx: int = 0,
     last_reset_idx: int = -1,
     blocked_positions: set[tuple] | None = None,
+    start_levels: int = 0,
 ) -> LevelModel:
     """
     Build a LevelModel from frame analysis, action history, and concept bindings.
@@ -647,6 +648,9 @@ def build_level_model(
     concept_bindings : dict {color_int: {"role": str, ...}} or {color_int: str}.
     history_start_idx: index in action_history where this level started.
     last_reset_idx   : index of last game-reset (life lost) in action_history.
+    start_levels     : levels_completed count at the start of this level.
+                       Prevents false win_gate detection when presolve steps
+                       are not recorded in action_history.
     """
     model = LevelModel()
 
@@ -740,17 +744,32 @@ def build_level_model(
 
     # --- History analysis --------------------------------------------------
     visited_set: set[tuple] = set()
-    prev_levels = 0
+    # Initialize prev_levels to start_levels (not 0) so that the first step in
+    # action_history doesn't falsely trigger win_gate detection.  When presolve
+    # steps are executed outside the main loop they are not appended to
+    # action_history, so history_start_idx=0 and the first entry already has
+    # levels=start_levels — without this init, curr_levels > prev_levels would
+    # fire a false positive on the first entry.
+    prev_levels = start_levels
 
     prev_diff = 0  # diff of the immediately preceding step
+    # prev_pos: player position from the previous step.  Because action_history
+    # records state_after (where the player IS after teleport), not state_before
+    # (where they stood when they triggered the PUSH_PAD), the actual trigger
+    # position is always one step back — i.e. prev_pos.
+    prev_pos: Optional[tuple] = None
     for i, step in enumerate(action_history):
         if i < history_start_idx:
             prev_levels = step.get("levels", 0)
             prev_diff   = step.get("diff", 0)
+            _pp = step.get("player_pos")
+            if _pp is not None:
+                prev_pos = tuple(_pp)
             continue
         if i <= last_reset_idx:
             prev_levels = step.get("levels", 0)
             prev_diff   = 0  # invalidate diff across a reset boundary
+            prev_pos    = None  # don't carry stale position across a reset
             continue
 
         ppos = step.get("player_pos")
@@ -761,21 +780,33 @@ def build_level_model(
             pos = tuple(ppos)
             visited_set.add(pos)
 
-            # Win gate: level advanced while standing here
+            # Win gate: level advanced — use prev_pos (the PUSH_PAD trigger
+            # position) rather than pos (the teleport landing position).
+            # action_history stores state_after, so pos is where the player
+            # landed after the trigger; prev_pos is where they stood before.
             if curr_levels > prev_levels:
+                trigger = prev_pos if prev_pos is not None else pos
                 if model.win_gate is None:
-                    model.win_gate = pos
+                    model.win_gate = trigger
 
             # RC: large diff at ANY visited position, no level advance.
+            # Same reasoning: use prev_pos as the trigger position.
             # Only classify if the PREVIOUS step's diff was NOT already large —
             # rotation animations span 2 frames, so the step after the trigger
             # also shows diff>80 (lagging residual). We only want the first step.
-            elif diff > 80 and prev_diff <= 80:
-                if pos not in model.rc_positions:
-                    model.rc_positions.append(pos)
+            # Threshold: RC visits cause diff > 300 (full maze rotation = many objects move).
+            # Ring refills only change the step-counter bar → diff ~ 80-200 (excluded).
+            # Upper bound 3000: game-reset restore frames have diff ~4000 and must NOT
+            # be classified as RC visits (they are level-reset artifacts, not PUSH_PADs).
+            elif 300 < diff <= 3000 and prev_diff <= 300:
+                trigger = prev_pos if prev_pos is not None else pos
+                if trigger not in model.rc_positions:
+                    model.rc_positions.append(trigger)
 
         prev_diff   = diff
         prev_levels = curr_levels
+        if ppos is not None:
+            prev_pos = tuple(ppos)
 
     # --- Ring detection from frame disappearance ---------------------------
     rc_pos_set = set(map(tuple, model.rc_positions))
