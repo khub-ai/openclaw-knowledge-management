@@ -442,10 +442,133 @@ without getting trapped in simulator complexity — and without the "toy environ
 
 ---
 
-## 14. Why This Use Case Matters
+## 14. Competitive Landscape — Who Is Doing What
 
-If this works, it would support a strong broader thesis:
+Understanding what adjacent systems have already demonstrated is important for positioning KF's contribution clearly and avoiding redundant work.
 
-**embodied systems need more than perception and control; they need an explicit runtime knowledge layer for long-horizon adaptive behavior.**
+### Category 1 — Memory architecture for embodied agents
 
-That is where KF could become genuinely important in robotics.
+**RoboMemory** (arxiv 2025) is the closest published system on the memory side. It unifies spatial, temporal, episodic, and semantic memory under a brain-inspired architecture (thalamus-like preprocessor, hippocampus-like memory, prefrontal-lobe-like planner) built on a dynamic knowledge graph. It outperforms Claude 3.5 Sonnet by 5% on EmbodiedBench. **Gap vs KF**: purely a memory architecture — no operator-facing correction mechanism, no governance, no scoping or audit. Knowledge accumulates but cannot be safely corrected or revoked.
+
+**MemoryOS / MemOS** (MemTensor, 2025) is a memory OS for LLM agents with persistent skill memory and cross-task reuse, similar in spirit to KF's procedure store. **Gap vs KF**: agent-focused rather than embodied-robot-focused; no hazard-aware safety layer; no correction governance.
+
+**ArmarX memory system** (KIT, ongoing academic) — long-running project on robot cognitive memory with episodic, semantic, and procedural stores. **Gap vs KF**: research prototype; not designed around operator-facing corrections or safety governance.
+
+### Category 2 — Cross-platform / multi-robot OS
+
+**EMOS** (NUS/HKU, ICLR 2025) is the most directly comparable system on the cross-platform angle. It is a heterogeneous multi-robot OS where LLM agents read robot URDF files to generate "robot resumes" (self-descriptions of physical capability), then use those for embodiment-aware task assignment across robots of different types. It benchmarks on Habitat-MAS (manipulation, perception, navigation, multi-floor rearrangement). **Gap vs KF**: EMOS is a planner and task dispatcher — it has no persistent knowledge across sessions, no operator correction mechanism, no governed memory layer. It answers "which robot should do this?" not "what has this robot learned across deployments?"
+
+### Category 3 — LLM planner + feedback loop (foundational work)
+
+These are the systems KF builds on top of:
+
+- **SayCan** (Google, 2022) — LLM skill selection grounded by affordance value functions. Proved LLM+skills on real robots. Stateless; no persistent memory; no correction.
+- **Inner Monologue** (Google, 2022) — closed-loop environment feedback to LLM planners. Better recovery and replanning. Still stateless per-episode; no persistence; no operator correction.
+- **Voyager** (NVIDIA, 2023) — skill library accumulation in Minecraft. Closest in spirit to KF's procedure store. Game-environment only; no safety/governance; no operator correction; no cross-session belief state.
+
+### Category 4 — Industry players
+
+No major embodied-AI company has published a systematic answer to cross-session memory and governed correction at the task level:
+
+| Company | Focus | Gap |
+|---|---|---|
+| Figure / OpenAI | End-to-end VLA, stateless per-episode | No persistent memory, no correction governance |
+| Physical Intelligence (π0) | Generalist VLA policy | Same — no cross-session layer |
+| 1X (NEO) | Cautious household deployment + teleoperation backup | Governance is human-in-the-loop, not systematic |
+| Agility Robotics (Digit) | Warehouse deployment | Workspace rules are hard-coded, not learned or correctable |
+| Boston Dynamics (Spot) | Cloud-assisted mission scripting | Mission scripting only; no learned/correctable knowledge |
+
+The pattern is consistent: everyone is investing in perception and control (VLA), and no one has a published, systematic solution to cross-session memory + governed correction at the task level.
+
+### Where KF's unoccupied territory is
+
+```
+                        PERSISTENT    GOVERNED     CROSS-         SAFETY-
+                        MEMORY        CORRECTIONS  PLATFORM       GOVERNED
+                                                   (cognitive OS) RULES
+────────────────────────────────────────────────────────────────────────────
+RoboMemory               ✓             ✗            ✗              ✗
+MemoryOS                 ✓             ✗            ✗              ✗
+EMOS                     ✗             ✗            ✓              ✗
+SayCan / InnerMonologue  ✗             ✗            ✗              ✗
+Voyager                  ✓ (skills)    ✗            ✗              ✗
+Industry VLAs            ✗             ✗            ✗              ✗
+KF (proposed)            ✓             ✓            ✓              ✓
+```
+
+The governed corrections + cross-platform + safety column is genuinely unoccupied by any published system. The positioning statement:
+
+> "RoboMemory and MemoryOS show that persistent memory improves embodied-agent performance. EMOS shows that a cross-platform cognitive layer is tractable. KF combines both and adds the missing dimension neither addresses: governed, auditable, safely-scoped operator corrections that persist and compose across sessions and platforms."
+
+The editorial "The Robot in Your Living Room Has No Rulebook" (AI Frontiers, 2025) directly names this gap and effectively writes the motivation section.
+
+---
+
+## 15. KF As A Cross-Robot Cognitive OS
+
+The longer-term strategic opportunity is not a memory layer for one robot — it is infrastructure that the embodied-AI industry is missing above the skill layer, comparable to what an OS kernel provides above hardware.
+
+### Why the abstraction is tractable
+
+Every major humanoid (and wheeled robot) exposes a similar semantic API boundary, just with different names and transports:
+
+| Robot | High-level API | Transport |
+|---|---|---|
+| Unitree R1 / G1 | `LocoClient`, `ArmActionClient` | DDS / JSON-RPC |
+| Boston Dynamics Spot | `RobotCommandClient`, `GraphNavClient` | gRPC |
+| Agility Digit | ROS 2 action servers | ROS 2 DDS |
+| Fourier GR-1 / GR-2 | `FourierClient` skill API | ROS 2 / WebSocket |
+| Hello Robot Stretch | `robot.move_to()`, `robot.arm` | ROS 2 |
+| Figure 02 / 1X NEO | Proprietary skill API | LAN WebSocket |
+
+The pattern is universal: discrete named skills + structured observation return + DDS or ROS 2 transport. If KF's planner speaks to a **Robot Adapter Interface (RAI)** that normalizes these, the cognitive layer above never needs to know which robot it's running on.
+
+### Proposed architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│              KF COGNITIVE OS                          │
+│  Belief state │ Goal manager │ Correction governance  │
+│  Procedure store │ Audit log │ Planner (LLM)          │
+└──────────────────┬───────────────────────────────────┘
+                   │  Robot Adapter Interface (RAI)
+                   │  Standard schema:
+                   │   skill_call(name, params) → outcome
+                   │   observe() → BeliefUpdate
+                   │   alert(type, payload)
+        ┌──────────┴───────────────┬────────────────┐
+        ▼                          ▼                ▼
+  [Unitree Adapter]       [Spot Adapter]    [Sim Adapter]
+  LocoClient / ArmClient  gRPC GraphNav     AI2-THOR / ALFWorld
+  DDS                     ROS 2             Python API
+```
+
+The RAI is approximately 200–400 lines per robot adapter — largely a skill-name mapping and an observation schema normalizer. The cognitive layer is written once.
+
+### What makes this tractable
+
+- The hard part (locomotion, manipulation, perception) is already solved per-robot. KF does not touch it.
+- Skill granularity is similar across platforms: `move_to`, `pick`, `place`, `inspect`, `ask` are universal task-level primitives.
+- Observation schemas are structurally similar across platforms: location, visible objects, task status, blocked routes — field names differ but semantics don't.
+
+### What makes this non-trivial
+
+- Timing and failure semantics differ. Spot's action server provides preemption hooks; Unitree's DDS is more fire-and-observe. The RAI must absorb this.
+- Safety estop integration is robot-specific and must stay in the adapter, not in KF.
+- Object models differ (Spot's GraphNav uses waypoints; AI2-THOR uses instance IDs; real cameras need object detection). The VLM/perception layer needs its own normalization alongside the RAI.
+
+### The compelling simulator proof
+
+The cross-robot claim is uniquely well-suited to simulation — in fact, sim is better than hardware here because you can run multiple robot adapters in the same test harness. A convincing demonstration runs **the same KF cognitive layer, unmodified, against two or three different sim adapters** — e.g., AI2-THOR, a warehouse-layout ProcTHOR environment, and a minimal adapter mimicking Spot's GraphNav API — showing identical correction-governance behavior, identical belief-state management, and identical audit trails across all three. The cognitive layer does not change. The adapter for each is under 300 lines. That is a clean, falsifiable, peer-legible claim and it requires no hardware.
+
+---
+
+## 16. Why This Use Case Matters
+
+The broader thesis this use case supports:
+
+**Embodied systems need more than perception and control. They need an explicit runtime knowledge layer for long-horizon adaptive behavior — one that is persistent, correctable, governed, and portable across platforms.**
+
+That is the gap KF targets. RoboMemory and MemoryOS are beginning to address persistence. EMOS is beginning to address cross-platform task allocation. No published system addresses the full combination — and correction governance in particular is completely open territory.
+
+If this works, KF has a credible path from a simulator benchmark to a cognitive OS substrate that any robot team deploying above the skill layer would want to adopt.
