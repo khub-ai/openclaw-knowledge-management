@@ -15,8 +15,9 @@
 > or data collection required — Phase 1 runs directly on the
 > [SeaDronesSee](https://github.com/Ben93kie/SeaDronesSee) public dataset.
 >
-> **Also see**: [Robotics Use Case Overview](../README.md) for the broader
-> context of Knowledge Fabric in embodied systems.
+> **Also see**: [AI Fleets Use Case Overview](../README.md) for the broader
+> pattern — hierarchical AI fleets across maritime SAR, hospital networks,
+> industrial IoT, and other large-scale deployments.
 
 ---
 
@@ -365,7 +366,7 @@ pip install transformers        # Qwen3-VL-8B (commander PUPIL)
 git clone https://github.com/Ben93kie/SeaDronesSee data/seadronessee
 
 # Run a standalone DD session (no simulator required)
-cd usecases/robotics/drone-swarm/python
+cd usecases/ai-fleets/drone-swarm/python
 python run_dd_session.py \
     --failure-image path/to/scout_frame_s22.jpg \
     --confirmation "Thermal camera confirmed 37°C human heat signature at these coordinates" \

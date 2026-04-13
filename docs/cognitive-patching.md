@@ -258,7 +258,7 @@ protocol.
 
 ## See Also
 
-- [SeaPatch README](../usecases/robotics/drone-swarm/README.md) — scenario and motivation
-- [SeaPatch DESIGN](../usecases/robotics/drone-swarm/DESIGN.md) — implementation architecture
-- [SeaPatch POSITIONING](../usecases/robotics/drone-swarm/POSITIONING.md) — marketing narrative and claim framing
+- [SeaPatch README](../usecases/ai-fleets/drone-swarm/README.md) — scenario and motivation
+- [SeaPatch DESIGN](../usecases/ai-fleets/drone-swarm/DESIGN.md) — implementation architecture
+- [SeaPatch POSITIONING](../usecases/ai-fleets/drone-swarm/POSITIONING.md) — marketing narrative and claim framing
 - [DD Patchability](./patchability.md) — predicting whether DD will work in a new domain

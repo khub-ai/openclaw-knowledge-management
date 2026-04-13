@@ -5,7 +5,7 @@ reformulation logic in agents.py.
 Uses a mocked LLM call — no API calls required.
 
 Run from repo root:
-    python -m pytest usecases/robotics/drone-swarm/python/tests/test_agents_grounding.py -v
+    python -m pytest usecases/ai-fleets/drone-swarm/python/tests/test_agents_grounding.py -v
 """
 from __future__ import annotations
 

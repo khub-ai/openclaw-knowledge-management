@@ -5,7 +5,7 @@ No LLM calls, no dataset required. Tests COCO annotation parsing, frame
 selection, and pool directory output.
 
 Run from repo root:
-    python -m pytest usecases/robotics/drone-swarm/python/tests/test_pool_builder.py -v
+    python -m pytest usecases/ai-fleets/drone-swarm/python/tests/test_pool_builder.py -v
 """
 from __future__ import annotations
 

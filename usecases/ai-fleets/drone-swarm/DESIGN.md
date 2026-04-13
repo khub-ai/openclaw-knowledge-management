@@ -439,7 +439,7 @@ All three are available from SeaDronesSee without any additional data collection
 ## 9. Repository Layout
 
 ```
-usecases/robotics/drone-swarm/
+usecases/ai-fleets/drone-swarm/
 ├── README.md                    ← User-facing scenario and motivation
 ├── DESIGN.md                    ← This file
 ├── knowledge_base/

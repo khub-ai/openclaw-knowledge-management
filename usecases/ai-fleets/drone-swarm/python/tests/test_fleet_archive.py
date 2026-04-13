@@ -4,7 +4,7 @@ test_fleet_archive.py — Unit tests for fleet.py and archive.py.
 No LLM calls. Tests pure Python state management logic.
 
 Run from repo root:
-    python -m pytest usecases/robotics/drone-swarm/python/tests/test_fleet_archive.py -v
+    python -m pytest usecases/ai-fleets/drone-swarm/python/tests/test_fleet_archive.py -v
 """
 from __future__ import annotations
 
