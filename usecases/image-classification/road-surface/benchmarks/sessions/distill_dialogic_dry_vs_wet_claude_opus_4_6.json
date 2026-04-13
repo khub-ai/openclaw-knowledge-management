@@ -1,0 +1,555 @@
+{
+  "pair": "dry_vs_wet",
+  "pupil_model": "qwen/qwen3-vl-8b-instruct",
+  "tutor_model": "claude-opus-4-6",
+  "validator_model": "claude-sonnet-4-6",
+  "max_rounds": 4,
+  "pool_size_per_class": 10,
+  "transcripts": [
+    {
+      "image_id": "20220323194758946",
+      "correct_label": "Dry Road",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When [preconditions], classify as Dry Road.",
+              "preconditions": [
+                "Individual stone aggregate particles are distinctly visible across the entire surface as a fine-grained speckled pattern of gray, green-gray, and dark gray tones with sharp edges between particles",
+                "The surface has a uniform matte finish with no localized bright spots, glare streaks, or mirror-like reflective patches anywhere in the image",
+                "No pooled areas, glossy ribbons, or smooth translucent film obscuring the granular texture — the interstitial spaces between aggregate particles remain visibly dry and textured throughout"
+              ],
+              "rationale": "The PUPIL mistook a naturally dark-colored aggregate surface for wetness. Dark pavement can appear 'dark and glossy' at first glance, but the key discriminator is whether individual aggregate particles and their boundaries remain sharply visible with a matte finish. On a truly wet road, water fills the voids between aggregate, creating a smooth reflective film that obscures individual stone texture and produces specular highlights or mirror-like reflections. Here, the speckled multi-tonal texture (gray, green-gray, charcoal) with clearly defined individual aggregate grains and no reflective sheen confirms a dry surface. The overall darkness is simply the natural color of the bituminous binder and aggregate mix, not moisture-induced darkening."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a fine-grained speckled surface with individual aggregate particles clearly visible in gray, green-gray, and dark gray tones with distinct edges. The finish is uniformly matte with no bright spots, glare streaks, or reflective patches. There are no pooled areas, glossy ribbons, or smooth films obscuring the granular texture; interstitial spaces between particles appear dry and textured throughout."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a fine-grained speckled surface with individual aggregate particles clearly visible in gray, green-gray, and dark gray tones with distinct edges. The finish is uniformly matte with no bright spots, glare streaks, or reflective patches. There are no pooled areas, glossy ribbons, or smooth films obscuring the granular texture; interstitial spaces between particles appear dry and textured throughout."
+        }
+      ],
+      "final_rule": {
+        "rule": "When [preconditions], classify as Dry Road.",
+        "feature": "dark_aggregate_matte_texture_no_reflections",
+        "favors": "Dry Road",
+        "confidence": "high",
+        "preconditions": [
+          "Individual stone aggregate particles are distinctly visible across the entire surface as a fine-grained speckled pattern of gray, green-gray, and dark gray tones with sharp edges between particles",
+          "The surface has a uniform matte finish with no localized bright spots, glare streaks, or mirror-like reflective patches anywhere in the image",
+          "No pooled areas, glossy ribbons, or smooth translucent film obscuring the granular texture — the interstitial spaces between aggregate particles remain visibly dry and textured throughout"
+        ],
+        "rationale": "The PUPIL mistook a naturally dark-colored aggregate surface for wetness. Dark pavement can appear 'dark and glossy' at first glance, but the key discriminator is whether individual aggregate particles and their boundaries remain sharply visible with a matte finish. On a truly wet road, water fills the voids between aggregate, creating a smooth reflective film that obscures individual stone texture and produces specular highlights or mirror-like reflections. Here, the speckled multi-tonal texture (gray, green-gray, charcoal) with clearly defined individual aggregate grains and no reflective sheen confirms a dry surface. The overall darkness is simply the natural color of the bituminous binder and aggregate mix, not moisture-induced darkening."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 5,
+        "fp": 8,
+        "tn": 2,
+        "fn": 5,
+        "precision": 0.385,
+        "recall": 0.5,
+        "accepted": false,
+        "rejection_reason": "fp=8 > 0",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed",
+      "tighten_history": [
+        {
+          "step": "contrastive_analysis",
+          "discriminating_feature": null,
+          "description": "Cannot identify a reliable discriminating feature.",
+          "present_in": null,
+          "confidence": "low"
+        },
+        {
+          "step": "spectrum_generation",
+          "n_levels": 4,
+          "levels": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "n_preconditions": 1
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "n_preconditions": 2
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "n_preconditions": 3
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "n_preconditions": 4
+            }
+          ]
+        },
+        {
+          "step": "batch_validation",
+          "results": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "tp": 7,
+              "fp": 9,
+              "precision": 0.438,
+              "accepted": false
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "tp": 5,
+              "fp": 8,
+              "precision": 0.385,
+              "accepted": false
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            }
+          ]
+        },
+        {
+          "step": "selected_level",
+          "level": null,
+          "outcome": "no_level_passed"
+        }
+      ]
+    },
+    {
+      "image_id": "202203152005281",
+      "correct_label": "Dry Road",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When [preconditions], classify as Dry Road.",
+              "preconditions": [
+                "Surface appears as a uniform medium-to-dark gray with a granular, matte texture where individual aggregate particles or fine gritty texture is discernible across the entire frame",
+                "No localized bright white or sky-colored specular highlights, mirror-like streaks, or glossy sheen patches are visible anywhere on the surface",
+                "The overall tonal variation across the surface is subtle and diffuse (slightly lighter or darker gray patches) rather than sharp contrast between bright reflected spots and dark surrounding areas"
+              ],
+              "rationale": "The PUPIL mistook a naturally dark-toned dry asphalt surface for wetness. Dry pavement can appear dark gray, especially with dense-graded or newer asphalt mixes, but it retains a matte, granular texture throughout. Truly wet surfaces produce specular (mirror-like) reflections that show bright highlights of the sky or surroundings contrasting sharply against dark water film. In this image, the surface is uniformly matte gray with visible fine aggregate texture and no specular highlights whatsoever — the tonal shifts are soft and diffuse, consistent with dry pavement under overcast or low light rather than a wet reflective film. The key discriminator is the absence of any glossy, mirror-like reflection patches; dark color alone does not indicate wetness."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The surface displays a uniform medium-to-dark gray with a granular, matte texture where individual aggregate particles are discernible across the entire frame. There are no specular highlights, mirror-like streaks, or glossy sheen patches visible. The tonal variation is subtle and diffuse, with slightly lighter and darker gray patches rather than sharp bright-dark contrasts, consistent with a dry road surface."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The surface displays a uniform medium-to-dark gray with a granular, matte texture where individual aggregate particles are discernible across the entire frame. There are no specular highlights, mirror-like streaks, or glossy sheen patches visible. The tonal variation is subtle and diffuse, with slightly lighter and darker gray patches rather than sharp bright-dark contrasts, consistent with a dry road surface."
+        }
+      ],
+      "final_rule": {
+        "rule": "When [preconditions], classify as Dry Road.",
+        "feature": "dark_gray_matte_surface_without_specular_reflection",
+        "favors": "Dry Road",
+        "confidence": "high",
+        "preconditions": [
+          "Surface appears as a uniform medium-to-dark gray with a granular, matte texture where individual aggregate particles or fine gritty texture is discernible across the entire frame",
+          "No localized bright white or sky-colored specular highlights, mirror-like streaks, or glossy sheen patches are visible anywhere on the surface",
+          "The overall tonal variation across the surface is subtle and diffuse (slightly lighter or darker gray patches) rather than sharp contrast between bright reflected spots and dark surrounding areas"
+        ],
+        "rationale": "The PUPIL mistook a naturally dark-toned dry asphalt surface for wetness. Dry pavement can appear dark gray, especially with dense-graded or newer asphalt mixes, but it retains a matte, granular texture throughout. Truly wet surfaces produce specular (mirror-like) reflections that show bright highlights of the sky or surroundings contrasting sharply against dark water film. In this image, the surface is uniformly matte gray with visible fine aggregate texture and no specular highlights whatsoever — the tonal shifts are soft and diffuse, consistent with dry pavement under overcast or low light rather than a wet reflective film. The key discriminator is the absence of any glossy, mirror-like reflection patches; dark color alone does not indicate wetness."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 7,
+        "fp": 8,
+        "tn": 2,
+        "fn": 3,
+        "precision": 0.467,
+        "recall": 0.7,
+        "accepted": false,
+        "rejection_reason": "fp=8 > 0",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed",
+      "tighten_history": [
+        {
+          "step": "contrastive_analysis",
+          "discriminating_feature": null,
+          "description": "Cannot identify a reliable discriminating feature.",
+          "present_in": null,
+          "confidence": "low"
+        },
+        {
+          "step": "spectrum_generation",
+          "n_levels": 4,
+          "levels": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "n_preconditions": 1
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "n_preconditions": 2
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "n_preconditions": 3
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "n_preconditions": 4
+            }
+          ]
+        },
+        {
+          "step": "batch_validation",
+          "results": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "tp": 10,
+              "fp": 10,
+              "precision": 0.5,
+              "accepted": false
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "tp": 8,
+              "fp": 9,
+              "precision": 0.471,
+              "accepted": false
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "tp": 8,
+              "fp": 9,
+              "precision": 0.471,
+              "accepted": false
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            }
+          ]
+        },
+        {
+          "step": "selected_level",
+          "level": null,
+          "outcome": "no_level_passed"
+        }
+      ]
+    },
+    {
+      "image_id": "202202102113582",
+      "correct_label": "Dry Road",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the road surface is uniformly pale and matte with no mirror-like reflections, and darker patches appear as opaque three-dimensional clumps sitting above the surface rather than flat reflective pools, classify as Dry Road.",
+              "preconditions": [
+                "The overall road surface appears uniformly pale, chalky, or washed-out with a powdery matte finish and no glossy or mirror-like sheen anywhere",
+                "Darker patches on the surface are opaque, three-dimensional clumps or mounds of loose material (dirt, gravel, debris) with visible height and irregular lumpy edges, rather than flat dark areas that reflect sky or surroundings",
+                "No continuous smooth film of liquid is visible — the surface texture appears granular and dusty throughout, with loose particulate matter scattered across it"
+              ],
+              "rationale": "The PUPIL confused a light-colored, dusty, sun-bleached dry road with a wet surface. Pale coloring on dry unpaved or heavily worn roads can superficially resemble the brightness of water reflection, and dirt clumps can be mistaken for puddles. The key distinction is that wet surfaces show mirror-like reflections of the sky or environment and smooth translucent films, while this surface shows a powdery matte texture with opaque debris sitting on top — hallmarks of a dry, dusty road."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The surface is uniformly pale, sandy, and matte with no glossy or mirror-like reflections anywhere. The darker patches visible are opaque, three-dimensional clumps of debris/organic material sitting above the surface with irregular lumpy edges, not flat reflective pools. The overall texture appears granular and dusty throughout, consistent with dry loose sand/dirt with no liquid film present."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The surface is uniformly pale, sandy, and matte with no glossy or mirror-like reflections anywhere. The darker patches visible are opaque, three-dimensional clumps of debris/organic material sitting above the surface with irregular lumpy edges, not flat reflective pools. The overall texture appears granular and dusty throughout, consistent with dry loose sand/dirt with no liquid film present."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the road surface is uniformly pale and matte with no mirror-like reflections, and darker patches appear as opaque three-dimensional clumps sitting above the surface rather than flat reflective pools, classify as Dry Road.",
+        "feature": "pale_matte_surface_with_debris_not_water",
+        "favors": "Dry Road",
+        "confidence": "high",
+        "preconditions": [
+          "The overall road surface appears uniformly pale, chalky, or washed-out with a powdery matte finish and no glossy or mirror-like sheen anywhere",
+          "Darker patches on the surface are opaque, three-dimensional clumps or mounds of loose material (dirt, gravel, debris) with visible height and irregular lumpy edges, rather than flat dark areas that reflect sky or surroundings",
+          "No continuous smooth film of liquid is visible — the surface texture appears granular and dusty throughout, with loose particulate matter scattered across it"
+        ],
+        "rationale": "The PUPIL confused a light-colored, dusty, sun-bleached dry road with a wet surface. Pale coloring on dry unpaved or heavily worn roads can superficially resemble the brightness of water reflection, and dirt clumps can be mistaken for puddles. The key distinction is that wet surfaces show mirror-like reflections of the sky or environment and smooth translucent films, while this surface shows a powdery matte texture with opaque debris sitting on top — hallmarks of a dry, dusty road."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 3,
+        "fp": 2,
+        "tn": 8,
+        "fn": 7,
+        "precision": 0.6,
+        "recall": 0.3,
+        "accepted": false,
+        "rejection_reason": "fp=2 > 0",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed",
+      "tighten_history": [
+        {
+          "step": "contrastive_analysis",
+          "discriminating_feature": null,
+          "description": "Cannot identify a reliable discriminating feature.",
+          "present_in": null,
+          "confidence": "low"
+        },
+        {
+          "step": "spectrum_generation",
+          "n_levels": 4,
+          "levels": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "n_preconditions": 1
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "n_preconditions": 2
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "n_preconditions": 3
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "n_preconditions": 4
+            }
+          ]
+        },
+        {
+          "step": "batch_validation",
+          "results": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "tp": 6,
+              "fp": 5,
+              "precision": 0.545,
+              "accepted": false
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "tp": 3,
+              "fp": 2,
+              "precision": 0.6,
+              "accepted": false
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "tp": 3,
+              "fp": 2,
+              "precision": 0.6,
+              "accepted": false
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            }
+          ]
+        },
+        {
+          "step": "selected_level",
+          "level": null,
+          "outcome": "no_level_passed"
+        }
+      ]
+    },
+    {
+      "image_id": "2022070223183585",
+      "correct_label": "Dry Road",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the surface shows a high-key, predominantly white-to-light-gray speckled pattern with individual aggregate stones or texture elements distinctly visible as separate dark and light specks, and the brightness is diffuse and even rather than concentrated in mirror-like streaks or pools, classify as Dry Road.",
+              "preconditions": [
+                "Surface appears as a dense mosaic of small, distinct light-gray and dark-gray speckles with no continuous glossy film connecting them — individual aggregate granules or chips are separately identifiable",
+                "Overall brightness is high and diffusely scattered across the entire frame rather than concentrated in elongated mirror-like reflections, glare streaks, or dark pools with bright edges",
+                "No visible standing water shapes such as dark puddle outlines, connected wet streaks, or continuous translucent film smoothing over the surface texture"
+              ],
+              "rationale": "The PUPIL mistook the overall high brightness and light color of this dry, light-colored aggregate surface for wet-road gloss. Wet roads produce mirror-like specular reflections that appear as concentrated bright streaks or elongated highlights against a darker surrounding surface, and water fills gaps between aggregate creating a smooth continuous film. Here the brightness is uniformly scattered as thousands of individually distinguishable light and dark granules with a matte, chalky quality — this speckled salt-and-pepper pattern with no continuous glossy film is characteristic of dry, light-colored crushed aggregate or weathered concrete, not water."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a dense mosaic of small, distinct light-gray and dark-gray speckles where individual aggregate granules are separately identifiable. The brightness is high and diffusely scattered across the entire frame with no concentrated mirror-like streaks or glare pools. There are no visible dark puddle outlines, wet streaks, or continuous translucent film smoothing over the texture — the surface appears uniformly dry and textured throughout."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a dense mosaic of small, distinct light-gray and dark-gray speckles where individual aggregate granules are separately identifiable. The brightness is high and diffusely scattered across the entire frame with no concentrated mirror-like streaks or glare pools. There are no visible dark puddle outlines, wet streaks, or continuous translucent film smoothing over the texture — the surface appears uniformly dry and textured throughout."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the surface shows a high-key, predominantly white-to-light-gray speckled pattern with individual aggregate stones or texture elements distinctly visible as separate dark and light specks, and the brightness is diffuse and even rather than concentrated in mirror-like streaks or pools, classify as Dry Road.",
+        "feature": "bright_speckled_matte_aggregate_texture",
+        "favors": "Dry Road",
+        "confidence": "high",
+        "preconditions": [
+          "Surface appears as a dense mosaic of small, distinct light-gray and dark-gray speckles with no continuous glossy film connecting them — individual aggregate granules or chips are separately identifiable",
+          "Overall brightness is high and diffusely scattered across the entire frame rather than concentrated in elongated mirror-like reflections, glare streaks, or dark pools with bright edges",
+          "No visible standing water shapes such as dark puddle outlines, connected wet streaks, or continuous translucent film smoothing over the surface texture"
+        ],
+        "rationale": "The PUPIL mistook the overall high brightness and light color of this dry, light-colored aggregate surface for wet-road gloss. Wet roads produce mirror-like specular reflections that appear as concentrated bright streaks or elongated highlights against a darker surrounding surface, and water fills gaps between aggregate creating a smooth continuous film. Here the brightness is uniformly scattered as thousands of individually distinguishable light and dark granules with a matte, chalky quality — this speckled salt-and-pepper pattern with no continuous glossy film is characteristic of dry, light-colored crushed aggregate or weathered concrete, not water."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 4,
+        "fp": 3,
+        "tn": 7,
+        "fn": 6,
+        "precision": 0.571,
+        "recall": 0.4,
+        "accepted": false,
+        "rejection_reason": "fp=3 > 0",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed",
+      "tighten_history": [
+        {
+          "step": "contrastive_analysis",
+          "discriminating_feature": null,
+          "description": "Cannot identify a reliable discriminating feature.",
+          "present_in": null,
+          "confidence": "low"
+        },
+        {
+          "step": "spectrum_generation",
+          "n_levels": 4,
+          "levels": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "n_preconditions": 1
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "n_preconditions": 2
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "n_preconditions": 3
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "n_preconditions": 4
+            }
+          ]
+        },
+        {
+          "step": "batch_validation",
+          "results": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "tp": 4,
+              "fp": 6,
+              "precision": 0.4,
+              "accepted": false
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "tp": 4,
+              "fp": 3,
+              "precision": 0.571,
+              "accepted": false
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "tp": 4,
+              "fp": 3,
+              "precision": 0.571,
+              "accepted": false
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "tp": 2,
+              "fp": 2,
+              "precision": 0.5,
+              "accepted": false
+            }
+          ]
+        },
+        {
+          "step": "selected_level",
+          "level": null,
+          "outcome": "no_level_passed"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_failures": 4,
+    "grounded": 4,
+    "accepted": 0
+  }
+}

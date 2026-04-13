@@ -287,20 +287,31 @@ The session is saved to `distill_dialogic_session.json`. Key outputs per failure
 - `grounded=True, accepted=False` — rule fires on trigger image but overfires on pool; needs tightening
 - `grounded=False` — PUPIL cannot observe the described feature; try simpler vocabulary
 
-**First experiment results (dry vs wet, 2026-04-12):**
+**Experiment 1 results (dry vs wet, 2026-04-13):**
 
 | Metric | Value |
 |---|---|
-| PUPIL zero-shot error rate | ~57% (essentially random) |
-| Rules grounded | 4/4 |
-| Rules accepted (precision ≥ 0.90) | 1/4 |
-| Best rule | High-key white-to-gray tonal range with individual aggregates visible |
-| Best rule precision | 1.0 on small pool |
+| PUPIL | qwen/qwen3-vl-8b-instruct |
+| TUTOR / VALIDATOR | claude-opus-4-6 / claude-sonnet-4-6 |
+| PUPIL zero-shot error rate | 60% (36/60 test images) |
+| Failures processed | 4 |
+| Rules grounded | 4/4 — all fired on trigger image at round 1 |
+| Rules accepted (precision ≥ 0.90) | 0/4 |
+| Best precision reached | 0.60 (3 TP, 2 FP on 20-image pool) |
 
-The 57% error rate confirms this is a genuinely hard confusable pair — a good
-DD target. The low acceptance rate (1/4) reflects that dry vs wet on asphalt
-is highly context-dependent; most visual features that indicate "dry" are also
-occasionally present on lightly-wet surfaces.
+Session JSON: [`benchmarks/sessions/distill_dialogic_dry_vs_wet_claude_opus_4_6.json`](benchmarks/sessions/distill_dialogic_dry_vs_wet_claude_opus_4_6.json)
+
+**Interpretation:** The 60% error rate confirms this is a genuinely hard confusable
+pair — a good DD target. All 4 rules grounded (the TUTOR's described features
+are visible in each trigger image), but none passed the pool gate at precision
+≥ 0.90. The core difficulty: features that indicate "dry" (matte granular
+texture, no specular highlights, visible aggregate) are also intermittently
+present in lightly-wet asphalt images. The visual boundary is a continuum, not
+a sharp threshold.
+
+**Next steps:** Increase pool size (`--val-per-class 20`) and process more
+failures (`--n-failures 8`) to give the tightening algorithm more signal. Also
+try the wet_vs_ice pair where the vocabulary gap is starker.
 
 ---
 
@@ -314,7 +325,7 @@ usecases/image-classification/road-surface/
     dry_vs_wet_probe_v1.json    ← 24 probe images (committed)
     dry_vs_wet_pool_v1.json     ← 40 pool images (committed)
     reports/                    ← probe reports saved here (gitignored)
-  knowledge_base/               ← accepted rules committed here after DD sessions
+  knowledge_base/               ← accepted rules committed here after DD sessions (empty — no rules accepted yet)
   python/
     domain_config.py            ← DomainConfig for road surface domain
     dataset.py                  ← RSCD loader (zip-native, no extraction needed)

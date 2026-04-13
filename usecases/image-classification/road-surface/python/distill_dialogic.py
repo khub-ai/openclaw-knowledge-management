@@ -64,11 +64,12 @@ DEFAULT_TUTOR         = "claude-opus-4-6"
 DEFAULT_VALIDATOR     = "claude-sonnet-4-6"
 DEFAULT_MAX_ROUNDS    = 4
 DEFAULT_VAL_PER_CLASS = 10
-DEFAULT_OUTPUT        = "distill_dialogic_session.json"
+DEFAULT_OUTPUT        = "../benchmarks/sessions/distill_dialogic_{pair}_{tutor}.json"
 
 # Temp dir for extracting zip-backed images during session
 _TMP_DIR = _HERE / ".." / ".." / ".." / ".." / ".tmp" / "rscd_session"
 _TMP_DIR = _TMP_DIR.resolve()
+_SESSIONS_DIR = (_HERE / ".." / "benchmarks" / "sessions").resolve()
 
 # Canonical failure cases for wet_vs_ice pair.
 # Replace with real RSCD image IDs once dataset is downloaded.
@@ -398,8 +399,10 @@ async def main():
         pass  # cost display is best-effort
 
     # Save session
+    tutor_tag = args.tutor_model.replace("/", "_").replace("-", "_").replace(".", "_")
     session = {
         "pair":                args.pair,
+        "pupil_model":         args.pupil_model,
         "tutor_model":         args.tutor_model,
         "validator_model":     args.validator_model,
         "max_rounds":          args.max_rounds,
@@ -412,10 +415,15 @@ async def main():
         },
     }
 
-    out_path = _HERE / args.output
+    if args.output == DEFAULT_OUTPUT:
+        _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = _SESSIONS_DIR / f"distill_dialogic_{args.pair}_{tutor_tag}.json"
+    else:
+        out_path = _HERE / args.output
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(session, f, indent=2, ensure_ascii=False)
-    console.print(f"  Session saved to [cyan]{out_path.name}[/cyan]")
+    console.print(f"  Session saved to [cyan]{out_path}[/cyan]")
+    console.print(f"  To commit: [dim]git add {out_path.relative_to(_HERE.parents[4])}[/dim]")
 
 
 if __name__ == "__main__":
