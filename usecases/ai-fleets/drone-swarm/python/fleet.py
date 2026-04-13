@@ -15,6 +15,7 @@ See DESIGN.md §2 for the fleet architecture.
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -90,6 +91,62 @@ class Detection:
     retroactive: bool = False
 
 
+@dataclass
+class UrgencyObservation:
+    """A single uncertain_investigate report from a scout drone."""
+    drone_id: str
+    frame_id: str
+    urgency: float          # investigation_urgency from classifier (0–1)
+    observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class UrgencyCell:
+    """Accumulated urgency state for one grid cell.
+
+    Each time a scout flies over and reports uncertain_investigate, an
+    UrgencyObservation is appended.  Accumulated urgency decays exponentially
+    so stale observations lose influence over time.
+    """
+    coordinates: tuple[float, float]
+    observations: list[UrgencyObservation] = field(default_factory=list)
+    escalated: bool = False
+    escalated_at: datetime | None = None
+    escalated_drone_id: str | None = None   # commander dispatched
+
+    def accumulated_urgency(self, half_life_s: float = 600.0) -> float:
+        """Compute current accumulated urgency with exponential time decay.
+
+        u(t) = Σ_i urgency_i · exp(-λ · (t_now - t_i))
+        where λ = ln(2) / half_life_s
+
+        Default half-life: 600 s (10 minutes) — a whitecap-like false
+        signal vanishes quickly; a person-consistent signal from repeated
+        passes accumulates.
+        """
+        if not self.observations:
+            return 0.0
+        lam = math.log(2) / half_life_s
+        now = datetime.now(timezone.utc)
+        total = 0.0
+        for obs in self.observations:
+            age_s = (now - obs.observed_at).total_seconds()
+            total += obs.urgency * math.exp(-lam * age_s)
+        return min(total, 1.0)   # cap at 1.0
+
+
+@dataclass
+class EscalationEvent:
+    """Record of a commander dispatch triggered by urgency accumulation."""
+    cell_coordinates: tuple[float, float]
+    accumulated_urgency: float
+    n_observations: int
+    triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    commander_id: str | None = None
+    resolved: bool = False
+    resolution: str = ""    # "confirmed_person" | "false_alarm" | "pending"
+
+
 # ---------------------------------------------------------------------------
 # Fleet manager
 # ---------------------------------------------------------------------------
@@ -101,11 +158,17 @@ class FleetManager:
     In Phase 3 (MCP server), drones register via the mesh network.
     """
 
+    # Default escalation parameters
+    ESCALATION_THRESHOLD: float = 0.70   # accumulated urgency to trigger dispatch
+    URGENCY_HALF_LIFE_S: float = 600.0   # 10-minute decay half-life
+
     def __init__(self) -> None:
         self._drones: dict[str, DroneState] = {}
         self._rule_pool: dict[str, Rule] = {}
         self._broadcast_log: list[BroadcastRecord] = []
-        self._track_map: dict[str, Detection] = {}   # coord_key → Detection
+        self._track_map: dict[str, Detection] = {}        # coord_key → Detection
+        self._urgency_map: dict[str, UrgencyCell] = {}   # coord_key → UrgencyCell
+        self._escalation_log: list[EscalationEvent] = []
 
     # -----------------------------------------------------------------------
     # Drone registration
@@ -275,6 +338,176 @@ class FleetManager:
         self._track_map[coord_key] = detection
         return detection
 
+    # -----------------------------------------------------------------------
+    # Urgency accumulator + escalation trigger
+    # -----------------------------------------------------------------------
+
+    def _coord_key(self, coordinates: tuple[float, float]) -> str:
+        """Round coordinates to ~10 m grid (4 decimal places ≈ 11 m at mid-lat)."""
+        return f"{coordinates[0]:.4f},{coordinates[1]:.4f}"
+
+    def report_uncertain(
+        self,
+        coordinates: tuple[float, float],
+        investigation_urgency: float,
+        drone_id: str,
+        frame_id: str,
+        observed_at: datetime | None = None,
+    ) -> UrgencyCell:
+        """Record an uncertain_investigate report from a scout drone.
+
+        Adds an UrgencyObservation to the cell at `coordinates`.  The cell's
+        accumulated urgency increases; if it crosses ESCALATION_THRESHOLD and
+        the cell has not yet been escalated, returns the cell flagged for
+        commander dispatch.
+
+        Parameters
+        ----------
+        coordinates:
+            (lat, lon) of the observed anomaly.
+        investigation_urgency:
+            The urgency score returned by the PUPIL classifier (0–1).
+        drone_id:
+            ID of the scout that made the observation.
+        frame_id:
+            Frame identifier for provenance.
+        observed_at:
+            Timestamp of the observation (default: now).
+        """
+        key = self._coord_key(coordinates)
+        if key not in self._urgency_map:
+            self._urgency_map[key] = UrgencyCell(coordinates=coordinates)
+
+        cell = self._urgency_map[key]
+        obs = UrgencyObservation(
+            drone_id=drone_id,
+            frame_id=frame_id,
+            urgency=investigation_urgency,
+            observed_at=observed_at or datetime.now(timezone.utc),
+        )
+        cell.observations.append(obs)
+        return cell
+
+    def check_escalations(
+        self,
+        threshold: float | None = None,
+        half_life_s: float | None = None,
+    ) -> list[tuple[UrgencyCell, float]]:
+        """Return (cell, accumulated_urgency) pairs that exceed the threshold
+        and have not yet been escalated.
+
+        Call this after each report_uncertain() to discover cells that need
+        a commander dispatch.  Cells are returned sorted by accumulated urgency
+        descending (highest priority first).
+
+        Parameters
+        ----------
+        threshold:
+            Override for ESCALATION_THRESHOLD.
+        half_life_s:
+            Override for URGENCY_HALF_LIFE_S.
+        """
+        threshold = threshold if threshold is not None else self.ESCALATION_THRESHOLD
+        half_life_s = half_life_s if half_life_s is not None else self.URGENCY_HALF_LIFE_S
+
+        candidates = []
+        for cell in self._urgency_map.values():
+            if cell.escalated:
+                continue
+            acc = cell.accumulated_urgency(half_life_s=half_life_s)
+            if acc >= threshold:
+                candidates.append((cell, acc))
+
+        return sorted(candidates, key=lambda x: x[1], reverse=True)
+
+    def escalate(
+        self,
+        cell: UrgencyCell,
+        commander_id: str | None = None,
+        threshold: float | None = None,
+        half_life_s: float | None = None,
+    ) -> EscalationEvent:
+        """Mark a cell as escalated and record the dispatch event.
+
+        In simulation this is instantaneous.  In production this would
+        issue a waypoint command to the nearest available commander drone.
+        """
+        threshold = threshold if threshold is not None else self.ESCALATION_THRESHOLD
+        half_life_s = half_life_s if half_life_s is not None else self.URGENCY_HALF_LIFE_S
+        acc = cell.accumulated_urgency(half_life_s=half_life_s)
+
+        cell.escalated = True
+        cell.escalated_at = datetime.now(timezone.utc)
+        cell.escalated_drone_id = commander_id
+
+        event = EscalationEvent(
+            cell_coordinates=cell.coordinates,
+            accumulated_urgency=round(acc, 4),
+            n_observations=len(cell.observations),
+            commander_id=commander_id,
+            resolution="pending",
+        )
+        self._escalation_log.append(event)
+        return event
+
+    def resolve_escalation(
+        self,
+        coordinates: tuple[float, float],
+        resolution: str,  # "confirmed_person" | "false_alarm"
+    ) -> bool:
+        """Record the outcome of a commander inspection.
+
+        `resolution` should be "confirmed_person" or "false_alarm".
+        Returns True if a matching pending escalation was found and updated.
+        """
+        key = self._coord_key(coordinates)
+        for event in reversed(self._escalation_log):
+            if (self._coord_key(event.cell_coordinates) == key
+                    and event.resolution == "pending"):
+                event.resolved = True
+                event.resolution = resolution
+                return True
+        return False
+
+    def get_urgency_map(
+        self,
+        half_life_s: float | None = None,
+        min_urgency: float = 0.0,
+    ) -> list[dict]:
+        """Return current urgency state for all cells above min_urgency."""
+        half_life_s = half_life_s if half_life_s is not None else self.URGENCY_HALF_LIFE_S
+        rows = []
+        for cell in self._urgency_map.values():
+            acc = cell.accumulated_urgency(half_life_s=half_life_s)
+            if acc < min_urgency:
+                continue
+            rows.append({
+                "coordinates": cell.coordinates,
+                "accumulated_urgency": round(acc, 4),
+                "n_observations": len(cell.observations),
+                "escalated": cell.escalated,
+                "escalated_drone": cell.escalated_drone_id,
+                "last_observed": max(
+                    (o.observed_at for o in cell.observations),
+                    default=None,
+                ).isoformat() if cell.observations else None,
+            })
+        return sorted(rows, key=lambda x: x["accumulated_urgency"], reverse=True)
+
+    def get_escalation_log(self) -> list[dict]:
+        return [
+            {
+                "coordinates": e.cell_coordinates,
+                "accumulated_urgency": e.accumulated_urgency,
+                "n_observations": e.n_observations,
+                "triggered_at": e.triggered_at.isoformat(),
+                "commander_id": e.commander_id,
+                "resolved": e.resolved,
+                "resolution": e.resolution,
+            }
+            for e in self._escalation_log
+        ]
+
     def get_track_map(self) -> list[dict]:
         return [
             {
@@ -295,6 +528,9 @@ class FleetManager:
     # -----------------------------------------------------------------------
 
     def get_swarm_state(self) -> dict:
+        pending_escalations = sum(
+            1 for e in self._escalation_log if e.resolution == "pending"
+        )
         return {
             "n_drones": len(self._drones),
             "n_scouts": sum(1 for d in self._drones.values() if d.tier == "scout"),
@@ -302,6 +538,9 @@ class FleetManager:
             "n_active_rules": len(self.get_active_rules()),
             "n_broadcasts": len(self._broadcast_log),
             "n_track_detections": len(self._track_map),
+            "n_urgency_cells": len(self._urgency_map),
+            "n_escalations_total": len(self._escalation_log),
+            "n_escalations_pending": pending_escalations,
             "drones": {
                 drone_id: {
                     "tier": d.tier,
