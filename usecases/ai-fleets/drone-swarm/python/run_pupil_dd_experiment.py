@@ -97,7 +97,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--pupil-model", default=PUPIL_MODEL,
-        help=f"PUPIL model on Together.ai (default: {PUPIL_MODEL}).",
+        help=f"PUPIL model on OpenRouter (default: {PUPIL_MODEL}).",
     )
     p.add_argument(
         "--tutor-model", default="claude-opus-4-6",

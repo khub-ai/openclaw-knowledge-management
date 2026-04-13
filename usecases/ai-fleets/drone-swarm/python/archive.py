@@ -205,7 +205,7 @@ async def reprocess_archive(
     config: DomainConfig = MARITIME_SAR_CONFIG,
     lookback_seconds: int = 2700,         # 45 minutes
     tier: str = "scout",
-    reprocess_class: str = "whitecap",   # only re-examine confident negatives
+    reprocess_class: str = "life_ring_unoccupied",  # only re-examine confident negatives
     confidence_min: float = 0.70,
     validator_model: str = "claude-sonnet-4-6",
     call_agent_fn: Callable | None = None,

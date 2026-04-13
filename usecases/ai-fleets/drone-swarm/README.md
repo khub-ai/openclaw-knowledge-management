@@ -605,3 +605,43 @@ for single-rule correction).
 | **Retroactive reprocessing** | Rule can be replayed against any previously captured frame |
 | **Auditability** | Every corrected classification carries the rule that triggered it |
 | **Precision gate** | Session gate required FP=0; pool achieved exactly that before acceptance |
+
+### Interpreting the results
+
+**The headline result to take seriously** is the +44pp recall on the
+life_ring_unoccupied confusion subpopulation. That is a real, systematic
+failure mode — high-confidence, reproducible, caused by a genuine visual
+ambiguity — and DD eliminates it in 43 seconds with zero retraining. The
+fix generalises from one failure frame to the full subpopulation.
+
+**Why the aggregate recall (26.7%) looks weak.** The SeaDronesSee val set
+contains many frames captured at high altitude (~200m AGL), where swimmers
+occupy 11–21px bounding boxes in 20-megapixel images. At that scale the
+failure is scale/attention — the model describes the scene without ever
+registering the swimmer — not classification confusion. The operational
+scenario in §2 specifies scouts flying at 20–40m AGL, where a swimmer's head
+occupies 50–200px and classification confusion is the dominant failure. The
+aggregate numbers are depressed by a mismatch between dataset altitude and
+the operational envelope DD is designed for. This is not an excuse — it is
+a limitation of the available public dataset that should be stated plainly.
+
+**What the `uncertain_investigate` numbers represent.** The 7 partial-credit
+frames (urgency avg=0.86) are not failures — in a real deployment they would
+trigger a commander dispatch that would likely find the person. The weighted
+recall of 32.5% is the more operationally meaningful number, because it
+distinguishes dead-end misses from actionable uncertainty. The urgency
+accumulator and escalation trigger are implemented and the design is sound,
+but the temporal sequence was demonstrated with simulated data, not real
+multi-pass SeaDronesSee observations. Testing the full accumulator loop
+with real sequenced frames from the same geographic position remains for
+future work.
+
+**What this means for KF broadly.** DD solves a specific, narrow problem
+extremely well: a human expert sees a failure, describes what should have been
+seen, and that description propagates to the entire fleet in under a minute
+with no engineering. The scope boundary is equally clear: DD requires the
+object to be perceived before it can correct the classification. Scale/attention
+failures upstream of the classification step need complementary solutions
+(detect-first pipeline, altitude adjustment, `uncertain_investigate` escalation).
+These are separable problems with separable solutions; KF occupies a well-defined
+and genuinely useful slot in that architecture.

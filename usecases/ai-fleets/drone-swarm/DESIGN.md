@@ -242,11 +242,11 @@ staging, or simulation:
 
 ```
 SeaDronesSee frames
-  ├── person_in_water/     ← PUPIL failure frames + pool positives
-  ├── whitecap/            ← pool negatives (primary confusable)
-  └── floating_debris/     ← pool negatives (secondary confusable)
+  ├── person_in_water/          ← PUPIL failure frames + pool positives
+  ├── life_ring_unoccupied/     ← pool negatives (measured primary confusable)
+  └── whitecap/ floating_debris/ ← pool negatives (secondary confusables)
         ↓
-  Select failure frame (person, classified as whitecap by baseline model)
+  Select failure frame (person, misclassified by baseline model)
   + commander thermal confirmation (ground truth label)
         ↓
   DD session (TUTOR dialogue → grounding check → pool validation)
@@ -385,13 +385,24 @@ Claude calls:
 
 ### 7.3 Confusable pairs
 
-**Primary**: `person_in_water` vs `whitecap` — both present as small pale
-ovals at 30m altitude. Ground truth via thermal or manual recovery.
+> **Empirical update (2026-04-13):** Initial design assumed whitecap as the
+> primary Qwen failure mode. Measurement on 120 SeaDronesSee val person frames
+> showed Qwen never predicts `whitecap` for a swimmer. The measured primary
+> tractable confusion is `life_ring_unoccupied`. See README §10 for details.
+
+**Measured primary (Qwen3-VL-8B)**: `person_in_water` vs `life_ring_unoccupied`
+— small bright oval near SAR vessels misread as thrown life ring. Systematic,
+high-confidence (0.95–0.97), fixed by DD session_003 (lru_001/lru_002).
+
+**Designed primary (general)**: `person_in_water` vs `whitecap` — both present
+as small pale ovals at 30m altitude. Ground truth via thermal or manual
+recovery. Relevant for other model architectures and closer-altitude frames.
 
 **Secondary**:
 - `person_in_water` vs `floating_debris` (similar size, non-uniform shape)
-- `person_in_water` vs `life_ring_unoccupied` (ring thrown overboard, no person)
 - `person_in_water` vs `seabird_on_water` (at lower altitudes, similar oval geometry)
+- `person_in_water` vs `other` (scale/attention failure at high altitude — addressed
+  by `uncertain_investigate` class + urgency accumulator, not by DD rules directly)
 
 ---
 
@@ -428,9 +439,11 @@ Targeting 20–40 pool frames is achievable from SeaDronesSee without augmentati
 
 ### 8.3 Minimum viable dataset for a DD session
 
-- 1 confirmed failure frame (person-in-water classified as whitecap)
+- 1 confirmed failure frame (person-in-water misclassified — measured primary:
+  `life_ring_unoccupied`; designed primary: `whitecap` for other architectures)
 - 1 ground truth confirmation (thermal label or SeaDronesSee ground truth)
-- 20–40 labeled pool frames from SeaDronesSee
+- 20–40 labeled pool frames from SeaDronesSee (include LSA-only frames as
+  life_ring negatives — only 10 exist in val split; supplement from train split)
 
 All three are available from SeaDronesSee without any additional data collection.
 
@@ -440,25 +453,34 @@ All three are available from SeaDronesSee without any additional data collection
 
 ```
 usecases/ai-fleets/drone-swarm/
-├── README.md                    ← User-facing scenario and motivation
+├── README.md                    ← User-facing scenario, motivation, measured results
 ├── DESIGN.md                    ← This file
+├── POSITIONING.md               ← Marketing narrative and claim framing
 ├── knowledge_base/
-│   ├── .gitkeep
-│   └── person_in_water_vs_whitecap.json     ← after first session
+│   ├── person_in_water_vs_whitecap.json          ← Seed + session_001 rules
+│   └── person_in_water_vs_life_ring_unoccupied.json  ← session_003 rules (lru_001/002)
 ├── python/
-│   ├── domain_config.py         ← DomainConfig + tier observability contexts
+│   ├── domain_config.py         ← DomainConfig + TIER_OBSERVABILITY + CROSS_MODAL_TUTOR_PROMPT
 │   ├── agents.py                ← Wraps core DD agents with maritime config
-│   ├── fleet.py                 ← Swarm state, tier management, rule broadcast
+│   ├── fleet.py                 ← Swarm state, rule broadcast, urgency accumulator,
+│   │                               escalation trigger (UrgencyCell, EscalationEvent)
 │   ├── archive.py               ← Frame buffer + retroactive reprocessing
+│   ├── pool_builder.py          ← SeaDronesSee → labeled pool construction
+│   ├── qwen_pupil_eval.py       ← Qwen3-VL-8B PUPIL evaluation via OpenRouter;
+│   │                               uncertain_investigate class + partial-credit scoring
+│   ├── run_dd_session.py        ← Standalone DD session runner (CLI)
+│   ├── run_pupil_dd_experiment.py ← End-to-end: baseline eval → DD → re-eval
 │   ├── mcp_server.py            ← MCP tool definitions for Claude Code control
 │   ├── simulation/
 │   │   ├── seadronessee_bridge.py   ← SeaDronesSee frame injection (no renderer)
 │   │   ├── gazebo_bridge.py         ← Gazebo + PX4 SITL interface
 │   │   └── thermal_oracle.py        ← Ground truth → simulated thermal output
-│   └── run_dd_session.py        ← Standalone DD session runner
+│   └── tests/
+│       ├── test_agents_grounding.py
+│       ├── test_fleet_archive.py
+│       └── test_pool_builder.py
 └── assets/
-    ├── scout_failure_frame.jpg  ← Example failure case for documentation
-    └── thermal_confirmation.png ← Commander thermal return showing survivor
+    └── README.md
 ```
 
 ---

@@ -237,7 +237,7 @@ async def classify_frame(
     image_path:
         Absolute path to the frame image (JPEG or PNG).
     model:
-        Together.ai model to use; defaults to PUPIL_MODEL.
+        OpenRouter model to use; defaults to PUPIL_MODEL.
     rules:
         Optional list of DD rule dicts to inject into the system prompt.
         When provided, the classifier is told to apply these rules before
@@ -318,7 +318,7 @@ async def run_baseline_eval(
     labeled_frames:
         List of (image_path, ground_truth_label) tuples.
     model:
-        Together.ai model string.
+        OpenRouter model string.
     n_concurrent:
         Maximum number of parallel classify_frame calls.
     call_agent_fn:
@@ -367,7 +367,7 @@ async def run_eval_with_rules(
         List of rule dicts from a DD session transcript["final_rules"]["scout"]
         or transcript["final_rules"]["commander"].
     model:
-        Together.ai model string.
+        OpenRouter model string.
     n_concurrent:
         Maximum number of parallel calls.
     call_agent_fn:
