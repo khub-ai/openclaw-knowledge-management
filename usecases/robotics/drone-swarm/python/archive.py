@@ -27,7 +27,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from core.dialogic_distillation import agents as _core_agents
 from core.dialogic_distillation.protocols import DomainConfig
 
-from .domain_config import MARITIME_SAR_CONFIG
+_PYTHON_DIR = Path(__file__).resolve().parent
+if str(_PYTHON_DIR) not in sys.path:
+    sys.path.insert(0, str(_PYTHON_DIR))
+
+from domain_config import MARITIME_SAR_CONFIG
 
 
 # ---------------------------------------------------------------------------

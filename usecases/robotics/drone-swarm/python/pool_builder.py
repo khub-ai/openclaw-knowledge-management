@@ -102,28 +102,60 @@ def bbox_area(ann: dict) -> float:
     return bbox[2] * bbox[3]
 
 
+def build_file_index(dataset_root: Path) -> dict[str, Path]:
+    """Build a filename → full path index by scanning the dataset images directory.
+
+    Handles datasets where images are in subdirectories (e.g. images/val/, images/train/).
+    """
+    index: dict[str, Path] = {}
+    images_dir = dataset_root / "images"
+    search_root = images_dir if images_dir.exists() else dataset_root
+    for p in search_root.rglob("*"):
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS:
+            index[p.name] = p
+    return index
+
+
+def _resolve_image_path(img_info: dict, dataset_root: Path,
+                        file_index: dict[str, Path]) -> Path | None:
+    """Resolve the full path for an image, trying multiple locations."""
+    fname = img_info["file_name"]
+    # 1. Index lookup by basename (handles images/val/3464.jpg etc.)
+    basename = Path(fname).name
+    if basename in file_index:
+        return file_index[basename]
+    # 2. Direct join
+    for candidate in [
+        dataset_root / "images" / fname,
+        dataset_root / fname,
+    ]:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def select_positive_frames(
     image_index: dict[int, dict],
     person_ann_index: dict[int, list[dict]],
     dataset_root: Path,
     n: int,
     hardest: bool = False,
+    file_index: dict[str, Path] | None = None,
 ) -> list[dict]:
     """Select n person frames from the dataset.
 
     If hardest=True, prefer frames where the person occupies the smallest
     fraction of the image (hardest for a classifier to detect).
     """
+    if file_index is None:
+        file_index = build_file_index(dataset_root)
     candidates = []
     for image_id, anns in person_ann_index.items():
         img_info = image_index.get(image_id)
         if img_info is None:
             continue
-        img_path = dataset_root / "images" / img_info["file_name"]
-        if not img_path.exists():
-            # Try without subdirectory
-            img_path = dataset_root / img_info["file_name"]
-        if not img_path.exists():
+        img_path = _resolve_image_path(img_info, dataset_root, file_index)
+        if img_path is None:
             continue
 
         min_bbox = min(bbox_area(a) for a in anns)
@@ -152,18 +184,19 @@ def select_negative_frames(
     person_ann_index: dict[int, list[dict]],
     dataset_root: Path,
     n: int,
+    file_index: dict[str, Path] | None = None,
 ) -> list[dict]:
     """Select n frames that contain NO person annotations."""
+    if file_index is None:
+        file_index = build_file_index(dataset_root)
     person_image_ids = set(person_ann_index.keys())
     candidates = []
 
     for image_id, img_info in image_index.items():
         if image_id in person_image_ids:
             continue
-        img_path = dataset_root / "images" / img_info["file_name"]
-        if not img_path.exists():
-            img_path = dataset_root / img_info["file_name"]
-        if not img_path.exists():
+        img_path = _resolve_image_path(img_info, dataset_root, file_index)
+        if img_path is None:
             continue
         candidates.append({
             "image_id": image_id,
@@ -341,6 +374,11 @@ def main() -> None:
     n_total_images = len(image_index)
     print(f"Images: {n_total_images} total, {n_person_images} with person annotations")
 
+    # Build file index once — shared across all selection calls
+    print("Building file index...")
+    file_index = build_file_index(dataset_root)
+    print(f"File index: {len(file_index)} images found")
+
     # Select frames
     pool_dir = Path(args.pool_dir)
     failure_dir = Path(args.failure_dir) if args.failure_dir else None
@@ -351,12 +389,14 @@ def main() -> None:
         dataset_root=dataset_root,
         n=args.n_positive,
         hardest=args.select_hardest,
+        file_index=file_index,
     )
     negatives = select_negative_frames(
         image_index=image_index,
         person_ann_index=person_ann_index,
         dataset_root=dataset_root,
         n=args.n_negative,
+        file_index=file_index,
     )
     failure_frames = None
     if failure_dir:
@@ -367,6 +407,7 @@ def main() -> None:
             dataset_root=dataset_root,
             n=args.n_positive + args.n_failure,
             hardest=True,
+            file_index=file_index,
         )
         # Take the hardest ones not already in positives
         pool_ids = {f["image_id"] for f in positives}
