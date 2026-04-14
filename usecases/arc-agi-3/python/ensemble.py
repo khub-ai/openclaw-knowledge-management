@@ -63,6 +63,7 @@ from core.knowledge.co_occurrence import CoOccurrenceRegistry, events_from_step
 from state_store import StateStore
 from distillation_recorder import DistillationRecorder
 from dynamic_discovery import HypothesisStore
+from behavioral_patterns import BehavioralPatternRegistry
 from nav_bfs import (
     compute_navigation_plan,
     find_player_position,
@@ -153,207 +154,10 @@ COMPETITION_MAX_LLM_CYCLES = 8
 STUCK_STEP_THRESHOLD = 3     # consecutive stuck steps before intervention
 STUCK_DIFF_THRESHOLD = 10    # pixel_diff at or below this counts as "stuck"
 
-# Known action sequences to pre-solve (skip) levels that are already mastered.
-# Keys are env_id strings.  Values are ordered action names.
-# LS20: ACTION3×3 + ACTION1×4 + ACTION4×3 + ACTION1×3 = 13 steps to complete level 1.
-_KNOWN_SUBPLANS: dict[str, list[str]] = {
-    # ls20 level 1→2 (13 steps): navigate cross at rows 47-48, cols 50-52
-    # ls20 level 2→3 (45 steps): shape-match puzzle
-    #   - Navigate to rotation changer at (49,45), touch 3× to reach 270°
-    #   - Collect step-counter resets at (40,51)→step20 and (15,16)→step40
-    #   - Navigate to target at (14,40) with rotation=270°
-    # ls20 level 3→4 (41 steps): color+rotation+push-pad puzzle
-    #   - Go up col 9 to y=5 (8×A1): yjgargdic_r push pad fires at (9,5) → pushed to (34,5)
-    #   - Left to (29,5) (A3), down to (29,15) (2×A2)
-    #   - Right to (34,15): collect reset1 (A4)
-    #   - Down to (34,30) (3×A2), left to (29,30) (A3)
-    #   - Down to (29,45): touch color changer col→1 (3×A2)
-    #   - Up to (29,30) (3×A1), left to (19,30): collect reset2 (2×A3)
-    #   - Up to (19,25) (A1), right across maze to (54,25) (7×A4)
-    #   - Up to (54,10) (3×A1), left to (49,10): touch rot changer rot→1 (A3)
-    #   - Up to (49,5) (A1), down to (49,10): touch rot changer rot→2 (A2)
-    #   - Up to (49,5) (A1), right to (54,5): kapcaakvb_b push pad → pushed to (54,45) (A4)
-    #   - Down to (54,50): target with rot=2, col=1 → WIN (A2)
-    # ls20 level 4→5 (43 steps): shape+color+push-pad puzzle
-    #   - Start (54,5): shape=4→need 5 (mkjdaccuuf at 24,30), color=2→need 1 (3× soyhouuebz at 34,30)
-    #   - A3x3: left to (39,5)
-    #   - A2x3: down to (39,20)
-    #   - A3: step to (34,20) → yjgargdic_r pad at (33,20) fires → pushed right to (54,20)
-    #   - A2x2: down to (54,30)
-    #   - A3x2: left to (44,30)
-    #   - A1: step to (44,25) → tihiodtoj_l pad at (45,25) fires → pushed left to (34,25)
-    #   - A2,A1,A2,A1,A2: bounce on color changer at (34,30): col 2→3→0→1
-    #   - A1x2: up from (34,25) → (34,20) → yjgargdic_r pad → pushed to (54,20)
-    #   - A3x2: left to (49,20) → kapcaakvb_b pad at (44,19) fires → pushed down to (44,45)
-    #   - A1: step to (44,40) → tihiodtoj_l pad at (45,40) fires → pushed left to (34,40)
-    #   - A2,A3x2: down and left to (24,45)
-    #   - A1: step to (24,40) → tihiodtoj_l pad at (25,40) fires → pushed left to (9,40)
-    #   - A1: step to (9,35) → yjgargdic_r pad at (8,35) fires → pushed right to (24,35)
-    #   - A1: step to (24,30) → mkjdaccuuf shape changer fires: shape 4→5
-    #   - A2x2,A4,A1x4: down, right, up navigating to (19,15) → reset1 collected (ctr→42)
-    #   - A4,A1,A4,A1x2: navigate right and up to (24,5)
-    #   - A3x3: left to (9,5) → target with shape=5, col=1, rot=0 → WIN
-    "ls20": (
-        ["ACTION3"] * 3 + ["ACTION1"] * 4 + ["ACTION4"] * 3 + ["ACTION1"] * 3
-        + ["ACTION1", "ACTION4", "ACTION1", "ACTION1", "ACTION1", "ACTION1", "ACTION1",
-           "ACTION4", "ACTION4", "ACTION2", "ACTION4", "ACTION2", "ACTION2", "ACTION2",
-           "ACTION2", "ACTION2", "ACTION2", "ACTION2", "ACTION3", "ACTION3",
-           "ACTION4", "ACTION4", "ACTION1", "ACTION3", "ACTION4"]
-        + ["ACTION1"] * 7
-        + ["ACTION3"] * 7
-        + ["ACTION2"] * 6
-        + ["ACTION1"] * 8
-        + ["ACTION3"]
-        + ["ACTION2"] * 2
-        + ["ACTION4"]
-        + ["ACTION2"] * 3
-        + ["ACTION3"]
-        + ["ACTION2"] * 3
-        + ["ACTION1"] * 3
-        + ["ACTION3"] * 2
-        + ["ACTION1"]
-        + ["ACTION4"] * 7
-        + ["ACTION1"] * 3
-        + ["ACTION3"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION4"]
-        + ["ACTION2"]
-        + ["ACTION3"] * 3
-        + ["ACTION2"] * 3
-        + ["ACTION3"]
-        + ["ACTION2"] * 2
-        + ["ACTION3"] * 2
-        + ["ACTION1"]
-        + ["ACTION2", "ACTION1", "ACTION2", "ACTION1", "ACTION2"]
-        + ["ACTION1"] * 2
-        + ["ACTION3"] * 2
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION3"] * 2
-        + ["ACTION1"] * 3
-        + ["ACTION2"] * 2
-        + ["ACTION4"]
-        + ["ACTION1"] * 4
-        + ["ACTION4"]
-        + ["ACTION1"]
-        + ["ACTION4"]
-        + ["ACTION1"] * 2
-        + ["ACTION3"] * 3
-        # ls20 level 5→6 (44 steps): shape+color+rot+reset+push-pad puzzle
-        #   - Start (49,40): shape=4→need 0 (mkjdaccuuf at 19,10 x2), color=0→need 3 (3× soyhouuebz at 29,25), rot=0→need 2 (2× rot-changer at 14,35; changer oscillates, must time visits)
-        #   - A1,A3,A1x2,A3x3: navigate to (34,25) via push pads
-        #   - A4,A3,A4,A3,A4: bounce left-right on color changer 3× (col 0→1→2→3)
-        #   - A1x2,A3x4,A1: navigate up to (24,10), touch shape changer (sh 4→5)
-        #   - A3x3: continue left to (9,10), collect reset at (10,11) (ctr→40)
-        #   - A4x2: right to (19,10), touch shape changer again (sh 5→0)
-        #   - A2x5,A4x2,A3: navigate to (14,35) area
-        #   - A2x2: enter rot-changer zone; rot changer fires twice (rot 0→1→2)
-        #   - A4,A2,A4x7: navigate east along row 50 to (54,10) via lujfinsby push pad
-        #   - A1: up to target (54,5) → WIN
-        + ["ACTION1"]
-        + ["ACTION3"]
-        + ["ACTION1"] * 2
-        + ["ACTION3"] * 3
-        + ["ACTION4"]
-        + ["ACTION3"]
-        + ["ACTION4"]
-        + ["ACTION3"]
-        + ["ACTION4"]
-        + ["ACTION1"] * 2
-        + ["ACTION3"] * 4
-        + ["ACTION1"]
-        + ["ACTION3"] * 3
-        + ["ACTION4"] * 2
-        + ["ACTION2"] * 5
-        + ["ACTION4"] * 2
-        + ["ACTION3"]
-        + ["ACTION2"] * 2
-        + ["ACTION4"]
-        + ["ACTION2"]
-        + ["ACTION4"] * 7
-        + ["ACTION1"]
-        # ls20 level 6→7 (72 steps): dual-target puzzle with 3 period-8 sliding gates
-        #   - Start (24,50): shape=0, color=2, rot=0
-        #   - Target 0 at (54,50): shape=5, color_idx=1, rot_idx=1
-        #   - Target 1 at (54,35): shape=0, color_idx=3, rot_idx=2
-        #   - Gate-driven changers period 8, undo on blocked moves
-        #   - Strategy: reach target 1 first (sh=0,col=3,rot=2) then collect shape & hit target 0
-        + ["ACTION1"] * 2
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION4"] * 2
-        + ["ACTION1"]
-        + ["ACTION4"]
-        + ["ACTION1"] * 3
-        + ["ACTION3"] * 2
-        + ["ACTION4"] * 2
-        + ["ACTION1"] * 2
-        + ["ACTION4"] * 2
-        + ["ACTION1"] * 2
-        + ["ACTION4"]
-        + ["ACTION2"] * 2
-        + ["ACTION1"] * 2
-        + ["ACTION3"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION3"] * 4
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION3"] * 2
-        + ["ACTION2"] * 4
-        + ["ACTION1"]
-        + ["ACTION4"] * 3
-        + ["ACTION3"] * 3
-        + ["ACTION1"] * 6
-        + ["ACTION4"] * 6
-        + ["ACTION2"]
-        + ["ACTION4"] * 2
-        + ["ACTION1"] * 2
-        + ["ACTION4"]
-        + ["ACTION2"] * 5
-        # ls20 level 7→WIN (53 steps): shape+color+rot puzzle with period-8 sliding gate
-        #   - Start (19,15): shape=1, color=0, rot=0
-        #   - Target at (29,50): shape=0, color_idx=3, rot_idx=2
-        #   - shape changer at (19,40): 5 touches (1→0 via 6 steps)
-        #   - color changer at (9,40): 3 touches (0→3)
-        #   - rot changer: sliding gate period 8 (rail x=54, y∈[10..30])
-        #   - 6 resets; StepsDecrement=2
-        + ["ACTION1"] * 2
-        + ["ACTION2"] * 2
-        + ["ACTION3"] * 2
-        + ["ACTION2"] * 5
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION4"]
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION4"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION1"]
-        + ["ACTION2"]
-        + ["ACTION3"] * 2
-        + ["ACTION1"] * 3
-        + ["ACTION4"] * 4
-        + ["ACTION1"]
-        + ["ACTION4"] * 2
-        + ["ACTION1"]
-        + ["ACTION4"] * 2
-        + ["ACTION1"] * 2
-        + ["ACTION4"]
-        + ["ACTION2"] * 2
-        + ["ACTION3"] * 3
-        + ["ACTION1"]
-        + ["ACTION2"] * 4
-    ),
-}
+# Design principle: solutions must be derived through exploration, VLM
+# perception, and on-the-fly learning — never via manually transcribed paths.
+# LS20 pre-solving uses ls20_solver.plan_ls20_level (BFS over game state).
+# Other environments must implement algorithmic solvers or start from level 1.
 
 
 # ---------------------------------------------------------------------------
@@ -1113,6 +917,16 @@ def _compute_bfs_nav_dynamic(
                     _blocked.add(_attempted)
             _prev_pos_b = _ppt
 
+    # Build a behavioral-pattern registry from trajectory.  Survives the
+    # unblock-after-RC logic: if a (pos, action) has produced only no-op
+    # outcomes since the last maze rotation, the registry marks it futile
+    # and the planner avoids it even if _blocked is cleared downstream.
+    _behavior_registry = BehavioralPatternRegistry()
+    _behavior_registry.rebuild_from_history(
+        action_history,
+        last_maze_mutation_idx=_last_rc_visit_idx,
+    )
+
     # Build the level model.
     # start_levels = level-1 so that prev_levels is correctly initialised even
     # when presolve steps are not recorded in action_history (the presolve runs
@@ -1391,9 +1205,14 @@ def _compute_bfs_nav_dynamic(
                 _rc_pos_set_pre.add(_cand_sh)
     _rc_visits_done_pre = 0
     _prev_at_rc_pre = False
+    _rc_confirmed_positions: set[tuple] = set()  # positions that triggered an RC visit count
     for _idx_pre, _s_pre in enumerate(action_history):
-        if _idx_pre < history_start_idx:
-            continue  # count RC visits across ALL lives in this level (not just latest life)
+        if _idx_pre < history_start_idx or _idx_pre <= _last_reset_idx:
+            # Skip pre-reset visits: a budget-exhaustion game reset (diff>=3000,
+            # pos=None, same level) fully reinitialises the level — RC progress
+            # must be re-earned in the new life.  Must match the main rc_visits
+            # computation below (line ~1668) so pre-compute and main compute agree.
+            continue
         _pp_pre = _s_pre.get("player_pos")
         _diff_pre = _s_pre.get("diff", 0)
         _at_rc_pre = _pp_pre is not None and tuple(_pp_pre) in _rc_pos_set_pre
@@ -1403,6 +1222,8 @@ def _compute_bfs_nav_dynamic(
         #   • Small indicator-sprite rotations (diff ~62, e.g. ls20 level 2 RC)
         if _at_rc_pre and not _prev_at_rc_pre and _diff_pre > 55:
             _rc_visits_done_pre += 1
+            if _pp_pre is not None:
+                _rc_confirmed_positions.add(tuple(_pp_pre))
         elif (not _at_rc_pre and 300 < _diff_pre < 3000 and not _prev_at_rc_pre
               and not (_idx_pre == history_start_idx and level > 1)):
             # Large-diff fallback for RCs whose position isn't yet in rc_pos_set
@@ -1410,6 +1231,8 @@ def _compute_bfs_nav_dynamic(
             # of level 2+ to avoid counting the level-transition frame change.
             _rc_visits_done_pre += 1
             _at_rc_pre = True
+            if _pp_pre is not None:
+                _rc_confirmed_positions.add(tuple(_pp_pre))
         _prev_at_rc_pre = _at_rc_pre
     _n_rc_needed_pre = get_n_rc_visits(_dk, game_id, level)
     if _n_rc_needed_pre is None:
@@ -1422,13 +1245,44 @@ def _compute_bfs_nav_dynamic(
     # Notably, the win gate is blocked early (impassable before triggers) but
     # must become accessible after all RC triggers.  It may not be in model.candidates
     # any more, so we must NOT restrict to candidates only.
+    _just_unblocked_positions: set[tuple] = set()  # exposed to ring-detour logic below
     if _rc_visits_done_pre >= _n_rc_needed_pre and _rc_pos_set_pre:
-        _unblocked = _blocked - _rc_pos_set_pre
+        _unblocked_candidates = _blocked - _rc_pos_set_pre
+        # Consult behavioral-pattern registry: a position is considered
+        # still-futile if, from any neighbouring cell, the action that
+        # would enter it has repeatedly produced no-op outcomes.  Those
+        # positions stay blocked even though the RC-visits gate opened,
+        # preventing the observed oscillation where the agent re-enters
+        # its wall-banging cycle after every unblock.
+        _still_futile: set[tuple] = set()
+        for _ubp in _unblocked_candidates:
+            for _dir_name, _aname in action_map.items():
+                _delta_action = _dir_deltas.get(_dir_name, (0, 0))
+                if _delta_action == (0, 0):
+                    continue
+                _from_pos = (_ubp[0] - _delta_action[0], _ubp[1] - _delta_action[1])
+                if _behavior_registry.is_futile(_from_pos, _aname, min_count=2):
+                    _still_futile.add(_ubp)
+                    break
+        _unblocked = _unblocked_candidates - _still_futile
+        if _still_futile:
+            print(f"  [DYN] Behavioral registry keeps {len(_still_futile)} position(s) "
+                  f"blocked despite RC-unblock: {_still_futile}", flush=True)
         if _unblocked:
             _blocked -= _unblocked
             wset |= _unblocked  # allow BFS to route through formerly-blocked positions
+            # Re-add to model candidates and remove from visited so exploration
+            # actively routes to these positions (model building strips blocked
+            # positions from candidates; visited.update(_blocked) above also
+            # marks them as "done").
+            for _ubp in _unblocked:
+                _ubc, _ubr = _ubp
+                if 0 <= _ubr < len(frame) and 0 <= _ubc < len(frame[_ubr]):
+                    model.candidates[_ubp] = frame[_ubr][_ubc]
+            visited -= _unblocked
+            _just_unblocked_positions = set(_unblocked)
             print(f"  [DYN] All RC visits done — unblocked {len(_unblocked)} position(s): "
-                  f"{_unblocked}", flush=True)
+                  f"{_unblocked} — added to candidates, removed from visited", flush=True)
 
     # If model is incomplete, explore nearest unclassified candidate.
     # Special case: if we have RCs but no win_gate, and blocked positions
@@ -1447,6 +1301,47 @@ def _compute_bfs_nav_dynamic(
         _rc_done_mode = False  # set inside ring-detour block when rings exist
         if _unvisited_rings_g:
             _steps_remaining_g = max(0, _step_budget_g - _steps_since_reset_g)
+
+            # Direct win-gate approach: if RC visits are done and a just-unblocked
+            # candidate (i.e., a formerly-blocked tile that the RC unblock logic
+            # just re-opened) is directly reachable within the remaining budget,
+            # route to it instead of detouring to a ring.  The just-unblocked
+            # positions are the strongest win-gate candidates (they were walls
+            # that became walkable exactly when the RC requirement was met).
+            if _just_unblocked_positions:
+                for _jup in _just_unblocked_positions:
+                    _jup_extra = {_jup}
+                    for _dc_j, _dr_j in [(0, step_size), (0, -step_size),
+                                          (step_size, 0), (-step_size, 0)]:
+                        _jup_extra.add((_jup[0] + _dc_j, _jup[1] + _dr_j))
+                    _jup_path = _bfs_path(player_pos, _jup, wset, step_size, _jup_extra)
+                    if _jup_path is not None and len(_jup_path) <= _steps_remaining_g:
+                        print(f"  [DYN] Just-unblocked target {_jup} reachable in "
+                              f"{len(_jup_path)} steps (<{_steps_remaining_g} budget) "
+                              f"— direct approach, skipping ring detour", flush=True)
+                        waypoints = [player_pos, _jup]
+                        extra_passable = _jup_extra
+                        # Short-circuit: build the plan now and return it.
+                        actions = compute_navigation_plan(
+                            frame=frame,
+                            waypoints=waypoints,
+                            walkable_colors=walkable_colors,
+                            step_size=step_size,
+                            action_map=action_map,
+                            extra_passable=extra_passable,
+                            blocked_positions=_blocked,
+                        )
+                        if actions is not None:
+                            formatted = format_nav_plan(actions)
+                            print(f"  [DYN-EXPLORE] {player_pos} -> {_jup}: {formatted} "
+                                  f"({len(actions)} steps)", flush=True)
+                            return (
+                                f"## Computed navigation path\n"
+                                f"  EXECUTE THIS PATH EXACTLY — take the first 3 actions, "
+                                f"then re-read.\n"
+                                f"  Full path: {formatted} ({len(actions)} total steps)"
+                            )
+
             _trigger_ring_detour = False
             if model.win_gate is not None:
                 # Win gate known: detour if we can't reach it directly.
@@ -1525,14 +1420,22 @@ def _compute_bfs_nav_dynamic(
             # directly reachable within remaining budget.  Keeping rings unvisited
             # preserves them for the post-RC win-gate approach (e.g. (14,15) must
             # be unused so we can refuel there to reach (14,40) after rc_visits=3).
-            if _trigger_ring_detour and not _rc_done_mode and model.has_rc:
+            #
+            # Exception: when only ONE more RC visit is needed, do NOT suppress —
+            # after that final visit we still need budget to reach the win gate,
+            # so a ring detour before the last RC visit is the right move.
+            # (Based on observed rc_visits_done vs n_rc_needed — not a fixed threshold.)
+            _visits_remaining = _n_rc_needed_pre - _rc_visits_done_pre
+            if (_trigger_ring_detour and not _rc_done_mode and model.has_rc
+                    and _visits_remaining > 1):
                 for _rcp in {tuple(p) for p in model.rc_positions}:
                     _path_to_rcp = _bfs_path(player_pos, _rcp, wset, step_size, {_rcp})
                     if _path_to_rcp is not None and len(_path_to_rcp) < _steps_remaining_g:
                         _trigger_ring_detour = False
                         print(f"  [RING] RC at {_rcp} reachable in {len(_path_to_rcp)} steps "
-                              f"(<{_steps_remaining_g} budget) — skipping ring detour to "
-                              f"preserve rings for post-RC win approach", flush=True)
+                              f"(<{_steps_remaining_g} budget, {_visits_remaining} visits left) "
+                              f"— skipping ring detour to preserve rings for post-RC win approach",
+                              flush=True)
                         break
             if _trigger_ring_detour:
                 # After RC visits done, prefer ring closest to the target (win gate or
@@ -1600,7 +1503,13 @@ def _compute_bfs_nav_dynamic(
                               f"({_steps_remaining_g} steps remaining)", flush=True)
                         break
         if not _ring_detour:
-            if (model.has_rc and not model.has_win_gate
+            # RC positions confirmed by actual visit increments, usable even when
+            # model.has_rc=False (model rebuilds from current-life history after reset).
+            # Use _rc_confirmed_positions (not _rc_pos_set_pre) to avoid false positives
+            # from wall-bounce events that happen to fall in the [55,80) diff range.
+            _rc_hist_known = _rc_confirmed_positions - _ring_pos_set_hist
+            if ((model.has_rc or (_rc_visits_done_pre > 0 and _rc_hist_known))
+                    and not model.has_win_gate
                     and _rc_visits_done_pre < _n_rc_needed_pre):
                 # RC found but no win gate yet — visit untriggered RCs to rotate
                 # maze further.  "Triggered" means a diff>300 step already occurred
@@ -1626,7 +1535,9 @@ def _compute_bfs_nav_dynamic(
                     else:
                         if _pp_rc is not None:
                             _prev_pos_trig = tuple(_pp_rc)
-                _rc_set_expl = {tuple(p) for p in model.rc_positions}
+                # Include cross-life known RC positions so agent targets RC even
+                # after a life reset when model.has_rc is False.
+                _rc_set_expl = {tuple(p) for p in model.rc_positions} | _rc_hist_known
                 _untriggered_rcs = [
                     p for p in _rc_set_expl if p not in _triggered_rc_positions
                 ]
@@ -1637,16 +1548,51 @@ def _compute_bfs_nav_dynamic(
                     _rc_target = _untriggered_rcs[0]
                     print(f"  [DYN] RC found, no win gate — routing to untriggered RC {_rc_target}",
                           flush=True)
-                elif _rc_visits_done_pre < _n_rc_needed_pre and model.has_rc:
+                elif _rc_visits_done_pre < _n_rc_needed_pre and (model.has_rc or _rc_hist_known):
                     # All discovered RC positions have already been triggered once,
                     # but we still need more visits (animated changer loops back to
                     # the same position every ~8 steps).  Navigate back to the last
                     # known RC position and bounce there until the changer returns.
                     _explore_rc = True
-                    _rc_target = tuple(model.rc_positions[-1])
+                    _rc_target = (tuple(model.rc_positions[-1]) if model.has_rc
+                                  else next(iter(_rc_hist_known)))
                     print(f"  [DYN] Need {_n_rc_needed_pre - _rc_visits_done_pre} more RC visits "
                           f"— returning to RC {_rc_target} to intercept animated changer",
                           flush=True)
+                # Ring-first RC: if an unvisited ring is closer to the RC target than
+                # we currently are, detour via it first to get more budget for bouncing.
+                # E.g., ring(39,50) is 3 steps from RC(49,45) vs 17 steps from spawn —
+                # visiting ring first gives 21 fresh steps at ring, leaving 18 at RC
+                # instead of 4, enabling the RC visit + win-gate approach in one segment.
+                if _explore_rc and _unvisited_rings_g:
+                    _rcvr_direct = _bfs_path(player_pos, _rc_target, wset,
+                                             step_size, {_rc_target})
+                    _rcvr_direct_dist = (len(_rcvr_direct) - 1
+                                         if _rcvr_direct else 9999)
+                    _best_rvr = None
+                    _best_rvr_to_rc = 9999
+                    for _rvr in _unvisited_rings_g:
+                        _rvr_to_rc = _bfs_path(_rvr, _rc_target, wset,
+                                               step_size, {_rc_target})
+                        if _rvr_to_rc is None:
+                            continue
+                        _rvr_to_rc_dist = len(_rvr_to_rc) - 1
+                        if _rvr_to_rc_dist >= _rcvr_direct_dist:
+                            continue  # ring not closer to RC than player
+                        _path_to_rvr = _bfs_path(player_pos, _rvr, wset,
+                                                  step_size, {_rvr})
+                        if (_path_to_rvr is None
+                                or len(_path_to_rvr) - 1 >= _steps_remaining_g):
+                            continue  # ring unreachable within budget
+                        if _rvr_to_rc_dist < _best_rvr_to_rc:
+                            _best_rvr_to_rc = _rvr_to_rc_dist
+                            _best_rvr = _rvr
+                    if _best_rvr is not None:
+                        print(f"  [DYN] RC-via-ring: detour to ring {_best_rvr} first "
+                              f"(ring→RC={_best_rvr_to_rc} steps vs direct="
+                              f"{_rcvr_direct_dist}; {_step_budget_g - _best_rvr_to_rc}"
+                              f" budget at RC after refuel)", flush=True)
+                        _rc_target = _best_rvr
             if not _explore_rc and _blocked:
                 # Fallback: check if any blocked cell has win_gate color (original logic)
                 _has_blocked_wg = False
@@ -2594,18 +2540,11 @@ async def run_episode(
             log(f"[PRE-SOLVE] Scorecard already at level {_levels_after_reset + 1} "
                 f"(target: {start_level}) — skipping pre-solve.")
         else:
-            subplan = _KNOWN_SUBPLANS.get(env_id, [])
-            if subplan:
-                log(f"[PRE-SOLVE] Currently at level {_levels_after_reset + 1}, "
-                    f"target level {start_level}. Executing {len(subplan)} known actions...")
-                for _act in subplan:
-                    if obs_levels_completed(obs) >= start_level - 1:
-                        break
-                    obs = env.step(_act)
-                log(f"[PRE-SOLVE] Done. Now at level {obs_levels_completed(obs) + 1}.")
-            else:
-                log(f"[PRE-SOLVE] No known subplan for '{env_id}' — "
-                    f"proceeding from level {_levels_after_reset + 1}.")
+            # No hardcoded pre-solve: start from current level.
+            # Environments needing a fast-forward must implement an algorithmic
+            # solver (see ls20_solver.py for the BFS pattern).
+            log(f"[PRE-SOLVE] No solver for '{env_id}' — "
+                f"proceeding from level {_levels_after_reset + 1}.")
         step_count_seed = 0
     else:
         step_count_seed = 0
