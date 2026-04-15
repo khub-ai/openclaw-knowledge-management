@@ -117,6 +117,7 @@ _OPENROUTER_PRICE_INPUT_PER_TOKEN = {
     "qwen/qwen2.5-vl-72b-instruct":         0.36 / 1_000_000,
     "meta-llama/llama-3.2-11b-vision-instruct": 0.055 / 1_000_000,
     "google/gemma-3-27b-it":                 0.10 / 1_000_000,
+    "google/gemma-4-26b-a4b-it":             0.10 / 1_000_000,
 }
 _OPENROUTER_PRICE_OUTPUT_PER_TOKEN = {
     "meta-llama/llama-4-maverick":           0.85 / 1_000_000,
@@ -124,6 +125,7 @@ _OPENROUTER_PRICE_OUTPUT_PER_TOKEN = {
     "qwen/qwen2.5-vl-72b-instruct":         0.36 / 1_000_000,
     "meta-llama/llama-3.2-11b-vision-instruct": 0.055 / 1_000_000,
     "google/gemma-3-27b-it":                 0.22 / 1_000_000,
+    "google/gemma-4-26b-a4b-it":             0.20 / 1_000_000,
 }
 
 _openrouter_client = None

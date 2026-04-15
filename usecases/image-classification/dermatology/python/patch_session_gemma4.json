@@ -1,0 +1,144 @@
+{
+  "cheap_model": "google/gemma-4-26b-a4b-it",
+  "expert_model": "claude-sonnet-4-6",
+  "validator_model": "claude-sonnet-4-6",
+  "patch_rules_file": "C:\\_backup\\github\\khub-knowledge-fabric\\usecases\\image-classification\\dermatology\\python\\patch_rules_gemma4.json",
+  "dry_run": false,
+  "total_tasks": 6,
+  "failures_before": 1,
+  "failures_processed": 1,
+  "rules_authored": 1,
+  "rules_accepted": 1,
+  "rules_registered": 1,
+  "cross_pair_events": [],
+  "patch_records": [
+    {
+      "task_id": "melanoma_vs_melanocytic_nevus_ISIC_0024392",
+      "pair_id": "melanoma_vs_melanocytic_nevus",
+      "wrong_prediction": "Melanoma",
+      "correct_label": "Melanocytic Nevus",
+      "candidate_rule": {
+        "rule": "When a lesion shows a predominantly homogeneous reddish-brown to dark-brown diffuse pigmentation with a roughly circular to oval overall silhouette, gradual peripheral fading (moth-eaten or fading border rather than sharp cut-off), no discrete structureless white areas, no regression structures (white scar-like areas or blue-grey peppering), no atypical pigment network with abrupt termination, and no blue-white veil, classify as Melanocytic Nevus.",
+        "feature": "homogeneous reddish-brown to dark-brown diffuse pigmentation with gradual peripheral fading",
+        "favors": "Melanocytic Nevus",
+        "confidence": "moderate",
+        "preconditions": [
+          "Dominant color is a single reddish-brown to dark-brown hue without true polychromia (no gray, blue, white, or black zones)",
+          "Pigment distribution, while non-uniform in texture, lacks discrete structureless zones or focal color breaks indicative of true architectural disorder",
+          "Borders fade gradually into surrounding skin (soft, moth-eaten periphery) rather than ending abruptly or showing notching",
+          "No blue-white veil (confluent blue-grey haze over raised area)",
+          "No regression structures: no white scar-like areas, no blue-grey peppering",
+          "No atypical dots or globules at the periphery that are markedly irregular in size and distribution",
+          "Overall lesion shape is roughly symmetric on at least one axis",
+          "If a pigment network is present, it is regular (uniform mesh with consistent line thickness and hole size) rather than atypical; network lines do not show focal thickening, branching streaks, or abrupt peripheral termination",
+          "No radial streaming or pseudopods projecting asymmetrically at the periphery",
+          "No milky-red areas or irregular vascular structures (dotted, irregular, or polymorphous vessels) inconsistent with a benign nevus",
+          "Lesion size is within a range that does not by itself raise strong suspicion for melanoma; no pronounced focal elevation or nodular component suggesting dermal invasion",
+          "No satellite lesions or discrete pigmented foci clearly separate from the main lesion body"
+        ],
+        "rationale": "The pupil over-interpreted normal textural heterogeneity within a homogeneous reddish-brown nevus as 'variegated color' and 'architectural disorder.' In reality, this lesion shows a single dominant warm reddish-brown tone, soft peripheral fading, and an absence of the cardinal melanoma features (blue-white veil, regression, abruptly terminating atypical network, true polychromia). The pupil hallucinated or overweighted the significance of uneven pigment texture \u2014 which is common in benign nevi \u2014 while missing the globally symmetric, softly fading, mono-tonal appearance that strongly favors a benign melanocytic nevus. Melanomas characteristically show multiple distinct colors (including grey/blue/white/black), sharp or notched borders, and regression structures \u2014 none of which are present here.",
+        "added_preconditions": [
+          "If a pigment network is present, it is regular (uniform mesh with consistent line thickness and hole size) rather than atypical; network lines do not show focal thickening, branching streaks, or abrupt peripheral termination",
+          "No radial streaming or pseudopods projecting asymmetrically at the periphery",
+          "No milky-red areas or irregular vascular structures (dotted, irregular, or polymorphous vessels) inconsistent with a benign nevus",
+          "Lesion size is within a range that does not by itself raise strong suspicion for melanoma; no pronounced focal elevation or nodular component suggesting dermal invasion",
+          "No satellite lesions or discrete pigmented foci clearly separate from the main lesion body"
+        ],
+        "completion_rationale": "The expert assumed that a trained dermoscopist would automatically check for a regular versus atypical pigment network (a fundamental melanoma discriminator), the absence of radial streaming or pseudopods (asymmetric peripheral projections strongly associated with melanoma), and the absence of atypical vascularity such as milky-red areas or polymorphous vessels, none of which were explicitly excluded. Additionally, the absence of a nodular component or satellite foci \u2014 both melanoma red flags \u2014 was implicitly expected for a benign nevus diagnosis but not stated, creating loopholes for more advanced or multifocal melanomas that might otherwise share the diffuse brown pigmentation pattern."
+      },
+      "semantic_validation": {
+        "precondition_ratings": [
+          {
+            "precondition": "Dominant color is a single reddish-brown to dark-brown hue without true polychromia (no gray, blue, white, or black zones)",
+            "rating": "context_dependent",
+            "comment": "Many melanomas can present with a dominant brown hue, especially early superficial spreading melanoma, making single-color appearance insufficiently discriminating on its own, though true polychromia strongly favors melanoma when present."
+          },
+          {
+            "precondition": "Pigment distribution, while non-uniform in texture, lacks discrete structureless zones or focal color breaks indicative of true architectural disorder",
+            "rating": "context_dependent",
+            "comment": "The qualifier 'non-uniform in texture' introduces ambiguity that could accommodate early melanoma; reliable only when combined with other benign features and assessed by an experienced observer."
+          },
+          {
+            "precondition": "Borders fade gradually into surrounding skin (soft, moth-eaten periphery) rather than ending abruptly or showing notching",
+            "rating": "context_dependent",
+            "comment": "Gradual border fading is more characteristic of nevi but also occurs in lentigo maligna and some flat melanomas, limiting its standalone discriminatory power."
+          },
+          {
+            "precondition": "No blue-white veil (confluent blue-grey haze over raised area)",
+            "rating": "reliable",
+            "comment": "Blue-white veil is a well-validated melanoma-specific feature and its absence is a meaningful negative criterion that reliably supports a benign classification."
+          },
+          {
+            "precondition": "No regression structures: no white scar-like areas, no blue-grey peppering",
+            "rating": "reliable",
+            "comment": "Regression structures are strongly associated with melanoma and only rarely seen in benign nevi, making their absence a reliable supporting criterion."
+          },
+          {
+            "precondition": "No atypical dots or globules at the periphery that are markedly irregular in size and distribution",
+            "rating": "reliable",
+            "comment": "Peripheral atypical dots/globules are a recognized melanoma criterion, and their absence meaningfully lowers suspicion for malignancy."
+          },
+          {
+            "precondition": "Overall lesion shape is roughly symmetric on at least one axis",
+            "rating": "unreliable",
+            "comment": "Symmetry on 'at least one axis' is a very weak criterion as many melanomas, particularly early lesions, can appear roughly symmetric on one axis while still being asymmetric overall."
+          },
+          {
+            "precondition": "If a pigment network is present, it is regular (uniform mesh with consistent line thickness and hole size) rather than atypical; network lines do not show focal thickening, branching streaks, or abrupt peripheral termination",
+            "rating": "reliable",
+            "comment": "A regular pigment network is a well-established dermoscopic criterion for benign melanocytic nevi, and atypical network features are reliable melanoma indicators whose absence is meaningful."
+          },
+          {
+            "precondition": "No radial streaming or pseudopods projecting asymmetrically at the periphery",
+            "rating": "reliable",
+            "comment": "Radial streaming and pseudopods are high-specificity melanoma features, and their absence is a reliable negative criterion supporting a benign lesion."
+          },
+          {
+            "precondition": "No milky-red areas or irregular vascular structures (dotted, irregular, or polymorphous vessels) inconsistent with a benign nevus",
+            "rating": "reliable",
+            "comment": "Milky-red areas and polymorphous vessels are well-validated melanoma indicators, and their absence reliably reduces the probability of malignancy."
+          },
+          {
+            "precondition": "Lesion size is within a range that does not by itself raise strong suspicion for melanoma; no pronounced focal elevation or nodular component suggesting dermal invasion",
+            "rating": "unreliable",
+            "comment": "Size is a weak dermoscopic criterion as both small melanomas and large benign nevi exist; the vague phrasing 'within a range that does not by itself raise suspicion' provides no actionable threshold and could allow dangerous misclassification."
+          },
+          {
+            "precondition": "No satellite lesions or discrete pigmented foci clearly separate from the main lesion body",
+            "rating": "context_dependent",
+            "comment": "Satellite lesions are more relevant to advanced or metastatic melanoma and are rarely seen in the early lesions most likely to be confused with nevi, limiting the discriminatory value of this criterion in practice."
+          }
+        ],
+        "overall": "revise",
+        "rationale": "The rule contains several strong and reliable negative criteria (blue-white veil, regression structures, atypical network, pseudopods, polymorphous vessels) that together form a defensible exclusion framework for melanoma. However, pre-conditions 7 and 11 are unreliable due to weak thresholds and vague language that could allow melanomas to pass the gate, and pre-conditions 1, 2, 3, and 12 are context-dependent and insufficiently discriminating when used alone. Before image validation, pre-conditions 7 and 11 should be tightened or removed, and the context-dependent criteria should be reframed as supporting rather than gating conditions."
+      },
+      "validation": {
+        "fires_on_trigger": true,
+        "tp": 4,
+        "fp": 0,
+        "tn": 8,
+        "fn": 4,
+        "precision": 1.0,
+        "recall": 0.5,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "confirmation_validation": {
+        "fires_on_trigger": true,
+        "tp": 6,
+        "fp": 2,
+        "tn": 14,
+        "fn": 10,
+        "precision": 0.75,
+        "recall": 0.375,
+        "accepted": false,
+        "rejection_reason": "fp=2 > 1",
+        "early_exited": false
+      },
+      "spectrum_history": [],
+      "accepted": true,
+      "registered": true
+    }
+  ]
+}

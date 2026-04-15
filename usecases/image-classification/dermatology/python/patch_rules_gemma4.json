@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "rules": [
+    {
+      "id": "r_001",
+      "condition": "[Patch rule \u2014 melanoma_vs_melanocytic_nevus] Dominant color is a single reddish-brown to dark-brown hue without true polychromia (no gray, blue, white, or black zones); Pigment distribution, while non-uniform in texture, lacks discrete structureless zones or focal color breaks indicative of true architectural disorder; Borders fade gradually into surrounding skin (soft, moth-eaten periphery) rather than ending abruptly or showing notching; No blue-white veil (confluent blue-grey haze over raised area); No regression structures: no white scar-like areas, no blue-grey peppering; No atypical dots or globules at the periphery that are markedly irregular in size and distribution; Overall lesion shape is roughly symmetric on at least one axis; If a pigment network is present, it is regular (uniform mesh with consistent line thickness and hole size) rather than atypical; network lines do not show focal thickening, branching streaks, or abrupt peripheral termination; No radial streaming or pseudopods projecting asymmetrically at the periphery; No milky-red areas or irregular vascular structures (dotted, irregular, or polymorphous vessels) inconsistent with a benign nevus; Lesion size is within a range that does not by itself raise strong suspicion for melanoma; no pronounced focal elevation or nodular component suggesting dermal invasion; No satellite lesions or discrete pigmented foci clearly separate from the main lesion body",
+      "action": "Classify as Melanocytic Nevus. Confidence: moderate. Rule: When a lesion shows a predominantly homogeneous reddish-brown to dark-brown diffuse pigmentation with a roughly circular to oval overall silhouette, gradual peripheral fading (moth-eaten or fading border rather than sharp cut-off), no discrete structureless white areas, no regression structures (white scar-like areas or blue-grey peppering), no atypical pigment network with abrupt termination, and no blue-white veil, classify as Melanocytic Nevus.",
+      "rule_type": "task",
+      "scope": "dataset",
+      "stats_by_ns": {
+        "derm-ham10000": {
+          "fires": 0,
+          "successes": 0,
+          "failures": 0
+        }
+      },
+      "source": "expert_vlm:claude-sonnet-4-6",
+      "source_task": "melanoma_vs_melanocytic_nevus_ISIC_0024392",
+      "tags": [
+        "derm-ham10000",
+        "melanoma_vs_melanocytic_nevus",
+        "patch:google/gemma-4-26b-a4b-it",
+        "triggered_by:melanoma_vs_melanocytic_nevus_ISIC_0024392"
+      ],
+      "lineage": {
+        "type": "new",
+        "parent_ids": [],
+        "reason": "patch rule for melanoma_vs_melanocytic_nevus triggered by melanoma_vs_melanocytic_nevus_ISIC_0024392"
+      },
+      "status": "active",
+      "source_level": 0,
+      "tasks_seen": 0,
+      "created": "2026-04-14T05:36:52",
+      "last_fired": null
+    }
+  ]
+}
