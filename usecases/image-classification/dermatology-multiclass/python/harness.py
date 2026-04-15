@@ -271,13 +271,12 @@ async def main() -> None:
         console.print(f"[red]Failed to load dataset: {e}[/red]")
         sys.exit(1)
 
-    # Determine max_per_class: --all means all test images; default caps at 3
-    max_pc = None if args.all else args.max_per_class
-
+    # --all selects all 7 classes; --max-per-class always caps images per class.
+    # (Unlike the 2-way harness where --all meant "all pairs AND all images".)
     all_tasks = build_tasks(
         ds,
         n_few_shot=args.n_few_shot,
-        max_per_class=max_pc,
+        max_per_class=args.max_per_class,
         filter_class=args.filter_class,
     )
 

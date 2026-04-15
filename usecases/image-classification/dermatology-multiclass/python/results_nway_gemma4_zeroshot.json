@@ -1,0 +1,411 @@
+{
+  "summary": {
+    "correct": 9,
+    "total": 21,
+    "accuracy": 0.42857142857142855,
+    "avg_ms": 4104.476190476191,
+    "total_cost_usd": 0.028164,
+    "avg_cost_usd": 0.001341,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cache_creation": 0,
+    "total_cache_read": 0,
+    "total_api_calls": 21,
+    "model": "google/gemma-4-26b-a4b-it",
+    "dataset": "derm-ham10000",
+    "category_set_id": "dermatology_7class",
+    "timestamp": "2026-04-15T11:13:05Z",
+    "rules": {
+      "total": 0,
+      "active": 0,
+      "candidates": 0,
+      "flagged": 0,
+      "deprecated": 0,
+      "archived": 0,
+      "total_fired": 0,
+      "total_succeeded": 0
+    }
+  },
+  "per_class": {
+    "Melanoma": {
+      "correct": 3,
+      "total": 3,
+      "accuracy": 1.0
+    },
+    "Melanocytic Nevus": {
+      "correct": 2,
+      "total": 3,
+      "accuracy": 0.6666666666666666
+    },
+    "Benign Keratosis": {
+      "correct": 0,
+      "total": 3,
+      "accuracy": 0.0
+    },
+    "Basal Cell Carcinoma": {
+      "correct": 1,
+      "total": 3,
+      "accuracy": 0.3333333333333333
+    },
+    "Actinic Keratosis": {
+      "correct": 0,
+      "total": 3,
+      "accuracy": 0.0
+    },
+    "Vascular Lesion": {
+      "correct": 3,
+      "total": 3,
+      "accuracy": 1.0
+    },
+    "Dermatofibroma": {
+      "correct": 0,
+      "total": 3,
+      "accuracy": 0.0
+    }
+  },
+  "confusion": {
+    "Melanoma": {
+      "Melanoma": 3
+    },
+    "Melanocytic Nevus": {
+      "Melanocytic Nevus": 2,
+      "Melanoma": 1
+    },
+    "Benign Keratosis": {
+      "Melanoma": 1,
+      "Melanocytic Nevus": 2
+    },
+    "Basal Cell Carcinoma": {
+      "Melanoma": 2,
+      "Basal Cell Carcinoma": 1
+    },
+    "Actinic Keratosis": {
+      "Melanoma": 2,
+      "Melanocytic Nevus": 1
+    },
+    "Vascular Lesion": {
+      "Vascular Lesion": 3
+    },
+    "Dermatofibroma": {
+      "Melanocytic Nevus": 1,
+      "Melanoma": 2
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "dermatology_7class_mel_ISIC_0024315",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Melanoma",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The lesion exhibits significant asymmetry in shape and color distribution. There is an irregular border, multiple shades of brown and black pigmentation, and an uneven, blotchy pattern characteristic of malignant melanocytic proliferation.",
+      "duration_ms": 5490,
+      "cost_usd": 0.0024749999999999998,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "mel"
+    },
+    {
+      "task_id": "dermatology_7class_mel_ISIC_0024333",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Melanoma",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The lesion exhibits significant asymmetry in both shape and color distribution, irregular and poorly defined borders, and a variegated pigment network with irregular globules and streaks, which are classic dermoscopic features suggestive of melanoma.",
+      "duration_ms": 2216,
+      "cost_usd": 0.0,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "mel"
+    },
+    {
+      "task_id": "dermatology_7class_mel_ISIC_0024400",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Melanoma",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The lesion exhibits significant asymmetry in color and pattern, irregular borders, and a variegated pigmentation pattern with shades of brown and black, which are characteristic features suspicious for melanoma.",
+      "duration_ms": 14780,
+      "cost_usd": 0.0023820000000000004,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "mel"
+    },
+    {
+      "task_id": "dermatology_7class_nv_ISIC_0024350",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Melanocytic Nevus",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The lesion exhibits a relatively symmetric, regular, and homogeneous brownish pigment distribution with well-defined borders, which is characteristic of a benign melanocytic nevus rather than the asymmetrical or chaotic patterns seen in melanoma.",
+      "duration_ms": 5777,
+      "cost_usd": 0.00015300000000000036,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "nv"
+    },
+    {
+      "task_id": "dermatology_7class_nv_ISIC_0024385",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Melanocytic Nevus",
+      "correct": true,
+      "confidence": 0.7,
+      "reasoning": "The image shows light brown, well-demarcated macules with relatively uniform pigmentation and no significant architectural disorder, asymmetry, or irregular pigment networks characteristic of melanoma. The appearance is consistent with benign melanocytic lesions, likely nevi.",
+      "duration_ms": 4233,
+      "cost_usd": 0.002456999999999999,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "nv"
+    },
+    {
+      "task_id": "dermatology_7class_nv_ISIC_0024392",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Melanocytic Nevus",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The lesion demonstrates significant asymmetry in both shape and color distribution, along with irregular and poorly defined borders, which are highly suspicious for melanoma.",
+      "duration_ms": 4092,
+      "cost_usd": -0.00016199999999999895,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "nv"
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024336",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Benign Keratosis",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The lesion exhibits significant asymmetry in shape and color distribution. There is an irregular pigment network and unevenly distributed brown and grayish-blue hues, which are highly suspicious for malignancy.",
+      "duration_ms": 2685,
+      "cost_usd": 0.0025769999999999994,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bkl"
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024420",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Benign Keratosis",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The lesion shows a symmetric, relatively uniform brown pigment distribution with fine, regular reticular patterns and no highly suspicious asymmetrical features or significant blue-white veil typical of melanoma.",
+      "duration_ms": 2544,
+      "cost_usd": -0.00014699999999999783,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bkl"
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024495",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Benign Keratosis",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The lesion shows a relatively symmetric, well-circumscribed brown pigment pattern without the highly irregular borders, multiple colors, or structural chaos typically seen in melanoma. It appears to be a stable melanocytic proliferation.",
+      "duration_ms": 2522,
+      "cost_usd": 0.0026819999999999934,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bkl"
+    },
+    {
+      "task_id": "dermatology_7class_bcc_ISIC_0024345",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Basal Cell Carcinoma",
+      "correct": false,
+      "confidence": 0.1,
+      "reasoning": "The image quality is insufficient for dermatoscopic analysis; it is too blurry to identify any diagnostic features.",
+      "duration_ms": 4477,
+      "cost_usd": 0.000288000000000007,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bcc"
+    },
+    {
+      "task_id": "dermatology_7class_bcc_ISIC_0024452",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Basal Cell Carcinoma",
+      "correct": false,
+      "confidence": 0.75,
+      "reasoning": "The lesion exhibits significant asymmetry in shape and color distribution, irregular borders, and an uneven pigment network with varied shades of brown and subtle reddish areas, which are suspicious features for malignancy.",
+      "duration_ms": 2840,
+      "cost_usd": 0.0021389999999999916,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bcc"
+    },
+    {
+      "task_id": "dermatology_7class_bcc_ISIC_0024457",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Basal Cell Carcinoma",
+      "correct_label": "Basal Cell Carcinoma",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The image shows a highly irregular, pigmented lesion with features suggestive of Basal Cell Carcinoma, including areas of ulceration, irregular vascular patterns, and multi-colored pigment distribution (blacks and browns) which are common in pigmented BCC.",
+      "duration_ms": 3689,
+      "cost_usd": 0.0005010000000000119,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "bcc"
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024468",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Actinic Keratosis",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The image shows significant architectural disorder, irregular pigmentation patterns, and an asymmetrical distribution of colors and structures, which are suspicious clinical features for melanoma.",
+      "duration_ms": 3422,
+      "cost_usd": 0.0018089999999999877,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "akiec"
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024470",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Actinic Keratosis",
+      "correct": false,
+      "confidence": 0.85,
+      "reasoning": "The image shows significant architectural disorder, asymmetrical pigment distribution, and irregular, blurred pigment networks. The presence of regression-like white structures and indistinct, irregular color variations are highly suspicious for melanoma.",
+      "duration_ms": 5824,
+      "cost_usd": 0.0006510000000000127,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "akiec"
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024646",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Actinic Keratosis",
+      "correct": false,
+      "confidence": 0.7,
+      "reasoning": "The image shows a light brown, symmetric lesion with a regular pigment network pattern and no significant architectural disorder, atypical pigment globules, or irregular streaks, which are more characteristic of a benign melanocytic nevus.",
+      "duration_ms": 2488,
+      "cost_usd": 0.0018689999999999818,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "akiec"
+    },
+    {
+      "task_id": "dermatology_7class_vasc_ISIC_0024662",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Vascular Lesion",
+      "correct_label": "Vascular Lesion",
+      "correct": true,
+      "confidence": 0.95,
+      "reasoning": "The image shows a well-demarcated, homogeneous reddish-purple lesion characteristic of a vascular growth, such as a hemangioma or cherry angioma, lacking the pigment networks or irregular structures associated with melanocytic lesions.",
+      "duration_ms": 4399,
+      "cost_usd": 0.0007110000000000172,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "vasc"
+    },
+    {
+      "task_id": "dermatology_7class_vasc_ISIC_0024669",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Vascular Lesion",
+      "correct_label": "Vascular Lesion",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The lesion presents as a well-demarcated, bright red/erythematous nodule. In a dermoscopic context, such a uniform red color without pigment networks, globules, or scale is highly suggestive of a vascular entity such as a cherry angioma or a pyogenic granuloma.",
+      "duration_ms": 3117,
+      "cost_usd": 0.0020939999999999848,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "vasc"
+    },
+    {
+      "task_id": "dermatology_7class_vasc_ISIC_0024867",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Vascular Lesion",
+      "correct_label": "Vascular Lesion",
+      "correct": true,
+      "confidence": 0.85,
+      "reasoning": "The image shows a well-demarcated, erythematous/red lesion characterized by a homogeneous reddish color, which is highly suggestive of a vascular lesion such as a cherry hemangioma or a similar vascular proliferation, lacking the pigmentary networks or structural irregularities typical of melanocytic lesions.",
+      "duration_ms": 3783,
+      "cost_usd": 0.0006660000000000138,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "vasc"
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0024973",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanocytic Nevus",
+      "correct_label": "Dermatofibroma",
+      "correct": false,
+      "confidence": 0.0,
+      "reasoning": "I cannot provide a medical diagnosis from this image. Identifying skin lesions requires high-resolution, clinical-grade imaging and a direct examination by a trained medical professional.",
+      "duration_ms": 3111,
+      "cost_usd": 0.0025439999999999907,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "df"
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0025302",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Dermatofibroma",
+      "correct": false,
+      "confidence": 0.7,
+      "reasoning": "The image shows an asymmetrical lesion with irregular pigmentation and a lack of a clearly defined border or organized pattern, which are suspicious features for malignancy.",
+      "duration_ms": 2305,
+      "cost_usd": -0.0002489999999999992,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "df"
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0025373",
+      "category_set_id": "dermatology_7class",
+      "predicted_label": "Melanoma",
+      "correct_label": "Dermatofibroma",
+      "correct": false,
+      "confidence": 0.75,
+      "reasoning": "The lesion shows significant architectural disorder with asymmetric pigment distribution, irregular color variegation (shades of brown and pinkish hues), and an indistinct, blurred border, which are concerning features for malignancy.",
+      "duration_ms": 2400,
+      "cost_usd": 0.002724000000000004,
+      "api_calls": 1,
+      "model": "google/gemma-4-26b-a4b-it",
+      "baseline_mode": "zero_shot",
+      "_dx": "df"
+    }
+  ]
+}
