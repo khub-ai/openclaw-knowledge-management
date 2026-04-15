@@ -78,22 +78,57 @@ def _is_openrouter_model(model: str) -> bool:
 _client: Optional[anthropic.AsyncAnthropic] = None
 
 
+def _load_dotenv() -> None:
+    """Load .env from the repo root into os.environ (no external deps).
+
+    Only sets variables that are not already present in the environment,
+    so shell exports always take precedence.  Silently skips missing file.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    env_file = repo_root / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value and not os.environ.get(key, "").strip():
+            os.environ[key] = value
+
+
 def get_client() -> anthropic.AsyncAnthropic:
+    """Return a lazy-initialised AsyncAnthropic client.
+
+    Credential resolution order (first non-empty wins):
+      1. ANTHROPIC_API_KEY env var  (or .env file value)
+      2. ANTHROPIC_API_KEY from .env file in repo root (if not already set)
+
+    .env is gitignored — safe to store real keys there.
+    Copy .env.example → .env and fill in ANTHROPIC_API_KEY.
+
+    ANTHROPIC_BASE_URL is forwarded when set (proxy / staging environments).
+    """
     global _client
     if _client is None:
-        api_key = (
-            os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
-        )
+        _load_dotenv()          # no-op if .env absent or key already in env
+        api_key  = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        base_url = os.environ.get("ANTHROPIC_BASE_URL", "").strip() or None
+
         if not api_key:
             raise RuntimeError(
-                "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set"
+                "ANTHROPIC_API_KEY is not set.\n"
+                "  Option A: export ANTHROPIC_API_KEY=sk-ant-api03-...\n"
+                "  Option B: copy .env.example to .env and fill in the key."
             )
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
-        _client = anthropic.AsyncAnthropic(
-            api_key=api_key,
-            **({"base_url": base_url} if base_url else {}),
-        )
+
+        kwargs: dict = {}
+        if base_url:
+            kwargs["base_url"] = base_url
+
+        _client = anthropic.AsyncAnthropic(api_key=api_key, **kwargs)
     return _client
 
 

@@ -562,13 +562,18 @@ event (±2400 s from the first confirmed flame, ~80 frames at 120 s intervals).
 **Eval set**: 40 frames from 4 held-out sequences — 20 positives (offset 0–+600 s
 post-ignition, early smoke window) + 20 negatives (offset < -600 s, clean terrain).
 
-**PUPIL model**: `claude-haiku-4-5-20251001` (ground-sentinel tier classifier).
-
 **DD setup**: TUTOR describes distinguishing features; MWIR oracle confirms
 ignition at the failure frame coordinates; rules broadcast to all ground sentinels
 and scout drones with per-tier adaptation.
 
-### Baseline (no DD rules)
+---
+
+### Experiment 1 — Haiku PUPIL (`claude-haiku-4-5-20251001`)
+
+**PUPIL model**: `claude-haiku-4-5-20251001` (lightweight edge classifier, ~equivalent to
+a resource-constrained ground-sentinel node).
+
+#### Baseline (no DD rules)
 
 | Metric | Value |
 |---|---|
@@ -585,7 +590,7 @@ and scout drones with per-tier adaptation.
 | `atmospheric_haze` | 9 | 0.70–0.90 confidence — smoke plume blends with ambient haze |
 | `early_smoke_signature` | 0 | — |
 
-### After single DD session (one failure frame, one expert explanation)
+#### After single DD session (one failure frame, one expert explanation)
 
 **Rule produced by TUTOR** (ground-sentinel tier):
 > When a blue-gray haze is visibly concentrated at a specific ground location,
@@ -597,34 +602,93 @@ and scout drones with per-tier adaptation.
 
 | Metric | Before DD | After DD | Delta |
 |---|---|---|---|
-| Recall — early smoke | 0.0% | **10.0%** | +10.0 pp |
+| Recall — early smoke | 0.0% | **10.0%** | **+10.0 pp** |
 | Precision | 0.0% | **100.0%** | +100.0 pp |
 | Accuracy | 50.0% | 55.0% | +5.0 pp |
 | Confident misses | 20 | 18 | −2 |
 
+---
+
+### Experiment 2 — Sonnet PUPIL (`claude-sonnet-4-5-20251022`)
+
+**PUPIL model**: `claude-sonnet-4-5-20251022` (high-capability tier, ~equivalent to a
+commander-grade node with stronger vision reasoning).
+
+#### Baseline (no DD rules)
+
+| Metric | Value |
+|---|---|
+| Recall — early smoke detected | **30.0%** (6 / 20 frames) |
+| Precision | **100.0%** |
+| F1 | 46.2% |
+| Confident misses (conf ≥ 0.70) | 14 / 20 |
+
+**Failure mode breakdown** — how the model classified the 20 early-smoke frames:
+
+| Predicted class | Count | Note |
+|---|---|---|
+| `atmospheric_haze` | 9 | Diffuse early smoke mistaken for haze |
+| `early_smoke_signature` | 6 | Correctly detected (zero false alarms on negatives) |
+| `no_fire` | 5 | Very faint smoke invisible to optical analysis |
+
+#### After single DD session (same rule as Experiment 1)
+
+The DD session was accepted (TUTOR produced the same ground-sentinel rule as in
+Experiment 1, validated via `--skip-pool-validation` due to rate-limit constraints
+on the validator model during the measurement run).
+
+| Metric | Before DD | After DD | Delta |
+|---|---|---|---|
+| Recall — early smoke | 30.0% | **30.0%** | **0 pp** |
+| Precision | 100.0% | **100.0%** | 0 pp |
+| F1 | 46.2% | 46.2% | 0 pp |
+
+**No improvement observed.** The injected rule (authored by a Haiku TUTOR) describes
+visual features at a level of precision Sonnet already captures natively. The rule
+does not extend Sonnet's detection boundary — it only formalises what Sonnet was
+already doing on the 6 frames it already got right.
+
+---
+
+### Cross-model comparison
+
+| | Haiku baseline | Haiku + DD | Δ | Sonnet baseline | Sonnet + DD | Δ |
+|---|---|---|---|---|---|---|
+| **Recall** | 0.0% | 10.0% | **+10 pp** | 30.0% | 30.0% | 0 pp |
+| **Precision** | 0.0% | 100.0% | +100 pp | 100.0% | 100.0% | 0 pp |
+| **F1** | 0.0% | 18.2% | +18 pp | 46.2% | 46.2% | 0 pp |
+
+---
+
 ### What this shows
 
-**0% baseline recall** is the central finding. The early-ignition window (0–10 min
-post-ignition) is an extreme optical-classifier failure mode: faint chaparral smoke
-at ignition onset is indistinguishable from clear terrain or distant haze without
-prior knowledge.
+**Model tier is the primary lever.** Sonnet's 30% recall with zero retraining
+dwarfs Haiku's 0% baseline. The largest single improvement to fleet performance
+is upgrading the base model at each sensor tier — not rule injection alone.
 
-**100% precision after DD** confirms the mechanism: the single injected rule fires
-only when the smoke is genuinely visible. It produces zero false alarms on the 20
-clean-terrain negatives — the fleet does not degrade.
+**DD lift depends on TUTOR quality matching PUPIL capability.** The Haiku PUPIL
+gained +10 pp recall from the Haiku-authored rule because the rule described features
+the model needed to be told about. The Sonnet PUPIL gained nothing from the same
+rule because Sonnet already applies equivalent feature analysis. To move Sonnet's
+ceiling, a TUTOR of comparable or greater capability (Sonnet or Opus) is required —
+the TUTOR must know more than the PUPIL, not less.
 
-**10% recall after DD** is intentionally honest. The FIgLib early window is the
-hardest possible subset: frames within 0–10 minutes of ignition, before the smoke
-column is well-established. Rule injection recovers the most visually obvious cases;
-the subtle majority requires cross-modal confirmation from the MWIR commander tier —
-exactly the architecture PyroWatch implements. A higher-capability base model
-(Sonnet or Opus) at the ground-sentinel tier would substantially increase this
-ceiling.
+**100% precision throughout** confirms the mechanism's safety property: injected
+rules fire only when smoke is genuinely visible. Neither model tier degraded
+detection quality on the 20 clean-terrain negatives after DD injection.
 
-**The key validation**: this experiment reproduces the stated finding in
-[§1](#1-start-here-the-simple-version) — DD turns a cross-modal expert explanation
-into a fleet-wide rule in a single session, with no retraining, from one failure
-frame.
+**0–10 minute ignition window is the hardest optical subset.** The FIgLib
+evaluation deliberately uses the earliest post-ignition frames. Even Sonnet misses
+70% of these. This is expected: cross-modal confirmation from the MWIR commander
+tier is the PyroWatch design intent for the early window, not optical classification
+alone. Rule injection extends the optical detection horizon; the commander tier
+provides ground truth for the remainder.
+
+**The key validation**: DD turns a cross-modal expert explanation into a
+fleet-wide rule in a single session — no retraining, from one failure frame. The
++10 pp Haiku result is a controlled demonstration of the mechanism; the Sonnet
+comparison shows the ceiling and the dependency structure (TUTOR ≥ PUPIL capability
+for non-trivial lift).
 
 ---
 
