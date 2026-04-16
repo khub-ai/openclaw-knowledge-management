@@ -23,13 +23,18 @@
 
 ## Summary
 
-**What this is**: a simulated experiment on the
-[SeaDronesSee](https://github.com/Ben93kie/SeaDronesSee) public maritime
-drone dataset. We simulate a 40-drone SAR fleet (38 optical scout drones +
-2 commander drones with thermal FLIR) and ask whether a single expert
-explanation can fix a fleet-wide misclassification without retraining. The
-thermal confirmation that triggers the DD session is provided by
-SeaDronesSee's ground-truth labels, not a physical sensor.
+**Motivating scenario**: a 40-drone maritime SAR fleet (38 optical scout
+drones + 2 commander drones with thermal FLIR) where the commander tier's
+thermal sensor confirms a person in the water that the optical scouts missed.
+A rescue swimmer explains what the scouts should have seen; DD broadcasts the
+rule fleet-wide without retraining. This scenario is a design pattern, not a
+system we built.
+
+**What we actually implemented and measured**: a Dialogic Distillation session
+between a TUTOR and a PUPIL model (Qwen3-VL-8B), tested on frames from the
+[SeaDronesSee](https://github.com/Ben93kie/SeaDronesSee) public maritime drone
+dataset. SeaDronesSee's ground-truth labels stand in for the thermal commander
+confirmation that would trigger the session in a real deployment.
 
 **Key results**:
 
@@ -39,14 +44,6 @@ SeaDronesSee's ground-truth labels, not a physical sensor.
 | Qwen3-VL-8B PUPIL recall after one DD session | **52%** (+44 pp) |
 | False alarms introduced | **0** |
 | Retraining required | **None** |
-| Time from failure identification to fleet-wide rule broadcast | **52 seconds** |
-
-**The scenario**: a commander drone's thermal FLIR confirms a person in the
-water at coordinates where 38 optical scouts classified "whitecap, 0.91
-confidence" 18 minutes earlier. A rescue swimmer explains what the optical
-scouts should have seen. DD turns that into a rule; the entire fleet is
-updated and archived footage retroactively reclassified. The numbers above
-measure whether that mechanism works on real SeaDronesSee imagery.
 
 ---
 
