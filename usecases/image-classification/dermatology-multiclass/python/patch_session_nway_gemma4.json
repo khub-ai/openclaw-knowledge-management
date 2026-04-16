@@ -1,0 +1,302 @@
+{
+  "cheap_model": "google/gemma-4-26b-a4b-it",
+  "expert_model": "claude-sonnet-4-6",
+  "validator_model": "claude-sonnet-4-6",
+  "patch_rules_file": "C:\\_backup\\github\\khub-knowledge-fabric\\usecases\\image-classification\\dermatology-multiclass\\python\\patch_rules_nway.json",
+  "category_set_id": "dermatology_7class",
+  "dry_run": false,
+  "total_tasks": 21,
+  "failures_before": 12,
+  "failures_processed": 12,
+  "rules_authored": 12,
+  "rules_accepted": 1,
+  "rules_registered": 1,
+  "patch_records": [
+    {
+      "task_id": "dermatology_7class_nv_ISIC_0024392",
+      "rule_authored": true,
+      "rule_accepted": true,
+      "rule_registered": true,
+      "candidate_rule": {
+        "rule": "When a lesion shows a diffuse, homogeneous reddish-brown to dark-brown pigmentation with a roughly symmetric, well-circumscribed but softly bordered outline, no focal areas of regression (white scar-like zones), no blue-white veil, no atypical pigment network with irregular streaks or pseudopods, and the overall color variation is limited to a single dominant hue (uniform reddish-brown) without discrete zones of black, blue-grey, or white, classify as Melanocytic Nevus.",
+        "feature": "diffuse homogeneous reddish-brown pigmentation with symmetric soft border",
+        "favors": "Melanocytic Nevus",
+        "confidence": "moderate",
+        "preconditions": [
+          "Dominant color is a single, uniform reddish-brown or dark-brown hue with no discrete multicolor zones (no focal black, blue-grey, or white areas)",
+          "Overall shape is roughly symmetric and the border, while slightly irregular, is soft and fades gradually rather than showing abrupt notching or radial streaks/pseudopods",
+          "Absence of blue-white veil (no confluent blue-grey opacity overlying pigment)",
+          "Absence of regression structures (no white scar-like depigmented patches or peppering of grey granules)",
+          "Absence of atypical vascular structures (no dotted, irregular, or polymorphous vessels visible at lesion periphery)",
+          "No discrete satellite nodules or focal areas of raised, structureless black pigment",
+          "Pigment network, if visible, is regular and symmetric \u2014 with evenly spaced, uniform grid lines and holes of consistent size \u2014 not broadened, irregularly thickened, or abruptly ending at the periphery",
+          "No irregularly distributed dots or globules (any dots or globules present are uniform in size, color, and distributed symmetrically throughout the lesion, consistent with a regular globular or combined nevus pattern)",
+          "Lesion has a flat or minimally elevated surface texture without focal nodular elevation, ulceration, or surface erosion",
+          "Overall lesion diameter is consistent with a benign nevus context (not markedly large or rapidly expanding in apparent surface area, as inferred from lesion morphology)",
+          "No shiny white streaks (chrysalis structures) visible under polarized light, which would raise suspicion for melanoma or other malignancy",
+          "The lesion is a single, discrete, well-defined melanocytic unit without evidence of confluence with adjacent separate lesions"
+        ],
+        "rationale": "The pupil likely over-triggered on the deep reddish-brown color and somewhat irregular, fluffy border, misreading them as signs of malignancy. In reality, this lesion's color is monotone (a single dominant reddish-brown) and its texture is homogeneous and diffuse \u2014 hallmarks of a benign compound or intradermal nevus, often with prominent vascularity explaining the reddish tint. True melanoma characteristically shows multicomponent patterns: at least two of \u2014 atypical pigment network, regression, blue-white veil, atypical vascular structures, irregular streaks, or multiple discrete color zones. This lesion has none of those; the pupil hallucinated or over-weighted the irregular silhouette while missing the absence of the high-specificity melanoma features. A benign diffuse homogeneous pigmentation pattern with symmetric color distribution and no blue-white or regressive structures strongly favors Melanocytic Nevus over Melanoma, Benign Keratosis (which typically shows milia-like cysts or comedo-like openings), Basal Cell Carcinoma (leaf-like areas, arborizing vessels), Actinic Keratosis (strawberry pattern, surface scale), Vascular Lesion (lacunae), or Dermatofibroma (central white patch, peripheral network).",
+        "contra": [
+          "Melanoma"
+        ],
+        "category_set_id": "dermatology_7class",
+        "added_preconditions": [
+          "Pigment network, if visible, is regular and symmetric \u2014 with evenly spaced, uniform grid lines and holes of consistent size \u2014 not broadened, irregularly thickened, or abruptly ending at the periphery",
+          "No irregularly distributed dots or globules (any dots or globules present are uniform in size, color, and distributed symmetrically throughout the lesion, consistent with a regular globular or combined nevus pattern)",
+          "Lesion has a flat or minimally elevated surface texture without focal nodular elevation, ulceration, or surface erosion",
+          "Overall lesion diameter is consistent with a benign nevus context (not markedly large or rapidly expanding in apparent surface area, as inferred from lesion morphology)",
+          "No shiny white streaks (chrysalis structures) visible under polarized light, which would raise suspicion for melanoma or other malignancy",
+          "The lesion is a single, discrete, well-defined melanocytic unit without evidence of confluence with adjacent separate lesions"
+        ],
+        "completion_rationale": "The expert implicitly assumed that the pigment network architecture \u2014 a foundational dermoscopic criterion distinguishing nevi from melanoma \u2014 would be regular and homogeneous, but this was not stated explicitly, leaving a loophole for melanomas with focal atypical network. Similarly, the regularity of dots/globules and the absence of surface disruption (ulceration, nodular foci, chrysalis structures) are canonical background features a trained dermoscopist would expect in a benign nevus but would not feel the need to enumerate when writing a rule focused on the homogeneous brown color pattern. Making these explicit prevents the rule from firing on nodular or network-disrupted melanomas that happen to present with a predominantly brown homogeneous hue."
+      },
+      "held_out_validation": {
+        "fires_on_trigger": true,
+        "tp": 1,
+        "fp": 0,
+        "tn": 24,
+        "fn": 3,
+        "precision": 1.0,
+        "recall": 0.25,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "confirmation_validation": {
+        "fires_on_trigger": true,
+        "tp": 1,
+        "fp": 0,
+        "tn": 48,
+        "fn": 7,
+        "precision": 1.0,
+        "recall": 0.125,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "rerun_correct": false
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024336",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024420",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_bkl_ISIC_0024495",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_bcc_ISIC_0024345",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_bcc_ISIC_0024452",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024468",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": true,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "precision=0.00 < 0.75",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024470",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_akiec_ISIC_0024646",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": true,
+        "tp": 1,
+        "fp": 1,
+        "tn": 23,
+        "fn": 3,
+        "precision": 0.5,
+        "recall": 0.25,
+        "accepted": false,
+        "rejection_reason": "precision=0.50 < 0.75",
+        "tp_cases": [
+          {
+            "image_path": "C:\\_backup\\ml\\data\\DermaMNIST_HAM10000\\HAM10000_images_part_1\\ISIC_0026720.jpg",
+            "ground_truth": "Actinic Keratosis",
+            "observations": "The image shows an erythematous/reddish-brown diffuse background consistent with the first pre-condition. Whitish opaque surface scale-like structures are visible centrally, not sharp-bordered brown globules. There is no true pigment network (no interconnected brown lines). Fine brown dots/scaling appear concentrated around follicular openings, suggesting keratin plugging. No central dark structureless zone or organized peripheral rim typical of melanocytic nevus is present. The lesion texture appears rough/scaly rather than smooth. No streaks, pseudopods, or radial streaming are visible at the periphery. No blue-white veil or regression structures are apparent. The borders are ill-defined and irregular in a non-melanocytic pattern. No aggregated brown-to-black dots/clods in a clustered pattern suggestive of a junctional or compound nevus. The vascular pattern, with dotted/coiled vessels in a patchy distribution, is consistent with actinic keratosis. All pre-conditions appear to be met."
+          }
+        ],
+        "fp_cases": [
+          {
+            "image_path": "C:\\_backup\\ml\\data\\DermaMNIST_HAM10000\\HAM10000_images_part_1\\ISIC_0024330.jpg",
+            "ground_truth": "Dermatofibroma",
+            "observations": "The lesion shows an erythematous/reddish-pink diffuse background with whitish-opaque scale-like surface structures that are variably sized and not uniformly pigmented brown globules. There is no true pigment network visible. Fine brown dots/particles are present at follicular openings consistent with keratin plugging. The texture appears rough and scaly rather than smooth. No blue-white veil, no central dark structureless zone, no streaks or pseudopods at periphery, no aggregated brown-black clods suggestive of a junctional nevus. The border is somewhat ill-defined and irregular in a non-melanocytic pattern. Overall features are consistent with Actinic Keratosis."
+          }
+        ],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0024973",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0025302",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    },
+    {
+      "task_id": "dermatology_7class_df_ISIC_0025373",
+      "rule_authored": true,
+      "rule_accepted": false,
+      "validation": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 24,
+        "fn": 4,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "tp_cases": [],
+        "fp_cases": [],
+        "early_exited": false
+      }
+    }
+  ]
+}

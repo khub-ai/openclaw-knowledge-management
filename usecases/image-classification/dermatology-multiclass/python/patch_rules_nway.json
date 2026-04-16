@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "rules": [
+    {
+      "id": "r_001",
+      "condition": "[Patch rule \u2014 dermatology_7class] Dominant color is a single, uniform reddish-brown or dark-brown hue with no discrete multicolor zones (no focal black, blue-grey, or white areas); Overall shape is roughly symmetric and the border, while slightly irregular, is soft and fades gradually rather than showing abrupt notching or radial streaks/pseudopods; Absence of blue-white veil (no confluent blue-grey opacity overlying pigment); Absence of regression structures (no white scar-like depigmented patches or peppering of grey granules); Absence of atypical vascular structures (no dotted, irregular, or polymorphous vessels visible at lesion periphery); No discrete satellite nodules or focal areas of raised, structureless black pigment; Pigment network, if visible, is regular and symmetric \u2014 with evenly spaced, uniform grid lines and holes of consistent size \u2014 not broadened, irregularly thickened, or abruptly ending at the periphery; No irregularly distributed dots or globules (any dots or globules present are uniform in size, color, and distributed symmetrically throughout the lesion, consistent with a regular globular or combined nevus pattern); Lesion has a flat or minimally elevated surface texture without focal nodular elevation, ulceration, or surface erosion; Overall lesion diameter is consistent with a benign nevus context (not markedly large or rapidly expanding in apparent surface area, as inferred from lesion morphology); No shiny white streaks (chrysalis structures) visible under polarized light, which would raise suspicion for melanoma or other malignancy; The lesion is a single, discrete, well-defined melanocytic unit without evidence of confluence with adjacent separate lesions",
+      "action": "Classify as Melanocytic Nevus. Confidence: moderate. Rule: When a lesion shows a diffuse, homogeneous reddish-brown to dark-brown pigmentation with a roughly symmetric, well-circumscribed but softly bordered outline, no focal areas of regression (white scar-like zones), no blue-white veil, no atypical pigment network with irregular streaks or pseudopods, and the overall color variation is limited to a single dominant hue (uniform reddish-brown) without discrete zones of black, blue-grey, or white, classify as Melanocytic Nevus. [CONTRA: Melanoma]",
+      "rule_type": "task",
+      "scope": "dataset",
+      "stats_by_ns": {
+        "derm-ham10000": {
+          "fires": 0,
+          "successes": 0,
+          "failures": 0
+        }
+      },
+      "source": "expert_vlm:claude-sonnet-4-6",
+      "source_task": "dermatology_7class_nv_ISIC_0024392",
+      "tags": [
+        "derm-ham10000",
+        "dermatology_7class",
+        "patch:google/gemma-4-26b-a4b-it",
+        "triggered_by:dermatology_7class_nv_ISIC_0024392",
+        "favors:Melanocytic Nevus"
+      ],
+      "lineage": {
+        "type": "new",
+        "parent_ids": [],
+        "reason": "nway patch rule for dermatology_7class triggered by dermatology_7class_nv_ISIC_0024392"
+      },
+      "status": "active",
+      "source_level": 0,
+      "tasks_seen": 0,
+      "created": "2026-04-16T00:42:35",
+      "last_fired": null,
+      "favors": "Melanocytic Nevus",
+      "contra": [
+        "Melanoma"
+      ]
+    }
+  ]
+}

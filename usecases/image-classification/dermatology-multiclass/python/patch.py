@@ -139,7 +139,7 @@ def _register_rule(
         if rule:
             rule["favors"] = favors
             rule["contra"] = contra
-            rule_engine._save()
+            rule_engine.save()
 
     return result is not None
 
@@ -223,9 +223,14 @@ def _run_pipeline_with_patch_rules(
 
 def _task_from_results_entry(entry: dict, ds) -> dict | None:
     """Reconstruct an N-way task dict from a results entry + dataset."""
-    task_id   = entry["task_id"]
-    dx        = entry.get("_dx", "")
-    image_id  = task_id.split("_")[-1]   # last segment is ISIC_XXXXXXX
+    task_id = entry["task_id"]
+    dx      = entry.get("_dx", "")
+
+    # task_id format: {CATEGORY_SET_ID}_{dx}_{image_id}
+    # e.g. "dermatology_7class_nv_ISIC_0024392"
+    # Strip the known prefix to isolate "{image_id}" cleanly.
+    prefix   = f"{CATEGORY_SET_ID}_{dx}_"
+    image_id = task_id[len(prefix):] if task_id.startswith(prefix) else "_".join(task_id.rsplit("_", 2)[-2:])
 
     # Build shared few_shot for all classes (same as harness)
     few_shot: dict[str, list[str]] = {}
