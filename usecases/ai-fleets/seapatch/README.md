@@ -832,17 +832,62 @@ as a busy harbour where life rings are common and every false alarm costs money
 trained with lighter human-feedback conditioning, or adding a pre-classification
 filter that identifies floating equipment *before* the VLM classifies the scene.
 
-**The hypothesis: try a less-conditioned model.**
+**Testing the hypothesis: Qwen3-VL-8B.**
 
-Open-source vision models (such as `Qwen3-VL-8B`, already used in §10) are
-trained with less human-feedback conditioning than Claude models. They may follow
-operational directives more literally — including conservative ones — because
-they hold weaker safety priors. This is not simply "better" or "worse": a model
-that can be fully instructed in any direction gives operators more control but
-also more responsibility. Testing whether `Qwen3-VL-8B` or a similar open-source
-model follows the conservative directive is a natural next step and would
-directly answer whether the immovability is a property of the model family or
-of VLMs generally.
+We ran the same two directives on `qwen/qwen3-vl-8b-instruct` — an open-source
+model used earlier in §10, trained with considerably less human-feedback
+conditioning than Claude.
+
+| Model | Directive | Accuracy | False alarms | Missed persons |
+|---|---|---|---|---|
+| `claude-sonnet-4-6` | Model rules | 83.3% | 4 | 0 |
+| `claude-sonnet-4-6` | Conservative | 79.2% | 4 | 1 |
+| `claude-opus-4-6` | Model rules | 75.0% | 6 | 0 |
+| `claude-opus-4-6` | Conservative | 70.8% | 6 | 1 |
+| `qwen/qwen3-vl-8b-instruct` | Model rules | **95.8%** | 0 | 1 |
+| `qwen/qwen3-vl-8b-instruct` | Rescue directive | **87.5%** | 0 | 1 |
+| `qwen/qwen3-vl-8b-instruct` | **Conservative** | **50.0%** | 0 | **12** |
+
+The hypothesis was confirmed — but the result was more extreme than expected.
+Qwen followed the conservative directive completely: it called **every single
+person-in-water frame** "whitecap." All 12. Zero false alarms, but also zero
+detections. The rescue directive also worked well — Qwen achieved 87.5% with
+only 1 missed person.
+
+**The core tradeoff, in plain terms:**
+
+- **Claude (more human-feedback conditioning):** has a floor it will not go below.
+  You cannot talk it out of flagging potential victims. The 4 orange-object frames
+  stay as "person in water" no matter what the instruction says. This is
+  inflexible but provides a built-in safety guarantee.
+
+- **Qwen (less human-feedback conditioning):** does exactly what you tell it, in
+  either direction. Tell it to be aggressive and it becomes aggressive. Tell it to
+  be cautious and it becomes maximally cautious — so cautious, in this case, that
+  it called every victim "whitecap." The model is highly controllable, but that
+  puts the full responsibility on whoever writes the instruction. A well-crafted
+  directive produces excellent results (GO at 95.8% with model rules). A
+  poorly-calibrated directive produces the opposite.
+
+**What this means for system design.**
+
+The choice between a highly-conditioned and a less-conditioned PUPIL is not
+simply "better vs worse." It is a decision about where the safety responsibility
+sits:
+
+- A highly-conditioned model (Claude) provides a safety floor at the cost of
+  operator control. Good for deployments where the cost of missing a victim is
+  catastrophically higher than the cost of a false alarm, and you want the model
+  to enforce that asymmetry regardless of operator instruction.
+
+- A less-conditioned model (Qwen) gives the operator full control. Good for
+  deployments where the operational context genuinely changes what the right
+  call is — and where the operator can be trusted to give well-calibrated
+  instructions. Qwen's 95.8% with model rules is the best result of any model
+  tested on this probe.
+
+The dialogic approach makes this tradeoff visible and testable before deployment,
+rather than discovering it in the field.
 
 **Why the dialogic method surfaces this.**
 

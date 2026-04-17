@@ -230,11 +230,17 @@ immovable false alarms than Sonnet, not fewer.
 **The practical implication:** If your deployment needs the model to behave in a
 way that conflicts with its safety training — for example, being less sensitive
 to potential victims in a harbour full of floating equipment — instructions alone
-will not get you there. The options are: (a) choose a model trained with lighter
-human-feedback conditioning (open-source models like `Qwen3-VL-8B` are a natural
-candidate to test); (b) add a pre-classification filter that handles the
-ambiguous object type before the VLM sees the frame; or (c) treat the model's
-rescue prior as a feature, not a bug, and design the system around it.
+will not get you there with a heavily-conditioned model. We tested this with
+`qwen/qwen3-vl-8b-instruct`, an open-source model with less human-feedback
+conditioning. The result was striking: Qwen followed the conservative directive
+completely, calling every person-in-water frame "whitecap" (50% accuracy, 12
+missed victims). It is fully controllable in either direction — which is
+powerful but puts the entire responsibility on the instruction author. With a
+well-crafted model-rules directive, Qwen achieved 95.8% accuracy (GO verdict),
+the best result of any model tested. The options for deployment are therefore:
+(a) use a less-conditioned model and invest in instruction quality; (b) add a
+pre-classification filter that handles the ambiguous object type before the VLM
+sees the frame; or (c) treat the safety prior as a feature and design around it.
 
 **This finding is only visible through the dialogic method.** Standard
 benchmarking tests accuracy in one direction. The immovability of the prior only
