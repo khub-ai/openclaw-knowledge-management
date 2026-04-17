@@ -6,18 +6,10 @@ KF framework code (``core.knowledge``, ``core.pipeline``,
 
 Current contents:
 
-* ``core.cognitive_os.engine``  — the second-generation cognitive
-                                   engine.  Domain-agnostic symbolic
-                                   reasoning substrate shared by ARC
-                                   and robotics.  See
-                                   ``core/cognitive_os/engine/DESIGN.md``.
-
-Archived elsewhere (``.private/_archive/cognitive_os_v1/``):
-
-* The first-generation COS implementation (StateStore, Environment,
-  Observation, Hypothesis, Perception, Tick/StreamRecorder, miners,
-  safety, causal, resources, similarity).  Kept for reference only.
-  Was imported exclusively by ``usecases/arc-agi-3/`` (now legacy).
+* ``core.cognitive_os.engine``  — domain-agnostic symbolic reasoning
+                                   substrate shared by sequential-
+                                   reasoning tasks and robotics.
+                                   See ``core/cognitive_os/engine/DESIGN.md``.
 
 This top-level package intentionally exports nothing at module level —
 import from the specific sub-package you need (currently

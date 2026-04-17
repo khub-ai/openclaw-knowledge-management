@@ -1,31 +1,26 @@
 # Cognitive Engine — Design Specification
 
 **Status:** Phase 1 complete (data types + protocols).  Behavioural modules in progress.
-**Scope:** Domain-agnostic symbolic reasoning substrate shared by ARC-AGI-3
-and robotics use cases.
-**Not to be confused with:** `usecases/arc-agi-3/python/ensemble.py` — the
-previous monolithic controller.  That code is **not modified** by this
-design; the new engine lives alongside it and will be validated in
-parallel in a separate use case (`usecases/arc-agi-3b/`) before any
-consolidation is considered.
+**Scope:** Domain-agnostic symbolic reasoning substrate shared by
+sequential-reasoning benchmarks (ARC-style interactive environments)
+and embodied robotics.
 
 ---
 
-## 1. Why this redesign
+## 1. Why this design
 
-The previous implementation (`usecases/arc-agi-3/python/ensemble.py`,
-~5,300 LOC) accumulated game-specific control flow over many debugging
-sessions: `_rc_done_mode`, `_visits_remaining`, `_trigger_ring_detour`,
-`_confirmed_refills`, `_just_unblocked_positions`, `_still_futile`,
-`lethal_at_pos` persistence, `CandidateGoalRegistry`.  355 lines refer
-to mechanics of one specific level (ls20 Level 2).
+An earlier attempt at a Cognitive OS accumulated game-specific
+control flow over many debugging sessions: flags for required-visit
+counters, ring refuels, win-gate unblocking, lethal-cell persistence,
+candidate-goal registries.  The code drifted into implicit encoding
+of one specific level's mechanics.
 
-This falsifies the Cognitive OS thesis — *"write cognitive logic once,
+That falsified the Cognitive OS thesis — *"write cognitive logic once,
 deploy across domains by swapping adapters"* — at the code level.
 Every mechanic discovered during debugging was implemented as an
 imperative flag in the controller loop rather than as a discovered
-fact in a hypothesis store, so the logic is implicitly tied to the
-game it was written against.
+fact in a hypothesis store, so the logic was implicitly tied to the
+game it was written against.  That earlier code has now been retired.
 
 The new engine is a clean-slate rewrite with two invariants:
 
@@ -840,8 +835,8 @@ a single loader function rather than scanning the entire codebase.
 | 2 | `hypothesis_store.py` (propose, dedup, link, update, prune) + `refinement.py` (generalise/specialise) | Pending |
 | 3 | `planner.py` (AO* over goal forest) + `explorer.py` (info-gain + curiosity) + `goal_forest.py` | Pending |
 | 4 | `episode_runner.py` (main loop) + core miners + `adapters.py` protocol + `postmortem.py` | Pending |
-| 5 | ARC-AGI-3 adapter in `usecases/arc-agi-3b/` + Observer + Mediator implementations | Pending |
-| 6 | Integration on ls20 L2 — side-by-side comparison with `ensemble.py` | Pending |
+| 5 | ARC adapter (new `usecases/<arc-target>/`) + Observer + Mediator implementations | Pending |
+| 6 | First integration benchmark (target level TBD) | Pending |
 | 7 | OptionSynthesiser + persistence layer | Pending |
 | 8 | Robotics adapter (phase-5 of the robotics roadmap) | Future |
 
@@ -872,23 +867,16 @@ These constraints apply to every change under `core/cognitive_os/engine/`:
 
 ## 15. File layout (current)
 
-The new engine lives as a **sub-package under `core/cognitive_os/`** so
+The engine lives as a **sub-package under `core/cognitive_os/`** so
 that all COS work is grouped together and cleanly separated from
 non-COS framework code (`core/knowledge/`, `core/pipeline/`,
-`core/benchmark/`, `core/dialogic_distillation/`).  The existing
-`core/cognitive_os/*.py` files from the first-generation COS remain in
-place unchanged; they are only imported by `usecases/arc-agi-3/` and
-will be pruned or archived once the new engine has proven itself.
+`core/benchmark/`, `core/dialogic_distillation/`).
 
 ```
 core/cognitive_os/                     ← COS namespace
-    __init__.py, state_store.py,
-    env_interface.py, hypothesis.py,   ← FIRST-GENERATION COS
-    perception.py, stream.py,             (used only by usecases/arc-agi-3/)
-    miners.py, safety.py, causal.py,
-    resources.py, similarity.py
+    __init__.py                        ← package stub (no exports)
 
-    engine/                            ← NEW engine (this document)
+    engine/                            ← the cognitive engine
         DESIGN.md                      ← this document
         __init__.py                    ← public API
         config.py                      ← EngineConfig + tunable sub-configs
@@ -897,38 +885,16 @@ core/cognitive_os/                     ← COS namespace
         credence.py                    ← Credence + update rules
         tools.py                       ← ToolSignature / Registry / Invocation / Result / Proposal
         types.py                       ← Events / Observation / Hypothesis / Rule / Goal /
-                                         Plan / Option / PostMortem / Observer / Mediator / WorldState
-
-usecases/arc-agi-3/                    ← PREVIOUS approach — NOT modified by this redesign
-    python/ensemble.py                 ← monolithic, with accumulated game-specific logic
-
-usecases/arc-agi-3b/                   ← NEW approach, adapter + harness only (Phase 5+)
-    python/
-        adapter.py                     ← ARC adapter for core.cognitive_os.engine
-        observer.py                    ← VLM wrapper
-        mediator.py                    ← text-LLM wrapper
-        perception_hints.py
-        harness.py                     ← CLI runner
-        DESIGN.md                      ← ARC-specific integration notes (Phase 5)
+                                         Plan / Option / CachedSolution / PostMortem /
+                                         Observer / Mediator / WorldState
 ```
 
-### Name collisions with first-generation COS
-
-Three names are reused between `core/cognitive_os/` (first-gen) and
-`core/cognitive_os/engine/` (new):
-
-| Name                | First-gen module                      | New engine module                                |
-|---------------------|---------------------------------------|--------------------------------------------------|
-| `Hypothesis`        | `core.cognitive_os.hypothesis`        | `core.cognitive_os.engine.types`                 |
-| `Observation`       | `core.cognitive_os.env_interface`     | `core.cognitive_os.engine.types`                 |
-| (conceptually) Goal | `core.knowledge.goals` (non-COS)      | `core.cognitive_os.engine.types`                 |
-
-Python's module namespacing keeps these fully separate — a file that
-imports `from core.cognitive_os import Hypothesis` gets the first-gen
-one; a file that imports `from core.cognitive_os.engine import
-Hypothesis` gets the new one.  No code should mix imports from both
-paths.  The `engine/` sub-package never imports from its parent
-`core/cognitive_os/` top-level.
+Domain-specific adapters will live under `usecases/<domain>/` when the
+first one is implemented (Phase 5).  One name collision exists outside
+the `cognitive_os` namespace: `Goal` is also defined in
+`core/knowledge/goals.py` (a non-COS framework module); the engine's
+`Goal` is in `core.cognitive_os.engine.types` and the two never mix
+because they live in distinct packages.
 
 ---
 

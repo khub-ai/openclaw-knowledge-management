@@ -21,11 +21,16 @@ This document describes the Knowledge Fabric ensemble pipeline: its domain-agnos
 3. [Base ensemble architecture](#3-base-ensemble-architecture)
 4. [Core abstractions](#4-core-abstractions)
 5. [Specialization 1 — ARC-AGI-2](#5-specialization-1--arc-agi-2-static-puzzles)
-6. [Specialization 2 — ARC-AGI-3](#6-specialization-2--arc-agi-3-interactive-environments)
-7. [Specialization 3 — Image classification UC200](#7-specialization-3--image-classification-uc200-birds)
-8. [Harness CLI conventions](#8-harness-cli-conventions)
-9. [Extension guide](#9-extension-guide-adding-a-new-domain)
-10. [Operational notes](#10-operational-notes)
+6. [Specialization 2 — Image classification UC200](#6-specialization-2--image-classification-uc200-birds)
+7. [Harness CLI conventions](#7-harness-cli-conventions)
+8. [Extension guide](#8-extension-guide-adding-a-new-domain)
+9. [Operational notes](#9-operational-notes)
+
+> The previous "Specialization 2 — ARC-AGI-3 (interactive environments)"
+> section has been removed.  Sequential-reasoning work has moved to
+> [`core/cognitive_os/engine/`](../core/cognitive_os/engine/) — a
+> clean-slate, domain-agnostic cognitive engine.  See the
+> [engine design spec](../core/cognitive_os/engine/DESIGN.md).
 
 ---
 
@@ -40,8 +45,10 @@ See [design-decisions.md](design-decisions.md#how-this-differs-from-existing-age
 | Use Case | Status | Dataset tag | Entry point |
 |---|---|---|---|
 | ARC-AGI-2 (static puzzles) | Active — 43/48 correct (89.6%) | `arc-agi-legacy` | `usecases/arc-agi-2/python/harness.py` |
-| ARC-AGI-3 (interactive environments) | Design phase | `arc-agi-3` | TBD — new harness needed |
 | Image classification UC200 (birds) | Design phase | `bird-uc200` | TBD — new harness needed |
+
+(Sequential-reasoning / interactive-environment work has moved to
+[`core/cognitive_os/engine/`](../core/cognitive_os/engine/).)
 
 ---
 
@@ -251,7 +258,7 @@ For vision calls (UC200 OBSERVER), pass a list of Anthropic content blocks:
 
 All rules and tools carry a `dataset_tag`. This prevents knowledge from different domains from cross-contaminating. Both `RuleEngine` and `ToolRegistry` filter by tag at retrieval time.
 
-Example tags: `arc-agi-legacy`, `arc-agi-3`, `bird-uc200`, `derm-uc201`
+Example tags: `arc-agi-legacy`, `bird-uc200`, `derm-uc201`
 
 ### 4.8 Shim pattern
 
@@ -304,60 +311,7 @@ Each use case has thin shim files `rules.py` and `tools.py` that:
 
 ---
 
-## 6. Specialization 2 — ARC-AGI-3 (interactive environments)
-
-**Task definition:** An interactive game environment where the agent must take sequential actions to advance `levels_completed`. Unlike ARC-AGI-2, there are no fixed input/output demo pairs — the agent explores and learns through live interaction.
-
-**Current status:** Early exploration only. No KF integration yet. See `tests/arc-agi-3/` for the existing explorer and playlog viewer.
-
-**Environment facts (LS20):**
-- Actions: ACTION1, ACTION2, ACTION3, ACTION4 (appear to be two reversal pairs)
-- State: grid with color values; diffs are localized (~52 cells per directional action, ~2 for status strip)
-- Goal: advance `levels_completed` from 0/7; no completion achieved in early runs
-- SDK entry: `import arc_agi` — requires conda env `arc` (NOT the default Python env)
-
-**Proposed round mapping:**
-
-| Round | Agent | Input | Output |
-|---|---|---|---|
-| 0 | RuleEngine | env_id, grid hash, current level | matched rules (known action sequences, level patterns) |
-| 1 | OBSERVER | current grid state + action history | structured state interpretation (what changed, what is goal state?) |
-| 2 | MEDIATOR | interpretation + rules + GoalManager state | action plan (sequence of steps) |
-| 3 | ACTOR | action plan + live environment | execute `env.step()` calls, observe results, update StateManager |
-| 3 (revision) | MEDIATOR | failed plan + new observations | revised plan |
-
-**Key differences from ARC-AGI-2:**
-
-| Aspect | ARC-AGI-2 | ARC-AGI-3 |
-|---|---|---|
-| Verification signal | Cell accuracy vs expected grid | `levels_completed` increasing |
-| State persistence | Reset per task | Sequential across steps — StateManager essential |
-| Tool type | Python grid transform function | Reusable action sequence: `def advance_level_1(env): ...` |
-| Data source | JSON challenge files | `arc_agi` Python SDK |
-| GoalManager role | Optional | Central — tracks `explore → complete level N → try sequence X` |
-
-**Observation format for OBSERVER:**
-```json
-{
-  "action_taken": "ACTION2",
-  "diff_count": 52,
-  "changed_cells": [{"row": 10, "col": 5, "from": 3, "to": 12}, "..."],
-  "bbox": {"x_min": 13, "x_max": 38, "y_min": 40, "y_max": 62},
-  "levels_completed": 0,
-  "game_state": "NOT_FINISHED"
-}
-```
-
-**What needs to be built:**
-1. `usecases/arc-agi-3/python/harness.py` — wraps `arc_agi` SDK, runs episodes, tracks `levels_completed`
-2. `usecases/arc-agi-3/python/ensemble.py` — same 4-round structure; EXECUTOR → ACTOR calling `env.step()`
-3. `usecases/arc-agi-3/python/rules.py` + `tools.py` — shims with `dataset_tag = "arc-agi-3"`
-4. OBSERVER prompt — produces the structured diff record above
-5. ACTOR — executes the plan and feeds results back to MEDIATOR
-
----
-
-## 7. Specialization 3 — Image classification UC200 (birds)
+## 6. Specialization 2 — Image classification UC200 (birds)
 
 For the full experiment background, dataset details, baseline results, and failure analysis, see the [UC200 README](../usecases/image-classification/README.md).
 
@@ -449,7 +403,7 @@ user_message = [
 
 ---
 
-## 8. Harness CLI conventions
+## 7. Harness CLI conventions
 
 All harness implementations should follow this shared convention:
 
@@ -470,7 +424,7 @@ python harness.py
 
 ---
 
-## 9. Extension guide: adding a new domain
+## 8. Extension guide: adding a new domain
 
 1. Create `usecases/<domain>/python/` with `harness.py`, `ensemble.py`, `rules.py`, `tools.py`
 2. In shims `rules.py` and `tools.py`:
@@ -492,7 +446,7 @@ python harness.py
 
 ---
 
-## 10. Operational notes
+## 9. Operational notes
 
 - `tools.json` and `rules.json` are gitignored in each use case directory — they are local workspace files that accumulate across runs. Document significant tool fixes or rule schema changes in commit messages.
 - Always run harness commands in the foreground so token consumption can be monitored and interrupted with Ctrl+C.

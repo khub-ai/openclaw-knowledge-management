@@ -195,7 +195,8 @@ Three categories of distillable knowledge have been identified:
 
 These heuristics transfer across games (game-agnostic), which is exactly what competition mode requires: the game identity is unknown in advance.
 
-See [usecases/arc-agi-3/README.md](../arc-agi-3/README.md) for the ARC-AGI-3 system overview.
+Sequential-reasoning work has moved to the new cognitive engine — see
+[`core/cognitive_os/engine/DESIGN.md`](../../core/cognitive_os/engine/DESIGN.md).
 
 ---
 
@@ -319,4 +320,4 @@ Results from the community will be aggregated into the Status table above.
 
 - [DESIGN.md](DESIGN.md) — developer-facing spec: three-party protocol, grounding mechanics, domain adaptations, differences across knowledge types
 - [usecases/image-classification/](../image-classification/) — reference implementation for visual classification
-- [usecases/arc-agi-3/](../arc-agi-3/) — ARC-AGI-3 system (competition mode target)
+- [`core/cognitive_os/engine/`](../../core/cognitive_os/engine/) — domain-agnostic cognitive engine (successor to the retired arc-agi-3 use case)
