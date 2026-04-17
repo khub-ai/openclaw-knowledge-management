@@ -1119,6 +1119,12 @@ class WorldState:
     # purged so the agent must re-solve each level from first
     # principles).  See config.OperatingMode.
     cached_solutions:     Dict[str, "CachedSolution"] = field(default_factory=dict)
+    # Monotonic counter used by the hypothesis_store to allocate unique
+    # hypothesis IDs.  Starts at 0 and never rolls back, so IDs of
+    # pruned hypotheses are never reused — this is important because
+    # refinement lattice references (parent_id / child_ids) would
+    # otherwise dangle to a different claim after pruning+reuse.
+    _next_hypothesis_id:  int = 0
     # The config is held here so subsystems can read thresholds without
     # plumbing it through every call signature.  ``Any`` to avoid a
     # circular import with the config module at typing time.

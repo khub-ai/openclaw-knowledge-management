@@ -91,6 +91,25 @@ from .credence import (
     update_on_contradict,
     apply_decay,
 )
+from . import hypothesis_store
+from .hypothesis_store import (
+    propose,
+    update_credence_from_events,
+    apply_staleness_decay_all,
+    prune_abandoned,
+    committed,
+    contested_groups,
+    by_canonical_key,
+    by_full_key,
+    event_evidence_for_claim,
+)
+from . import refinement
+from .refinement import (
+    specialize_on_contradiction,
+    detect_generalization_candidates,
+    link_parent_child,
+    prune_subsumed_children,
+)
 from .tools import (
     ToolSignature,
     ToolRegistry,
@@ -174,6 +193,15 @@ __all__ = [
     "RelationPattern", "Asymmetry",
     # credence
     "Credence", "update_on_support", "update_on_contradict", "apply_decay",
+    # hypothesis store (Phase 2)
+    "hypothesis_store",
+    "propose", "update_credence_from_events", "apply_staleness_decay_all",
+    "prune_abandoned", "committed", "contested_groups",
+    "by_canonical_key", "by_full_key", "event_evidence_for_claim",
+    # refinement (Phase 2)
+    "refinement",
+    "specialize_on_contradiction", "detect_generalization_candidates",
+    "link_parent_child", "prune_subsumed_children",
     # tools
     "ToolSignature", "ToolRegistry", "ToolInvocation", "ToolResult",
     "ToolProposal", "ToolCallback",

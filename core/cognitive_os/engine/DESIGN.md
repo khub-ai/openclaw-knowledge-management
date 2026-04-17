@@ -1,6 +1,6 @@
 # Cognitive Engine — Design Specification
 
-**Status:** Phase 1 complete (data types + protocols).  Behavioural modules in progress.
+**Status:** Phase 2 complete (hypothesis store + refinement).  Planner / explorer / runner in progress.
 **Scope:** Domain-agnostic symbolic reasoning substrate shared by
 sequential-reasoning benchmarks (ARC-style interactive environments)
 and embodied robotics.
@@ -832,7 +832,7 @@ a single loader function rather than scanning the entire codebase.
 | Phase | Deliverable | Status |
 |---|---|---|
 | 1 | Data types + protocols (`types.py`, `claims.py`, `conditions.py`, `credence.py`, `config.py`, `tools.py`) | **Complete** |
-| 2 | `hypothesis_store.py` (propose, dedup, link, update, prune) + `refinement.py` (generalise/specialise) | Pending |
+| 2 | `hypothesis_store.py` (propose, dedup, link, update, prune) + `refinement.py` (specialise, generalise-candidate detection) | **Complete** |
 | 3 | `planner.py` (AO* over goal forest) + `explorer.py` (info-gain + curiosity) + `goal_forest.py` | Pending |
 | 4 | `episode_runner.py` (main loop) + core miners + `adapters.py` protocol + `postmortem.py` | Pending |
 | 5 | ARC adapter (new `usecases/<arc-target>/`) + Observer + Mediator implementations | Pending |
@@ -887,6 +887,11 @@ core/cognitive_os/                     ← COS namespace
         types.py                       ← Events / Observation / Hypothesis / Rule / Goal /
                                          Plan / Option / CachedSolution / PostMortem /
                                          Observer / Mediator / WorldState
+        hypothesis_store.py            ← propose / dedup / link competitors / update on events /
+                                         staleness decay / prune abandoned / query helpers
+        refinement.py                  ← specialise on contradiction /
+                                         detect generalisation candidates /
+                                         parent-child lattice maintenance
 ```
 
 Domain-specific adapters will live under `usecases/<domain>/` when the
