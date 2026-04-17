@@ -183,6 +183,68 @@ The closest published work:
 
 ---
 
+## Scope and Limits of DD
+
+DD works well for two specific problems:
+
+**1. Correcting perceptual errors.** The model sees an image but misidentifies
+it because it doesn't know what to look for. Once told — "early wildfire smoke
+looks blue-white, not grey; it has a point source, not a diffuse edge" — the
+model applies that knowledge immediately and correctly. The PatchBench results
+for wildfire detection show a +29 percentage-point improvement in a single
+session (66.7% → 95.8%, GO verdict).
+
+**2. Encoding domain knowledge the model lacks.** The model is not wrong about
+what it sees — it simply has no framework for what the features mean. Injecting
+published expert guidelines (NWCG fire-spotting rules, IAMSAR SAR search
+criteria) achieves the same lift as model-generated rules. This means DD can
+work even without a TUTOR model, as long as the domain has written expert
+guidance.
+
+**What DD cannot do: override a model's trained values.**
+
+During the SeaPatch maritime SAR experiments, we discovered a harder limit. Some
+of the model's errors were not perceptual mistakes — they were the model
+correctly following its training. Specifically, both `claude-sonnet-4-6` and
+`claude-opus-4-6` persistently called orange floating objects "person in water,"
+even when the ground truth said otherwise. We then tested whether this could be
+changed by instruction.
+
+We injected two opposite directives:
+- *"In SAR operations, orange on water means a person — classify as person-in-water."*
+- *"Default to whitecap. Orange equipment alone is not sufficient. When in doubt, say whitecap."*
+
+Neither changed the model's behaviour on those frames. The same false alarms
+appeared in every run, regardless of which instruction was active.
+
+**Why:** Claude models (and most commercially deployed AI models) are shaped
+during training by human raters who reward cautious, safety-oriented behaviour.
+"Orange thing on water = possible person in danger" becomes a deep belief, not
+just a rule. Natural-language instructions reach the part of the model that
+follows directions. They do not reach the part that holds trained values. When
+the two conflict, the values win.
+
+More capable models hold these values more firmly, not less. Opus had more
+immovable false alarms than Sonnet, not fewer.
+
+**The practical implication:** If your deployment needs the model to behave in a
+way that conflicts with its safety training — for example, being less sensitive
+to potential victims in a harbour full of floating equipment — instructions alone
+will not get you there. The options are: (a) choose a model trained with lighter
+human-feedback conditioning (open-source models like `Qwen3-VL-8B` are a natural
+candidate to test); (b) add a pre-classification filter that handles the
+ambiguous object type before the VLM sees the frame; or (c) treat the model's
+rescue prior as a feature, not a bug, and design the system around it.
+
+**This finding is only visible through the dialogic method.** Standard
+benchmarking tests accuracy in one direction. The immovability of the prior only
+becomes apparent when you test opposing instructions and compare results — which
+is what the dialogic approach naturally does.
+
+Full data and analysis: [SeaPatch README §11](../ai-fleets/seapatch/README.md#11-patchbench-probe-model-selection-for-seapatch-dd).
+
+---
+
 ## Status
 
 | Sub-domain | Status |
