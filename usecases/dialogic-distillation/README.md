@@ -9,6 +9,41 @@
 
 ---
 
+## Key Findings
+
+Results across four domains, with links to full data and analysis:
+
+### DD improves weaker models significantly — without retraining
+
+| Domain | PUPIL model | Accuracy before DD | Accuracy after DD | Gain |
+|---|---|---|---|---|
+| Dermatology (melanoma vs nevus) | `Qwen3-VL-8B` | ~55% | ~83% | +28 pp |
+| Ornithology (cowbird species) | `Qwen3-VL-8B` | ~33% | ~83% | +50 pp |
+| Wildfire detection (smoke vs terrain) | `claude-sonnet-4-6` | 66.7% | **95.8%** | +29 pp ✓ GO |
+| Maritime SAR (person vs whitecap) | `qwen/qwen3-vl-8b-instruct` | 66.7% | **95.8%** | +29 pp ✓ GO |
+
+Full data: [image classification](../image-classification/README.md) · [wildfire detection](../ai-fleets/wildfire-detection/README.md) · [maritime SAR](../ai-fleets/seapatch/README.md)
+
+### Human expert rules work as well as model-generated rules
+
+When a domain has published expert guidelines, you can skip the TUTOR model entirely and inject those guidelines directly. Wildfire: NWCG fire-spotting rules matched Opus-generated rules exactly (both 95.8%). Maritime SAR: IAMSAR search criteria matched model rules (both 83.3%). This means DD is usable even in organisations with no access to a high-end TUTOR model.
+
+### Models have different levels of "swayability" — and this matters for deployment
+
+We tested whether human policy directives could change model behaviour by injecting two opposite instructions: one saying "bias toward detecting persons" and one saying "default to the negative class, be conservative." The results reveal a fundamental difference between model families:
+
+**Heavily-conditioned models (Claude):** The rescue prior is immovable. Claude-Sonnet and Claude-Opus kept calling the same orange-object frames "person in water" regardless of which directive was active — rescue-biased or conservative. You cannot override a deep safety prior with a natural-language instruction. More capable models (Opus) were *harder* to sway, not easier.
+
+**Less-conditioned models (Qwen3-VL-8B):** Fully swayable in both directions. The rescue directive produced GO at 87.5%. The conservative directive caused the model to call *every single victim* "whitecap" — 12/12 missed, 0 false alarms. The model did exactly what it was told, in both directions.
+
+This is not "better vs worse" — it is a choice about where the safety responsibility sits. Full analysis and data: [SeaPatch §11](../ai-fleets/seapatch/README.md#11-patchbench-probe-model-selection-for-seapatch-dd).
+
+### DD reveals model properties invisible to standard benchmarking
+
+The swayability finding only becomes visible when you test opposing directives and compare results. A single-direction accuracy test would miss it entirely. The dialogic method — actively trying to change model behaviour, not just scoring outputs — surfaces properties that matter for real deployment decisions.
+
+---
+
 ## The Problem in Plain Terms
 
 Imagine you have access to a highly capable AI model — say, Claude Sonnet — that performs very well on a specialized task: diagnosing skin lesions, identifying rare bird species, or solving complex reasoning puzzles. Now imagine you need to deploy a different, cheaper model in production: one that runs locally, fits within a competition budget, or costs a fraction of the expert model per call. That cheaper model fails on exactly the cases the expert handles well.
