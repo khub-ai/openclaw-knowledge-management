@@ -3,10 +3,10 @@
 
 ---
 
-> **Status**: Active research prototype — results validated across two domains, third in setup:  
+> **Status**: Active research prototype — results validated across three domains:  
 > **Birds** (ornithology): zero-shot 46.7% → 96.7% (+50 pp at 30 images/class) using 4 distilled rules.  
 > **Dermatology**: Melanoma vs. Nevus 55% → 93% (+38 pp); BCC vs. Keratosis 57% → 75% (+18 pp).  
-> **Road surface conditions**: dataset and domain config complete; baseline experiments pending.  
+> **Road surface**: wet_vs_water DD complete — 8/8 grounded, 4/4 accepted, all at precision=1.00; 4 rules in knowledge_base.  
 > **Theme**: [Knowledge Fabric (KF)](../../docs/what-is-kf.md) — runtime model patching via [Dialogic Distillation](../dialogic-distillation/README.md); no fine-tuning or retraining required  
 > **Last updated**: 2026.04.17
 
@@ -147,7 +147,7 @@ Road surface condition classification moves KF from biological/medical domains i
 
 **The story in brief**: A small VLM cannot distinguish wet road from black ice — both appear as a dark, reflective surface. A pavement engineer explains that ice obscures surface texture completely while wet pavement preserves faint aggregate visibility through the film. KF turns that into a testable rule with explicit preconditions.
 
-**Status**: Domain setup complete — dataset identified (RSCD, 1M images, 27 classes), domain config authored, confusable pairs defined. Baseline experiments pending.
+**Status**: Two DD experiments complete. **dry_vs_wet**: 4/4 grounded, 0/4 accepted — pair is a continuum, pool contains too many borderline images for high-precision rules. **wet_vs_water**: 8/8 grounded, 4/4 accepted at precision=1.00 (0 false positives) — sharper visual boundary yields clean rules. 4 rules committed to `knowledge_base/`. Visual similarity router (`router.py`) and canonical reference curation (`curate_references.py`) implemented, adapting the architecture from dermatology hierarchical experiments.
 
 **Dataset**: [RSCD](https://thu-rsxd.com/rscd/) — 1M images, 27 classes (6 friction x 4 material x 3 roughness), CC BY-NC.
 
@@ -191,12 +191,12 @@ This means DD is usable in a wider range of deployment scenarios than originally
 
 Summary of current evidence:
 
-| Category | What birds showed | What dermatology has added |
-|---|---|---|
-| Runtime patching value | Yes, on targeted confusable pairs | Pipeline overhead is net-negative for strong VLMs; dialogic loop is the right framing |
-| Need for expert verification | Yes, clearly | Pre-conditions as hard gates are essential in medicine — soft rules cause regressions |
-| Benefit of structured intermediate evidence | Suggested strongly by Brewer vs Clay-colored | Feature-level observation (OBSERVER stage) confirmed as valuable; cross-pair firing adds a new quality signal |
-| Portability across domains | Promising in principle | Architecture is domain-agnostic; confirmed by transferring bird pipeline to dermatology with only prompt changes; bird dialogic loop (Exp 3) reuses exact same pipeline |
+| Category | What birds showed | What dermatology added | What road surface added |
+|---|---|---|---|
+| Runtime patching value | Yes, on targeted confusable pairs | Pipeline overhead is net-negative for strong VLMs; dialogic loop is the right framing | Pair difficulty is the binding constraint: wet_vs_water succeeds where dry_vs_wet fails |
+| Need for expert verification | Yes, clearly | Pre-conditions as hard gates are essential in medicine — soft rules cause regressions | Pool gate (precision ≥ 0.90, max 0 FP) is the right automated proxy for expert review |
+| Benefit of structured intermediate evidence | Suggested strongly by Brewer vs Clay-colored | Feature-level observation (OBSERVER stage) confirmed as valuable; cross-pair firing adds a new quality signal | Visual similarity routing (not schema-based) is required for coarse routing — feature denial is real |
+| Portability across domains | Promising in principle | Architecture is domain-agnostic; confirmed by transferring bird pipeline to dermatology | Confirmed again: dermatology lessons (vocabulary bridging, visual routing, easier-pair-first) applied directly to road surface with no code changes |
 
 ---
 

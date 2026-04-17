@@ -2,7 +2,7 @@
 
 > **For**: Autonomous driving engineers, ADAS developers, and road safety researchers interested in how domain expertise can improve small-model accuracy on safety-critical surface classification without retraining.
 >
-> **Status**: Active experiments — dry_vs_wet run (4/4 grounded, 0/4 accepted — pair is a continuum); wet_vs_water pair set up (expected to be easier); visual similarity router and canonical reference curation added.
+> **Status**: Active experiments — dry_vs_wet (4/4 grounded, 0/4 accepted — continuum boundary); wet_vs_water DD complete (8/8 grounded, 4/4 accepted, precision=1.00 on all accepted rules); 4 rules committed to knowledge_base; visual similarity router ready.
 >
 > **Dataset**: RSCD (Road Surface Classification Dataset), Tsinghua University — ~600K images, labels encoded in filenames across friction, material, and roughness.
 >
@@ -327,22 +327,52 @@ plan.
 
 ---
 
-### Step 5 — Run DD on the wet_vs_water pair
+### Step 5 — Run DD on the wet_vs_water pair ✓ (complete)
 
-Benchmark manifests for wet_vs_water are committed. Run DD on this pair next —
-standing water is visually far more distinct from wet than wet is from dry,
-giving rules a better chance of passing the precision gate:
+Benchmark manifests for wet_vs_water were committed and DD was run. Results confirmed that standing water is visually far more distinct from wet than wet is from dry.
 
 ```bash
 cd usecases/image-classification/road-surface/python
-
-# Generate wet_vs_water benchmark manifests (already committed — skip if present)
-# python create_benchmark.py --pair wet_vs_water --types probe,pool
-
-# Run three-party DD on wet_vs_water
 python distill_dialogic.py --pair wet_vs_water \
     --val-per-class 20 --max-rounds 4 --n-failures 8
 ```
+
+**Experiment 2 results (wet vs water, 2026-04-17):**
+
+| Metric | Value |
+|---|---|
+| PUPIL | qwen/qwen3-vl-8b-instruct |
+| TUTOR / VALIDATOR | claude-opus-4-6 / claude-sonnet-4-6 |
+| PUPIL zero-shot error rate | 47% (28/60 test images) |
+| Failures processed | 8 |
+| Rules grounded | 8/8 — all fired on trigger image (4 at round 1, 4 at round 2) |
+| Rules accepted (precision ≥ 0.90, max FP = 0) | 4/4 grounded-and-passed |
+| Precision on all 4 accepted rules | 1.00 (0 false positives) |
+
+Session JSON: [`benchmarks/sessions/distill_dialogic_wet_vs_water_claude_opus_4_6.json`](benchmarks/sessions/distill_dialogic_wet_vs_water_claude_opus_4_6.json)  
+Accepted rules: [`knowledge_base/wet_vs_water_rules.json`](knowledge_base/wet_vs_water_rules.json)
+
+**The 4 accepted rules cover four visually distinct Standing Water presentations:**
+
+| Rule ID | Feature | Visual cue |
+|---|---|---|
+| `wet_water_r1` | Uniform opaque water layer | Featureless pale gray field — sky reflection, zero pavement texture visible |
+| `wet_water_r2` | Scattered specular highlights on dark film | Numerous tiny glints distributed across entire dark surface; texture softened |
+| `wet_water_r3` | Diffuse sheen puddles on deteriorated surface | Lighter reflective patches pooling around cracks on damaged pavement |
+| `wet_water_r4` | Uniform dark film with gradient streaks | No aggregate visible; smooth diagonal gradient streaks; no bright highlights |
+
+**4 rules grounded-but-not-accepted** (pool failed):
+
+| Image ID | Outcome | Reason |
+|---|---|---|
+| `202202092134334` | TP=0, FP=0 | Rule too narrow — fires on trigger but recognises no pool positives |
+| `20220722225221311` | TP=11, FP=1, prec=0.917 | 1 false positive; spectrum tightening tried (L1–L4) — no level passed |
+| `20220328151524200` | grounded but did not fire on pool trigger | Rule converged to a Wet rule in round 2 (label-flip during refinement) |
+| `2022021720391615` | grounded but did not fire on pool trigger | Rule converged to a Damp rule in round 2 (label-flip during refinement) |
+
+**Key insight:** The two label-flip cases (images 20220328151524200 and 2022021720391615) are genuine borderline images — RSCD-labelled "Standing Water" but visually presenting as wet or damp asphalt. The TUTOR correctly described their appearance; the resulting rule grounded but favoured the wrong class, revealing a dataset annotation noise boundary rather than a rule failure.
+
+**Contrast with dry_vs_wet:** wet_vs_water achieved 4/4 accepted rules vs 0/4 for dry_vs_wet. The sharper visual boundary (mirror reflections vs. thin film) makes rules both easier to author and more precise on the held-out pool.
 
 ---
 
@@ -461,9 +491,11 @@ usecases/image-classification/road-surface/
     wet_vs_water_probe_v1.json       ← 24 probe images (committed)
     wet_vs_water_pool_v1.json        ← 40 pool images (committed)
     sessions/
-      distill_dialogic_dry_vs_wet_claude_opus_4_6.json  ← first DD session (4 grounded, 0 accepted)
+      distill_dialogic_dry_vs_wet_claude_opus_4_6.json      ← first DD session (4 grounded, 0 accepted)
+      distill_dialogic_wet_vs_water_claude_opus_4_6.json    ← second DD session (8 grounded, 4 accepted)
     reports/                         ← probe reports saved here (gitignored)
-  knowledge_base/                    ← accepted rules committed here after DD sessions (empty — no rules accepted yet)
+  knowledge_base/
+    wet_vs_water_rules.json          ← 4 accepted Standing Water rules, precision=1.00
   python/
     domain_config.py                 ← DomainConfig for road surface (with vocabulary bridging)
     dataset.py                       ← RSCD loader (zip-native, no extraction needed)

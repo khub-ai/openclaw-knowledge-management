@@ -1,0 +1,652 @@
+{
+  "pair": "wet_vs_water",
+  "pupil_model": "qwen/qwen3-vl-8b-instruct",
+  "tutor_model": "claude-opus-4-6",
+  "validator_model": "claude-sonnet-4-6",
+  "max_rounds": 4,
+  "pool_size_per_class": 20,
+  "transcripts": [
+    {
+      "image_id": "202202092134334",
+      "correct_label": "Wet Road",
+      "wrong_prediction": "Standing Water",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the majority of the road surface shows a uniformly darkened, wet appearance with visible pavement texture and crack patterns through the moisture film, and any pooled water is confined to small peripheral areas at the road edges rather than covering the driving surface, classify as Wet Road.",
+              "preconditions": [
+                "The central and dominant portion of the road surface appears as a uniformly dark gray with a thin glossy sheen, and the underlying pavement texture — including crack lines, aggregate grain, and surface irregularities — remains clearly visible through the moisture film",
+                "Any mirror-like reflective pools showing sky or object reflections are limited to small patches at the road margins or edges (top corners, gutters) and do not extend across the main travel surface",
+                "An interconnected network of dark crack lines is visible across most of the wet surface, confirming the moisture is a thin coating rather than a depth of water that would obscure such fine surface details"
+              ],
+              "rationale": "The PUPIL focused on small peripheral puddles in the upper-right corner and over-generalized to classify the entire scene as Standing Water. However, the dominant feature is a thin moisture film across the main road surface through which pavement cracks and texture are clearly visible — a hallmark of a wet road, not standing water. Standing Water requires pooled water of sufficient depth to obscure underlying surface details and show prominent mirror-like reflections across a significant portion of the driving surface. Small edge puddles do not override the classification when the vast majority of pavement is merely wet with visible texture."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The central road surface shows a uniformly darkened gray appearance with a thin moisture film, through which the pavement texture and an interconnected network of crack lines are clearly visible. Any pooled/reflective water (visible in the upper right corner) is confined to a small peripheral area at the road edge, not covering the main travel surface. All three pre-conditions are satisfied."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The central road surface shows a uniformly darkened gray appearance with a thin moisture film, through which the pavement texture and an interconnected network of crack lines are clearly visible. Any pooled/reflective water (visible in the upper right corner) is confined to a small peripheral area at the road edge, not covering the main travel surface. All three pre-conditions are satisfied."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the majority of the road surface shows a uniformly darkened, wet appearance with visible pavement texture and crack patterns through the moisture film, and any pooled water is confined to small peripheral areas at the road edges rather than covering the driving surface, classify as Wet Road.",
+        "feature": "wet_surface_with_visible_texture_through_moisture",
+        "favors": "Wet Road",
+        "confidence": "high",
+        "preconditions": [
+          "The central and dominant portion of the road surface appears as a uniformly dark gray with a thin glossy sheen, and the underlying pavement texture — including crack lines, aggregate grain, and surface irregularities — remains clearly visible through the moisture film",
+          "Any mirror-like reflective pools showing sky or object reflections are limited to small patches at the road margins or edges (top corners, gutters) and do not extend across the main travel surface",
+          "An interconnected network of dark crack lines is visible across most of the wet surface, confirming the moisture is a thin coating rather than a depth of water that would obscure such fine surface details"
+        ],
+        "rationale": "The PUPIL focused on small peripheral puddles in the upper-right corner and over-generalized to classify the entire scene as Standing Water. However, the dominant feature is a thin moisture film across the main road surface through which pavement cracks and texture are clearly visible — a hallmark of a wet road, not standing water. Standing Water requires pooled water of sufficient depth to obscure underlying surface details and show prominent mirror-like reflections across a significant portion of the driving surface. Small edge puddles do not override the classification when the vast majority of pavement is merely wet with visible texture."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 0,
+        "fp": 0,
+        "tn": 20,
+        "fn": 20,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "precision=0.00 < 0.9",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed"
+    },
+    {
+      "image_id": "20220722225221311",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the surface displays concentric circular ripple patterns and the underlying pavement texture is completely obscured by a uniform opaque water layer, classify as Standing Water.",
+              "preconditions": [
+                "Multiple concentric circular ripple rings are visible on the surface, indicating water deep enough to propagate wave patterns from raindrop impacts",
+                "The underlying pavement texture (aggregate, lane markings, asphalt grain) is completely invisible — the surface appears as a uniform gray-toned opaque liquid layer rather than a glossy wet solid",
+                "The surface has a soft, fluid appearance with gentle tonal gradations caused by water movement, rather than the hard reflective sheen of a wet but drained pavement"
+              ],
+              "rationale": "The PUPIL correctly noticed water ripples but then contradicted itself by concluding 'Wet Road.' Concentric raindrop ripple rings can only form when there is a layer of standing water with enough depth to sustain wave propagation — typically several millimeters or more. On a merely wet road, raindrops splash on the hard surface without generating expanding circular wave fronts. Additionally, when the pavement texture is entirely hidden beneath an opaque, uniform-toned water layer (as in this image), the water has accumulated beyond a thin film. A wet road retains visible pavement texture or at minimum shows the hard substrate through a glossy film; standing water replaces the pavement appearance entirely with a fluid surface."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": false,
+              "validator_observations": "The surface shows some subtle texture patterns and slight ripple-like markings, but there are no clearly visible concentric circular ripple rings from raindrop impacts. The underlying pavement texture appears partially visible through the surface, and while the surface has a uniform gray appearance, it does not clearly present as a fully opaque liquid layer obscuring all pavement detail. The conditions for standing water with distinct concentric ripple patterns and complete pavement obscuration are not convincingly met."
+            }
+          ],
+          "fires_on_trigger": false,
+          "validator_observations": "The surface shows some subtle texture patterns and slight ripple-like markings, but there are no clearly visible concentric circular ripple rings from raindrop impacts. The underlying pavement texture appears partially visible through the surface, and while the surface has a uniform gray appearance, it does not clearly present as a fully opaque liquid layer obscuring all pavement detail. The conditions for standing water with distinct concentric ripple patterns and complete pavement obscuration are not convincingly met."
+        },
+        {
+          "round": 2,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "refine_rule",
+              "rule": "When the surface shows a uniform gray appearance with subtle ripple-like markings and underlying pavement texture is only partially visible through the surface, classify as Standing Water.",
+              "preconditions": [
+                "The surface has a uniform gray appearance with subtle texture patterns and slight ripple-like markings visible across it",
+                "The underlying pavement texture appears only partially visible through the surface, indicating a water layer that partially obscures but does not fully hide the road beneath",
+                "No distinct aggregate stones, lane markings, or dry matte patches are discernible — the entire visible area is covered by a continuous translucent-to-opaque film"
+              ],
+              "rationale": "A road surface where pavement detail is partially obscured by a uniform gray layer with slight ripple-like markings indicates a shallow but continuous water film sitting on the pavement. Unlike merely wet pavement (which shows a reflective sheen over clearly visible texture), or deep flooding (which fully obscures all features), this intermediate state — partial obscuration with subtle fluid movement patterns — corresponds to standing water shallow enough to partially transmit underlying texture but deep enough to dampen and blur it."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a uniform gray surface with subtle ripple-like markings distributed across it, consistent with a water film. The underlying pavement texture is only partially visible, suggesting a translucent water layer partially obscuring the road. No distinct aggregate stones, dry matte patches, or lane markings are discernible — the entire visible area appears covered by a continuous film."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a uniform gray surface with subtle ripple-like markings distributed across it, consistent with a water film. The underlying pavement texture is only partially visible, suggesting a translucent water layer partially obscuring the road. No distinct aggregate stones, dry matte patches, or lane markings are discernible — the entire visible area appears covered by a continuous film."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the surface shows a uniform gray appearance with subtle ripple-like markings and underlying pavement texture is only partially visible through the surface, classify as Standing Water.",
+        "feature": "shallow_standing_water_film",
+        "favors": "Standing Water",
+        "confidence": "medium",
+        "preconditions": [
+          "The surface has a uniform gray appearance with subtle texture patterns and slight ripple-like markings visible across it",
+          "The underlying pavement texture appears only partially visible through the surface, indicating a water layer that partially obscures but does not fully hide the road beneath",
+          "No distinct aggregate stones, lane markings, or dry matte patches are discernible — the entire visible area is covered by a continuous translucent-to-opaque film"
+        ],
+        "rationale": "A road surface where pavement detail is partially obscured by a uniform gray layer with slight ripple-like markings indicates a shallow but continuous water film sitting on the pavement. Unlike merely wet pavement (which shows a reflective sheen over clearly visible texture), or deep flooding (which fully obscures all features), this intermediate state — partial obscuration with subtle fluid movement patterns — corresponds to standing water shallow enough to partially transmit underlying texture but deep enough to dampen and blur it."
+      },
+      "grounded_at_round": 2,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 11,
+        "fp": 1,
+        "tn": 19,
+        "fn": 9,
+        "precision": 0.917,
+        "recall": 0.55,
+        "accepted": false,
+        "rejection_reason": "fp=1 > 0",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed",
+      "tighten_history": [
+        {
+          "step": "contrastive_analysis",
+          "discriminating_feature": "specular_reflection_or_object_mirroring",
+          "description": "Distinct bright specular highlights (light source reflections) or mirrored reflections of surrounding objects (e.g., tree branches, sky) visible on the water surface, indicating a water layer with sufficient depth to act as a reflective pool rather than just a thin wet film.",
+          "present_in": "tp",
+          "confidence": "medium"
+        },
+        {
+          "step": "spectrum_generation",
+          "n_levels": 4,
+          "levels": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "n_preconditions": 1
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "n_preconditions": 2
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "n_preconditions": 3
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "n_preconditions": 4
+            }
+          ]
+        },
+        {
+          "step": "batch_validation",
+          "results": [
+            {
+              "level": 1,
+              "label": "most_general",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            },
+            {
+              "level": 2,
+              "label": "moderate",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            },
+            {
+              "level": 3,
+              "label": "original",
+              "tp": 11,
+              "fp": 1,
+              "precision": 0.917,
+              "accepted": false
+            },
+            {
+              "level": 4,
+              "label": "most_specific",
+              "tp": 0,
+              "fp": 0,
+              "precision": 0.0,
+              "accepted": false
+            }
+          ]
+        },
+        {
+          "step": "selected_level",
+          "level": null,
+          "outcome": "no_level_passed"
+        }
+      ]
+    },
+    {
+      "image_id": "20220328151524200",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When [preconditions], classify as Standing Water.",
+              "preconditions": [
+                "Surface displays a dense pattern of small, repeating ripple-like or wavelet textures across a broad area, resembling wind-disturbed water rather than the granular texture of wet pavement aggregate",
+                "The surface has a uniform silvery-gray tone with low contrast, obscuring any underlying pavement texture such as aggregate stones, lane markings, or asphalt grain",
+                "Small bright white specular highlights or glints are scattered irregularly across the surface, consistent with light reflecting off a thin but continuous water layer"
+              ],
+              "rationale": "The PUPIL mistook a shallow, widespread sheet of standing water for a merely wet road because no deep, clearly bounded puddles were visible. However, the image shows telltale ripple patterns across the entire surface — these fine, repeating wavelets are caused by wind acting on a continuous water film and are NOT the texture of wet pavement. On a wet road without standing water, the aggregate texture (individual stones, asphalt grain) remains visible through the moisture film. Here, the pavement texture is completely submerged and invisible, replaced by water-surface ripples and scattered specular glints. Standing water does not require deep pools; a continuous shallow sheet that obscures pavement texture and shows its own surface dynamics (ripples, wavelets) qualifies as standing water."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": false,
+              "validator_observations": "The surface shows a rough, granular texture consistent with wet pavement aggregate rather than a dense ripple/wavelet pattern of wind-disturbed water. While the tone is grayish and somewhat uniform, the underlying pavement texture (coarse grain, aggregate-like surface) is partially visible. There are no clear scattered specular highlights or glints consistent with a continuous thin water layer reflecting light. The streaky texture appears to be rain streaks or motion blur rather than water surface ripples."
+            }
+          ],
+          "fires_on_trigger": false,
+          "validator_observations": "The surface shows a rough, granular texture consistent with wet pavement aggregate rather than a dense ripple/wavelet pattern of wind-disturbed water. While the tone is grayish and somewhat uniform, the underlying pavement texture (coarse grain, aggregate-like surface) is partially visible. There are no clear scattered specular highlights or glints consistent with a continuous thin water layer reflecting light. The streaky texture appears to be rain streaks or motion blur rather than water surface ripples."
+        },
+        {
+          "round": 2,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "refine_rule",
+              "rule": "When [preconditions], classify as Wet.",
+              "preconditions": [
+                "Surface shows a rough, granular texture consistent with wet pavement aggregate, with coarse grain partially visible but muted in contrast compared to dry pavement",
+                "Streaky linear texture is present across the surface, consistent with rain streaks or motion blur from falling rain",
+                "The overall surface tone is grayish and somewhat uniform, reducing but not fully obscuring the underlying aggregate-like pavement texture"
+              ],
+              "rationale": "The coarse aggregate texture remains partially visible, ruling out standing water which would fully obscure it. The grayish uniform tone with muted contrast indicates a wet film clinging to the pavement surface rather than dry conditions. The streaky texture from rain streaks further confirms active precipitation wetting the surface without pooling."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a road surface with a rough, granular texture that appears muted in contrast, consistent with wet pavement aggregate. There are clear streaky linear patterns across the surface that are consistent with rain streaks or falling rain motion blur. The overall tone is grayish and somewhat uniform, partially obscuring but not completely hiding the underlying pavement texture. All three pre-conditions appear to be met."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a road surface with a rough, granular texture that appears muted in contrast, consistent with wet pavement aggregate. There are clear streaky linear patterns across the surface that are consistent with rain streaks or falling rain motion blur. The overall tone is grayish and somewhat uniform, partially obscuring but not completely hiding the underlying pavement texture. All three pre-conditions appear to be met."
+        }
+      ],
+      "final_rule": {
+        "rule": "When [preconditions], classify as Wet.",
+        "feature": "wet_aggregate_with_rain_streaks",
+        "favors": "Wet",
+        "confidence": "medium",
+        "preconditions": [
+          "Surface shows a rough, granular texture consistent with wet pavement aggregate, with coarse grain partially visible but muted in contrast compared to dry pavement",
+          "Streaky linear texture is present across the surface, consistent with rain streaks or motion blur from falling rain",
+          "The overall surface tone is grayish and somewhat uniform, reducing but not fully obscuring the underlying aggregate-like pavement texture"
+        ],
+        "rationale": "The coarse aggregate texture remains partially visible, ruling out standing water which would fully obscure it. The grayish uniform tone with muted contrast indicates a wet film clinging to the pavement surface rather than dry conditions. The streaky texture from rain streaks further confirms active precipitation wetting the surface without pooling."
+      },
+      "grounded_at_round": 2,
+      "pool_result": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed"
+    },
+    {
+      "image_id": "2022021720391615",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the surface shows a uniform dark film that obscures aggregate texture across the entire frame, with no dry patches or exposed stone visible anywhere, and small debris or particles appear to float or sit on top of a liquid layer rather than being embedded in the pavement, classify as Standing Water.",
+              "preconditions": [
+                "The entire visible surface is covered by a continuous dark film with no dry or matte patches — aggregate texture is uniformly suppressed or invisible across the full frame, giving a flat tonal appearance rather than the speckled light-dark pattern of exposed wet stones",
+                "Small loose particles, grit, or debris appear to rest on top of the surface layer rather than being embedded in or bonded to the pavement, suggesting a liquid film thick enough to suspend or float material",
+                "Surface irregularities such as minor cracks or undulations show soft, blurred edges rather than sharp defined edges, indicating a translucent water layer is pooling over and filling surface depressions"
+              ],
+              "rationale": "The PUPIL mistakenly called this 'Wet Road' because it saw a dark, seemingly reflective surface. The key distinction is that a merely wet road still reveals aggregate texture — individual stones appear darker but remain individually distinguishable with visible grain boundaries. Standing water, even as a thin sheet, creates a continuous liquid film that uniformly masks all micro-texture, producing a flat tonal field. Additionally, standing water fills micro-depressions and softens the visual edges of cracks and surface roughness. The presence of loose particles sitting atop the surface rather than embedded in it is a strong visual cue that a water film of measurable depth is present, distinguishing shallow standing water from a simple wet sheen."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": false,
+              "validator_observations": "The image shows a dark asphalt surface with clearly visible aggregate texture — the speckled light-dark pattern of individual stones and particles is evident throughout the frame. The surface does not show a uniform flat dark film suppressing texture; instead, the rough, granular texture of the pavement is clearly visible. There is no indication of particles floating on a liquid layer, and surface irregularities appear to have sharp rather than soft blurred edges. The surface appears damp or dark-toned but not covered by a standing water film."
+            }
+          ],
+          "fires_on_trigger": false,
+          "validator_observations": "The image shows a dark asphalt surface with clearly visible aggregate texture — the speckled light-dark pattern of individual stones and particles is evident throughout the frame. The surface does not show a uniform flat dark film suppressing texture; instead, the rough, granular texture of the pavement is clearly visible. There is no indication of particles floating on a liquid layer, and surface irregularities appear to have sharp rather than soft blurred edges. The surface appears damp or dark-toned but not covered by a standing water film."
+        },
+        {
+          "round": 2,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "refine_rule",
+              "rule": "When the surface shows a dark asphalt surface with clearly visible aggregate texture that appears damp or dark-toned but without any reflective sheen, standing puddles, or uniform wet film, classify as Damp.",
+              "preconditions": [
+                "The surface is a dark asphalt surface with a rough, granular texture where the speckled light-dark pattern of individual stones and particles is clearly visible throughout the frame",
+                "The overall surface appears damp or dark-toned compared to fully dry pale-gray pavement, but no mirror-like reflective sheen, gloss, or pooled water is visible anywhere in the frame",
+                "Surface irregularities such as minor cracks or undulations have sharp defined edges rather than soft blurred edges, indicating no liquid film is pooling over or filling surface depressions"
+              ],
+              "rationale": "A surface that appears darker than fully dry pavement yet retains full visible aggregate texture with sharp-edged features indicates moisture has dampened the surface without forming a continuous water film. This distinguishes the Damp condition from both Dry (which would appear lighter/paler gray) and Wet or Standing Water (which would suppress texture, produce reflective sheen, or show pooling). The retained granular texture and sharp crack edges confirm moisture is absorbed into or thinly coating the surface rather than sitting as a visible liquid layer."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a dark asphalt surface with clearly visible rough, granular aggregate texture throughout. The surface appears darker than dry pale-gray pavement, suggesting dampness, but there is no mirror-like reflective sheen, gloss, or standing water/puddles visible. Surface irregularities and texture details appear with sharp, defined edges rather than being blurred or filled by a liquid film, consistent with a damp (not wet) condition. All three pre-conditions are satisfied."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a dark asphalt surface with clearly visible rough, granular aggregate texture throughout. The surface appears darker than dry pale-gray pavement, suggesting dampness, but there is no mirror-like reflective sheen, gloss, or standing water/puddles visible. Surface irregularities and texture details appear with sharp, defined edges rather than being blurred or filled by a liquid film, consistent with a damp (not wet) condition. All three pre-conditions are satisfied."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the surface shows a dark asphalt surface with clearly visible aggregate texture that appears damp or dark-toned but without any reflective sheen, standing puddles, or uniform wet film, classify as Damp.",
+        "feature": "damp_dark_toned_textured_surface",
+        "favors": "Damp",
+        "confidence": "medium",
+        "preconditions": [
+          "The surface is a dark asphalt surface with a rough, granular texture where the speckled light-dark pattern of individual stones and particles is clearly visible throughout the frame",
+          "The overall surface appears damp or dark-toned compared to fully dry pale-gray pavement, but no mirror-like reflective sheen, gloss, or pooled water is visible anywhere in the frame",
+          "Surface irregularities such as minor cracks or undulations have sharp defined edges rather than soft blurred edges, indicating no liquid film is pooling over or filling surface depressions"
+        ],
+        "rationale": "A surface that appears darker than fully dry pavement yet retains full visible aggregate texture with sharp-edged features indicates moisture has dampened the surface without forming a continuous water film. This distinguishes the Damp condition from both Dry (which would appear lighter/paler gray) and Wet or Standing Water (which would suppress texture, produce reflective sheen, or show pooling). The retained granular texture and sharp crack edges confirm moisture is absorbed into or thinly coating the surface rather than sitting as a visible liquid layer."
+      },
+      "grounded_at_round": 2,
+      "pool_result": {
+        "fires_on_trigger": false,
+        "tp": 0,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accepted": false,
+        "rejection_reason": "did not fire on trigger",
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "grounded_but_pool_failed"
+    },
+    {
+      "image_id": "20220722233146777",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When [preconditions], classify as Standing Water.",
+              "preconditions": [
+                "The surface appears as a uniform, featureless light gray or pale blue-gray plane with no visible pavement texture, aggregate, or asphalt coloring whatsoever",
+                "The tone is flat and nearly homogeneous across the entire visible area, resembling a calm water surface or overcast sky reflection rather than a wet road",
+                "No road markings, lane lines, cracks, stones, or surface irregularities are visible through the covering layer"
+              ],
+              "rationale": "The PUPIL mistook a deep, calm layer of standing water for a merely wet road. On a wet road, even with sheen, the underlying pavement texture (aggregate grain, color variation, cracks, lane markings) remains at least partially visible through the water film. When standing water is deep enough, it forms an opaque or highly reflective layer that completely obscures all pavement features, producing a uniform featureless pale gray field — essentially the viewer sees only the water surface and its sky reflection, not the road beneath. The total absence of any pavement detail is the critical distinguishing cue: wet roads show texture through moisture, standing water hides everything."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a uniform, featureless light gray/pale blue-gray plane with no visible pavement texture, aggregate, asphalt coloring, road markings, cracks, or surface irregularities. The tone is flat and nearly homogeneous across the entire visible area, closely resembling a calm water surface or overcast sky reflection rather than a typical wet road surface."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a uniform, featureless light gray/pale blue-gray plane with no visible pavement texture, aggregate, asphalt coloring, road markings, cracks, or surface irregularities. The tone is flat and nearly homogeneous across the entire visible area, closely resembling a calm water surface or overcast sky reflection rather than a typical wet road surface."
+        }
+      ],
+      "final_rule": {
+        "rule": "When [preconditions], classify as Standing Water.",
+        "feature": "uniform_opaque_water_layer_obscuring_surface",
+        "favors": "Standing Water",
+        "confidence": "high",
+        "preconditions": [
+          "The surface appears as a uniform, featureless light gray or pale blue-gray plane with no visible pavement texture, aggregate, or asphalt coloring whatsoever",
+          "The tone is flat and nearly homogeneous across the entire visible area, resembling a calm water surface or overcast sky reflection rather than a wet road",
+          "No road markings, lane lines, cracks, stones, or surface irregularities are visible through the covering layer"
+        ],
+        "rationale": "The PUPIL mistook a deep, calm layer of standing water for a merely wet road. On a wet road, even with sheen, the underlying pavement texture (aggregate grain, color variation, cracks, lane markings) remains at least partially visible through the water film. When standing water is deep enough, it forms an opaque or highly reflective layer that completely obscures all pavement features, producing a uniform featureless pale gray field — essentially the viewer sees only the water surface and its sky reflection, not the road beneath. The total absence of any pavement detail is the critical distinguishing cue: wet roads show texture through moisture, standing water hides everything."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 2,
+        "fp": 0,
+        "tn": 20,
+        "fn": 18,
+        "precision": 1.0,
+        "recall": 0.1,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "accepted"
+    },
+    {
+      "image_id": "2022042912043716",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the surface shows a uniformly dark tone with scattered small bright specular highlights distributed across the entire field rather than concentrated in one area, and the underlying pavement texture is obscured or softened as if viewed through a thin layer of liquid, classify as Standing Water.",
+              "preconditions": [
+                "Surface appears uniformly dark gray with numerous small bright white specular highlights (tiny glints) scattered irregularly across the entire visible area, not just along a single reflective streak",
+                "Pavement aggregate texture is visible but appears softened, blurred, or muted as though seen through a thin translucent water film rather than showing crisp sharp grain edges",
+                "No dry matte patches are visible anywhere in the frame — the entire surface has a consistent wet-dark tone with the same level of light diffusion throughout"
+              ],
+              "rationale": "The PUPIL dismissed standing water because it expected obvious deep pools or puddles. However, standing water can present as a shallow uniform film covering the entire surface. The key visual difference from merely wet road is: on a wet road, the aggregate texture remains sharp and defined with a glossy sheen on each stone, while standing water creates a continuous translucent film that softens and blurs the texture underneath and produces many scattered specular highlights (tiny bright dots) across the whole surface as light reflects off the continuous water layer rather than off individual wet stone faces. The image shows this characteristic pattern — muted texture with distributed micro-reflections indicating a continuous water film sitting on the surface."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a uniformly dark gray surface with numerous small bright specular highlights (glints) scattered irregularly across the entire field, not concentrated in one streak. The pavement texture appears softened and muted, consistent with being viewed through a thin water film. There are no dry matte patches visible anywhere in the frame — the entire surface maintains a consistent wet-dark tone with uniform light diffusion."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a uniformly dark gray surface with numerous small bright specular highlights (glints) scattered irregularly across the entire field, not concentrated in one streak. The pavement texture appears softened and muted, consistent with being viewed through a thin water film. There are no dry matte patches visible anywhere in the frame — the entire surface maintains a consistent wet-dark tone with uniform light diffusion."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the surface shows a uniformly dark tone with scattered small bright specular highlights distributed across the entire field rather than concentrated in one area, and the underlying pavement texture is obscured or softened as if viewed through a thin layer of liquid, classify as Standing Water.",
+        "feature": "shallow_standing_water_film",
+        "favors": "Standing Water",
+        "confidence": "medium",
+        "preconditions": [
+          "Surface appears uniformly dark gray with numerous small bright white specular highlights (tiny glints) scattered irregularly across the entire visible area, not just along a single reflective streak",
+          "Pavement aggregate texture is visible but appears softened, blurred, or muted as though seen through a thin translucent water film rather than showing crisp sharp grain edges",
+          "No dry matte patches are visible anywhere in the frame — the entire surface has a consistent wet-dark tone with the same level of light diffusion throughout"
+        ],
+        "rationale": "The PUPIL dismissed standing water because it expected obvious deep pools or puddles. However, standing water can present as a shallow uniform film covering the entire surface. The key visual difference from merely wet road is: on a wet road, the aggregate texture remains sharp and defined with a glossy sheen on each stone, while standing water creates a continuous translucent film that softens and blurs the texture underneath and produces many scattered specular highlights (tiny bright dots) across the whole surface as light reflects off the continuous water layer rather than off individual wet stone faces. The image shows this characteristic pattern — muted texture with distributed micro-reflections indicating a continuous water film sitting on the surface."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 2,
+        "fp": 0,
+        "tn": 20,
+        "fn": 18,
+        "precision": 1.0,
+        "recall": 0.1,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "accepted"
+    },
+    {
+      "image_id": "202204162132411",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the road surface contains areas where a continuous water layer shows clear mirror-like reflections of above-ground objects (trees, sky, structures) as coherent reflected images, and the water body has visible defined edges where wet pavement transitions to deeper pooled water, classify as Standing Water.",
+              "preconditions": [
+                "One or more areas on the pavement show sharp, coherent mirror-like reflections of objects above the surface — such as reflected tree branches, overhead structures, or sky — appearing as recognizable inverted shapes within the water layer, not just a diffuse sheen or gloss",
+                "The reflective water area has discernible irregular edges or boundaries where the water depth visibly transitions, with the surrounding pavement appearing as a darker wet surface without those same reflected object images",
+                "The reflective water patch spans a continuous area larger than small crack-filling moisture — covering at least a hand-sized or larger contiguous region of the surface"
+              ],
+              "rationale": "The pupil dismissed the water as merely a wet road because it did not see 'large, distinct puddles.' However, standing water is definitively distinguished from a merely wet road by the presence of coherent reflected images of above-ground objects (here, tree branches are clearly reflected in the water). A wet road produces only a diffuse dark sheen or gloss; standing water acts as a mirror with enough depth to render recognizable reflections of surroundings. The visible tree-branch reflections in this image are unmistakable evidence of a water layer with sufficient depth and stillness to constitute standing water, regardless of whether the puddle shape looks 'large' or 'distinct' by the pupil's expectations."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": false,
+              "validator_observations": "The image shows a deteriorated road surface with cracking and some wet areas, but there are no sharp, coherent mirror-like reflections of above-ground objects (trees, sky, structures) visible as recognizable inverted shapes within any water layer. The lighter areas appear to be reflective wet pavement or puddles with diffuse sheen rather than clear mirror-like reflections showing coherent reflected images. The first pre-condition of sharp, coherent mirror-like reflections of recognizable objects is not met."
+            }
+          ],
+          "fires_on_trigger": false,
+          "validator_observations": "The image shows a deteriorated road surface with cracking and some wet areas, but there are no sharp, coherent mirror-like reflections of above-ground objects (trees, sky, structures) visible as recognizable inverted shapes within any water layer. The lighter areas appear to be reflective wet pavement or puddles with diffuse sheen rather than clear mirror-like reflections showing coherent reflected images. The first pre-condition of sharp, coherent mirror-like reflections of recognizable objects is not met."
+        },
+        {
+          "round": 2,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "refine_rule",
+              "rule": "When the road surface shows lighter areas that appear as reflective wet pavement or puddles with diffuse sheen on a deteriorated cracked surface, classify as Standing Water.",
+              "preconditions": [
+                "One or more lighter areas on the pavement appear as reflective wet pavement or puddles with a diffuse sheen, distinguishable from the darker surrounding wet surface",
+                "The road surface shows visible cracking and deterioration, with the lighter reflective wet areas pooling in or around the damaged pavement sections",
+                "The reflective wet areas or puddles cover contiguous regions larger than individual cracks, forming distinct patches against the overall darker wet pavement"
+              ],
+              "rationale": "Deteriorated and cracked pavement creates low spots where water accumulates into puddles. Even without sharp mirror-like reflections, the pooled water is identifiable as lighter areas with diffuse sheen against the surrounding darker wet pavement, indicating standing water rather than merely damp or uniformly wet conditions."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a deteriorated road surface with visible cracking and pavement damage. There is a lighter, reflective area in the upper-left/center portion of the image that appears to be a puddle or wet reflective patch with a diffuse sheen, clearly distinguishable from the darker surrounding pavement. This lighter reflective area covers a contiguous region larger than individual cracks and pools around the damaged pavement sections, satisfying all three pre-conditions."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a deteriorated road surface with visible cracking and pavement damage. There is a lighter, reflective area in the upper-left/center portion of the image that appears to be a puddle or wet reflective patch with a diffuse sheen, clearly distinguishable from the darker surrounding pavement. This lighter reflective area covers a contiguous region larger than individual cracks and pools around the damaged pavement sections, satisfying all three pre-conditions."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the road surface shows lighter areas that appear as reflective wet pavement or puddles with diffuse sheen on a deteriorated cracked surface, classify as Standing Water.",
+        "feature": "diffuse_sheen_puddles_on_deteriorated_surface",
+        "favors": "Standing Water",
+        "confidence": "medium",
+        "preconditions": [
+          "One or more lighter areas on the pavement appear as reflective wet pavement or puddles with a diffuse sheen, distinguishable from the darker surrounding wet surface",
+          "The road surface shows visible cracking and deterioration, with the lighter reflective wet areas pooling in or around the damaged pavement sections",
+          "The reflective wet areas or puddles cover contiguous regions larger than individual cracks, forming distinct patches against the overall darker wet pavement"
+        ],
+        "rationale": "Deteriorated and cracked pavement creates low spots where water accumulates into puddles. Even without sharp mirror-like reflections, the pooled water is identifiable as lighter areas with diffuse sheen against the surrounding darker wet pavement, indicating standing water rather than merely damp or uniformly wet conditions."
+      },
+      "grounded_at_round": 2,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 3,
+        "fp": 0,
+        "tn": 20,
+        "fn": 17,
+        "precision": 1.0,
+        "recall": 0.15,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "accepted"
+    },
+    {
+      "image_id": "202203312316036",
+      "correct_label": "Standing Water",
+      "wrong_prediction": "Wet Road",
+      "rounds": [
+        {
+          "round": 1,
+          "party_actions": [
+            {
+              "party": "TUTOR",
+              "action": "author_rule",
+              "rule": "When the surface appears as a uniform dark tone with no visible aggregate texture or grain, and diagonal or directional streaks show continuous tonal blending rather than discrete wet-dry boundaries, and the overall surface has a flat, featureless matte-to-satin sheen without bright specular highlights, classify as Standing Water.",
+              "preconditions": [
+                "Surface appears as a uniform dark brownish-gray tone with no individual stones, aggregate particles, or pavement texture visible — the underlying road texture is completely obscured as if covered by a continuous opaque film",
+                "Diagonal or streaked tonal variations appear as smooth, blended gradients rather than sharp reflective glints — resembling light passing through a layer of turbid water rather than bouncing off a thin wet coating",
+                "No bright specular highlights or mirror-like reflections of sky or surroundings are present; instead the surface has a muted, absorptive appearance with subdued contrast, consistent with a water layer deep enough to diffuse reflected light"
+              ],
+              "rationale": "The PUPIL mistook the motion-blurred dark surface for a merely wet road. On a wet road, aggregate texture and individual stones remain partially visible through a thin moisture film, and specular highlights (bright glints from sky or light sources) are typically present. Standing water, by contrast, creates a layer thick enough to completely obscure pavement texture, producing a featureless, uniformly dark surface. The smooth tonal gradients and absence of any visible road texture in this image indicate the water depth is sufficient to submerge surface features entirely — the hallmark of standing water rather than simple surface wetness. The lack of bright mirror-like reflections further suggests turbid or shallow-pooled water that diffuses rather than sharply reflects light."
+            },
+            {
+              "party": "KF",
+              "action": "grounding_check",
+              "fires_on_trigger": true,
+              "validator_observations": "The image shows a uniform dark brownish-gray surface with no visible aggregate, stones, or pavement texture — the road surface is completely obscured by what appears to be a continuous opaque film. Diagonal streaks are present as smooth, blended tonal gradients rather than sharp specular reflections or discrete wet-dry boundaries. There are no bright mirror-like highlights or strong specular glints; the surface has a muted, flat, matte-to-satin appearance consistent with light diffusing through a turbid water layer. All three pre-conditions appear to be met."
+            }
+          ],
+          "fires_on_trigger": true,
+          "validator_observations": "The image shows a uniform dark brownish-gray surface with no visible aggregate, stones, or pavement texture — the road surface is completely obscured by what appears to be a continuous opaque film. Diagonal streaks are present as smooth, blended tonal gradients rather than sharp specular reflections or discrete wet-dry boundaries. There are no bright mirror-like highlights or strong specular glints; the surface has a muted, flat, matte-to-satin appearance consistent with light diffusing through a turbid water layer. All three pre-conditions appear to be met."
+        }
+      ],
+      "final_rule": {
+        "rule": "When the surface appears as a uniform dark tone with no visible aggregate texture or grain, and diagonal or directional streaks show continuous tonal blending rather than discrete wet-dry boundaries, and the overall surface has a flat, featureless matte-to-satin sheen without bright specular highlights, classify as Standing Water.",
+        "feature": "uniform_dark_film_obscuring_texture",
+        "favors": "Standing Water",
+        "confidence": "medium",
+        "preconditions": [
+          "Surface appears as a uniform dark brownish-gray tone with no individual stones, aggregate particles, or pavement texture visible — the underlying road texture is completely obscured as if covered by a continuous opaque film",
+          "Diagonal or streaked tonal variations appear as smooth, blended gradients rather than sharp reflective glints — resembling light passing through a layer of turbid water rather than bouncing off a thin wet coating",
+          "No bright specular highlights or mirror-like reflections of sky or surroundings are present; instead the surface has a muted, absorptive appearance with subdued contrast, consistent with a water layer deep enough to diffuse reflected light"
+        ],
+        "rationale": "The PUPIL mistook the motion-blurred dark surface for a merely wet road. On a wet road, aggregate texture and individual stones remain partially visible through a thin moisture film, and specular highlights (bright glints from sky or light sources) are typically present. Standing water, by contrast, creates a layer thick enough to completely obscure pavement texture, producing a featureless, uniformly dark surface. The smooth tonal gradients and absence of any visible road texture in this image indicate the water depth is sufficient to submerge surface features entirely — the hallmark of standing water rather than simple surface wetness. The lack of bright mirror-like reflections further suggests turbid or shallow-pooled water that diffuses rather than sharply reflects light."
+      },
+      "grounded_at_round": 1,
+      "pool_result": {
+        "fires_on_trigger": true,
+        "tp": 2,
+        "fp": 0,
+        "tn": 20,
+        "fn": 18,
+        "precision": 1.0,
+        "recall": 0.1,
+        "accepted": true,
+        "rejection_reason": null,
+        "early_exited": false
+      },
+      "pool_result_after_tighten": null,
+      "outcome": "accepted"
+    }
+  ],
+  "summary": {
+    "total_failures": 8,
+    "grounded": 8,
+    "accepted": 4
+  }
+}
