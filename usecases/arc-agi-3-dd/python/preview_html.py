@@ -17,6 +17,64 @@ def _json_pretty(obj) -> str:
     return escape(json.dumps(obj, indent=2, ensure_ascii=False))
 
 
+def _render_initial_prompt(session_dir: Path) -> str:
+    """Render the initial system+user prompt, if saved, as a collapsible block."""
+    path = session_dir / "initial_prompt.txt"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    parts = ['<div class="section">']
+    parts.append(f'<h2>Round 1 — initial prompt '
+                 f'<span class="sub">({session_dir.name}/initial_prompt.txt)</span></h2>')
+    parts.append('<details class="prompt-block"><summary>show prompt</summary>')
+    parts.append('<pre class="prompt-pre">' + escape(text) + '</pre>')
+    parts.append('</details></div>')
+    return "\n".join(parts)
+
+
+def _render_change_report(cr: dict) -> str:
+    """Render a CHANGE_REPORT observation compactly as HTML."""
+    parts: list[str] = ['<div class="change-report">']
+    motions = cr.get("element_motions") or []
+    if motions:
+        parts.append('<div class="cr-label">element_motions</div><ul class="cr-list">')
+        for m in motions:
+            sign_r = "+" if m.get("dr", 0) >= 0 else ""
+            sign_c = "+" if m.get("dc", 0) >= 0 else ""
+            mv = "moved" if m.get("moved") else "static"
+            parts.append(
+                f'<li>#{escape(str(m.get("element_id","?")))} '
+                f'<b>{escape(str(m.get("name","?")))}</b> '
+                f'({mv}) Δ=({sign_r}{m.get("dr",0)}, {sign_c}{m.get("dc",0)}) '
+                f'pre={escape(str(m.get("pre_bbox")))} → post={escape(str(m.get("post_bbox")))}</li>'
+            )
+        parts.append('</ul>')
+    for key, label in (("appearances", "appearances"),
+                       ("disappearances", "disappearances"),
+                       ("counter_changes", "counter_changes")):
+        items = cr.get(key) or []
+        if items:
+            parts.append(f'<div class="cr-label">{label}</div>')
+            parts.append('<pre>' + _json_pretty(items) + '</pre>')
+    unex = cr.get("unexplained_regions") or []
+    if unex:
+        parts.append('<div class="cr-label">unexplained_regions</div>')
+        parts.append('<pre>' + _json_pretty(unex) + '</pre>')
+    if cr.get("full_frame_fallback") is not None:
+        parts.append('<div class="cr-label error">full_frame_fallback</div>')
+        parts.append('<pre>(diff exceeded 30% of frame — full post-frame attached)</pre>')
+    totals = cr.get("totals") or {}
+    if totals:
+        parts.append(
+            f'<div class="cr-totals">diff={totals.get("diff_cells","?")} '
+            f'unexplained={totals.get("unexplained_cells","?")} '
+            f'/{totals.get("frame_area","?")} cells</div>'
+        )
+    parts.append('</div>')
+    return "\n".join(parts)
+
+
 def _render_round1_exchanges(session_dir: Path) -> str:
     """Turn tutor_reply + tutor_probe_results into a compact HTML section."""
     try:
@@ -70,7 +128,16 @@ def _render_round1_exchanges(session_dir: Path) -> str:
                           for t in exec_r.get("trace", []))
             ) + '</pre>')
             parts.append('<div class="label">observations</div>')
-            parts.append('<pre>' + _json_pretty(exec_r.get("observations", [])) + '</pre>')
+            obs_list = exec_r.get("observations", []) or []
+            other_obs = []
+            for obs in obs_list:
+                if obs.get("kind") == "CHANGE_REPORT":
+                    parts.append('<div class="label">CHANGE_REPORT</div>')
+                    parts.append(_render_change_report(obs))
+                else:
+                    other_obs.append(obs)
+            if other_obs:
+                parts.append('<pre>' + _json_pretty(other_obs) + '</pre>')
             parts.append(f'<div class="label">final_state</div>'
                          f'<pre>{escape(str(exec_r.get("final_state","?")))}</pre>')
         else:
@@ -145,6 +212,15 @@ pre { margin: 2px 0 6px; white-space: pre-wrap; word-break: break-word; backgrou
 .revnotes { font-size: 12px; color: #ddd; }
 .revnotes li { margin: 6px 0; }
 .revnotes .reason { color: #aaa; font-size: 11px; }
+.prompt-block { background: #0e0e0e; border: 1px solid #2a2a2a; border-radius: 4px; padding: 6px; font-size: 11px; }
+.prompt-block summary { cursor: pointer; color: #bbb; }
+.prompt-pre { max-height: 400px; overflow: auto; color: #ccc; }
+.change-report { background: #0a0a0a; border: 1px solid #1d3036; border-radius: 3px; padding: 6px; margin: 4px 0; }
+.cr-label { color: #8ec0c8; font-size: 10px; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
+.cr-label.error { color: #ff8b6d; }
+.cr-list { margin: 2px 0 4px 16px; padding: 0; font-size: 11px; color: #ddd; }
+.cr-list li { margin: 1px 0; }
+.cr-totals { color: #888; font-size: 10px; margin-top: 4px; }
 """
 
 
@@ -175,6 +251,10 @@ def render_index(
         "</div>"
     )
 
+    initial_prompt_html = ""
+    if round1_session is not None:
+        initial_prompt_html = _render_initial_prompt(round1_session)
+
     exchanges_html = ""
     if round1_session is not None:
         exchanges_html += _render_round1_exchanges(round1_session)
@@ -197,6 +277,7 @@ def render_index(
 </head><body>
 {frame_header}
 <img src="{escape(png_name)}" width="512" height="512">
+{initial_prompt_html}
 {exchanges_html}
 {revnotes_html}
 {palette_table}

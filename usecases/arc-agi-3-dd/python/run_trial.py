@@ -50,8 +50,8 @@ def extract_json(text: str) -> dict:
     raise ValueError("unterminated JSON in reply")
 
 
-def call_model(role: str, payload: dict, png_path: Path, *, use_image: bool) -> dict:
-    user_msg = prompts.build_user_message(
+def build_initial_user_msg(payload: dict) -> str:
+    return prompts.build_user_message(
         frame_text       = prompts.format_frame_text(payload["grid"]),
         action_labels    = payload["available_actions"],
         state            = payload["state"],
@@ -62,6 +62,10 @@ def call_model(role: str, payload: dict, png_path: Path, *, use_image: bool) -> 
         tags             = payload["tags"],
         level            = 1,
     )
+
+
+def call_model(role: str, payload: dict, png_path: Path, *, use_image: bool) -> dict:
+    user_msg = build_initial_user_msg(payload)
     image_b64 = base64.b64encode(png_path.read_bytes()).decode("ascii") if use_image else None
 
     if role == "TUTOR":
@@ -89,6 +93,14 @@ def process_probes(
     game_id:        str,
 ) -> list[dict]:
     elements = {int(e["id"]): e.get("bbox") for e in assessment.get("elements", [])}
+    records = {
+        int(e["id"]): {
+            "bbox":     e.get("bbox"),
+            "name":     e.get("name"),
+            "function": e.get("function", "unknown"),
+        }
+        for e in assessment.get("elements", [])
+    }
     valid_ids = set(elements.keys())
     results = []
     for probe_json in assessment.get("probes", []) or []:
@@ -101,7 +113,7 @@ def process_probes(
                 "hypothesis":   parsed.hypothesis,
             })
             continue
-        results.append(run_probe(parsed, game_id, elements))
+        results.append(run_probe(parsed, game_id, elements, records))
     return results
 
 
@@ -127,6 +139,14 @@ def main() -> None:
     trial_id = a.trial_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     session_dir = sessions_dir / f"trial_{trial_id}"
     session_dir.mkdir(parents=True, exist_ok=True)
+
+    # Persist the initial prompt (system + user) so the preview can show it.
+    initial_user = build_initial_user_msg(payload)
+    (session_dir / "initial_prompt.txt").write_text(
+        "=== SYSTEM ===\n" + prompts.SYSTEM +
+        "\n\n=== USER ===\n" + initial_user,
+        encoding="utf-8",
+    )
 
     # 2. Call both models.
     results: dict = {"trial_id": trial_id, "game_id": a.game, "used_image": a.use_image}

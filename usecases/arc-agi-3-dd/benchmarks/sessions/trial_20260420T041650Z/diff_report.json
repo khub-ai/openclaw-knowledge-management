@@ -1,0 +1,23 @@
+{
+  "parse_ok_both": false,
+  "parse_ok_tutor": true,
+  "parse_ok_pupil": false,
+  "section_summaries": {
+    "elements": {
+      "TUTOR": "14 (agent:2, collectible:1, decor:1, portal:1, readout:3, unknown:3, wall:3)",
+      "PUPIL": "\u2014"
+    },
+    "similar_groups": {
+      "TUTOR": "2 groups",
+      "PUPIL": "\u2014"
+    },
+    "initial_strategy": {
+      "TUTOR": "first_action='ACTION1', goal=Navigate the agent through the maze-like floor area, likely ",
+      "PUPIL": "\u2014"
+    },
+    "probes": {
+      "TUTOR": "5 probes",
+      "PUPIL": "\u2014"
+    }
+  }
+}

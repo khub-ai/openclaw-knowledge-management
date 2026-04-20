@@ -80,9 +80,10 @@ If you have no changes, return an empty list and explain why in a single
 "no_changes_reason" top-level string field.
 
 You may also propose up to 5 NEW probes to run in a potential Round 3
-(same PROBES DSL as Round 1: DO, DO_SEQ, REPEAT DO, RESET; REGION_DELTA,
-ELEMENT_MOVED, STATE, AVAILABLE_ACTIONS, SCORE_DELTA).  These must target
-hypotheses still open after Round 2.
+(same PROBES DSL as Round 1: DO, DO_SEQ, REPEAT DO, RESET; observations:
+CHANGE_REPORT (preferred broad summary), REGION_DELTA, ELEMENT_MOVED,
+STATE, AVAILABLE_ACTIONS, SCORE_DELTA).  These must target hypotheses
+still open after Round 2.
 
 -----------------------------------------------------------------------
 REPLY SCHEMA (valid JSON, nothing else):

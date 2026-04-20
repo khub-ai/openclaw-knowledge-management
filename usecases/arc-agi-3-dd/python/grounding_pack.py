@@ -56,6 +56,16 @@ def build_grounding_pack(session_dir: Path) -> dict:
                     "moved":           o.get("moved"),
                     "tracker_note":    _tracker_reliability_note(o, el),
                 })
+            elif kind == "CHANGE_REPORT":
+                # Drop full-frame fallback from grounding pack (too large);
+                # keep a one-line summary instead.
+                cr = {k: v for k, v in o.items() if k != "full_frame_fallback"}
+                if o.get("full_frame_fallback") is not None:
+                    cr["full_frame_fallback_note"] = (
+                        "diff exceeded 30% of frame — full post-frame was "
+                        "captured in probe results but omitted here for brevity"
+                    )
+                clean_obs.append(cr)
             elif kind in ("REGION_DELTA", "STATE", "SCORE_DELTA", "AVAILABLE_ACTIONS"):
                 clean_obs.append({k: v for k, v in o.items() if k != "raw"})
             else:
@@ -81,6 +91,13 @@ def build_grounding_pack(session_dir: Path) -> dict:
             "nearest-component heuristic may still produce a misleading bbox. "
             "Treat a post_bbox whose area is >>10x the element's pre-bbox as "
             "a tracking failure, not a real movement.",
+            "CHANGE_REPORT aggregates the above per-element tracker into a "
+            "single structured summary: element_motions (dr/dc vs pre_bbox), "
+            "disappearances, appearances (novel-colour components), "
+            "counter_changes (for counter/readout elements: fill count "
+            "before/after), unexplained_regions (clustered residual diff "
+            "cells with before/after patches), and a full_frame_fallback "
+            "when diff > 30% of frame.",
         ],
     }
 

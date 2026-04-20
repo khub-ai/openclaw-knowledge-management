@@ -16,7 +16,7 @@ import numpy as np
 from dsl import (
     DoOne, DoSeq, RepeatDo, Reset,
     ObsRegionDelta, ObsElementMoved, ObsState,
-    ObsAvailableActions, ObsScoreDelta,
+    ObsAvailableActions, ObsScoreDelta, ObsChangeReport,
     ProbeParseResult,
 )
 
@@ -30,12 +30,19 @@ from arcengine import GameAction  # noqa: E402
 
 
 def _normalise_frame(raw_frame) -> np.ndarray:
-    if isinstance(raw_frame, list) and len(raw_frame) == 1:
-        inner = raw_frame[0]
+    """Return a 2D grid.  ARC envs sometimes hand back a framestack (list
+    of frames) — take the last entry."""
+    if isinstance(raw_frame, list):
+        if not raw_frame:
+            return np.zeros((64, 64), dtype=int)
+        inner = raw_frame[-1]
         if isinstance(inner, np.ndarray):
             return inner.astype(int)
         return np.array(inner, dtype=int)
-    return np.array(raw_frame, dtype=int)
+    arr = np.array(raw_frame, dtype=int)
+    if arr.ndim == 3:
+        return arr[-1]
+    return arr
 
 
 def _action_for_label(label: str) -> GameAction:
@@ -129,10 +136,229 @@ def _bbox_of_value(grid: np.ndarray, target_bbox, tracked_colour: int | None = N
     return best, tracked_colour
 
 
+def _connected_components(mask: np.ndarray) -> List[Tuple[Tuple[int,int,int,int], int]]:
+    """BFS-flood-fill connected components of a boolean mask.  Returns
+    [((r0,c0,r1,c1), cell_count), ...] in no particular order."""
+    if not mask.any():
+        return []
+    h, w = mask.shape
+    visited = np.zeros_like(mask, dtype=bool)
+    out: List[Tuple[Tuple[int,int,int,int], int]] = []
+    for sr in range(h):
+        for sc in range(w):
+            if not mask[sr, sc] or visited[sr, sc]:
+                continue
+            stack = [(sr, sc)]
+            rmin, cmin, rmax, cmax = sr, sc, sr, sc
+            count = 0
+            while stack:
+                rr, cc_ = stack.pop()
+                if rr < 0 or rr >= h or cc_ < 0 or cc_ >= w:
+                    continue
+                if visited[rr, cc_] or not mask[rr, cc_]:
+                    continue
+                visited[rr, cc_] = True
+                count += 1
+                if rr < rmin: rmin = rr
+                if cc_ < cmin: cmin = cc_
+                if rr > rmax: rmax = rr
+                if cc_ > cmax: cmax = cc_
+                stack.extend([(rr+1, cc_), (rr-1, cc_), (rr, cc_+1), (rr, cc_-1)])
+            out.append(((rmin, cmin, rmax, cmax), count))
+    return out
+
+
+def _bbox_centre(bbox) -> Tuple[float, float]:
+    r0, c0, r1, c1 = bbox
+    return (r0 + r1) / 2.0, (c0 + c1) / 2.0
+
+
+def _patch(grid: np.ndarray, bbox, max_side: int = 16) -> list:
+    """Return grid slice as python lists; truncates very large regions."""
+    r0, c0, r1, c1 = bbox
+    if (r1 - r0 + 1) > max_side or (c1 - c0 + 1) > max_side:
+        return [[int(x) for x in row[:max_side]]
+                for row in grid[r0:r0+max_side, c0:c0+max_side].tolist()]
+    return [[int(x) for x in row] for row in grid[r0:r1+1, c0:c1+1].tolist()]
+
+
+def _build_change_report(
+    start_grid:      np.ndarray,
+    end_grid:        np.ndarray,
+    element_records: Dict[int, dict],
+) -> dict:
+    """Harness-side semantic summary of start→end change.
+
+    Shape:
+      {
+        "element_motions":   [{"element_id", "name", "pre_bbox", "post_bbox",
+                               "dr", "dc", "moved"}],
+        "disappearances":    [{"element_id", "name", "colour"}],
+        "appearances":       [{"bbox", "colour", "area"}],
+        "counter_changes":   [{"element_id", "name", "before_fill",
+                               "after_fill", "direction"}],
+        "unexplained_regions": [{"bbox", "cells_changed",
+                                 "before_patch", "after_patch"}],
+        "full_frame_fallback": null | [[int, ...], ...],
+      }
+    """
+    h, w = start_grid.shape
+    diff_mask = (start_grid != end_grid)
+
+    # Mask of cells we have "explained" via element motion / appear / disappear.
+    explained = np.zeros_like(diff_mask, dtype=bool)
+
+    element_motions = []
+    disappearances  = []
+    counter_changes = []
+
+    for eid, rec in element_records.items():
+        target = rec.get("bbox")
+        if not target or len(target) != 4:
+            continue
+        sig_col = _signature_colour(start_grid, target)
+        if sig_col is None:
+            continue
+        pre  = _bbox_of_value(start_grid, target, sig_col)
+        post = _bbox_of_value(end_grid,   target, sig_col)
+        pre_bbox  = pre[0]  if pre  else None
+        post_bbox = post[0] if post else None
+        fn = rec.get("function", "unknown")
+
+        if pre_bbox is None:
+            continue  # already gone before probe started — skip
+
+        if post_bbox is None:
+            disappearances.append({
+                "element_id": int(eid),
+                "name":       rec.get("name"),
+                "colour":     int(sig_col),
+            })
+            for r in range(pre_bbox[0], pre_bbox[2]+1):
+                for c in range(pre_bbox[1], pre_bbox[3]+1):
+                    if 0 <= r < h and 0 <= c < w:
+                        explained[r, c] = True
+            continue
+
+        pr, pc = _bbox_centre(pre_bbox)
+        qr, qc = _bbox_centre(post_bbox)
+        dr = round(qr - pr)
+        dc = round(qc - pc)
+        moved = (pre_bbox != post_bbox)
+        # Flag tracker-unreliable motions: the element's declared bbox covers
+        # a huge chunk of the frame (so the sig-colour heuristic can latch
+        # onto a much smaller moving thing), or the post/pre bboxes differ
+        # in area by >10x.
+        ref_area_r  = max(1, (target[2] - target[0] + 1) * (target[3] - target[1] + 1))
+        pre_area    = max(1, (pre_bbox[2] - pre_bbox[0] + 1) * (pre_bbox[3] - pre_bbox[1] + 1))
+        post_area   = max(1, (post_bbox[2] - post_bbox[0] + 1) * (post_bbox[3] - post_bbox[1] + 1))
+        tracker_unreliable = (
+            ref_area_r > 0.20 * (h * w)
+            or post_area > 10 * pre_area
+            or pre_area  > 10 * post_area
+        )
+        element_motions.append({
+            "element_id": int(eid),
+            "name":       rec.get("name"),
+            "pre_bbox":   list(pre_bbox),
+            "post_bbox":  list(post_bbox),
+            "dr":         int(dr),
+            "dc":         int(dc),
+            "moved":      bool(moved),
+            "tracker_unreliable": bool(tracker_unreliable),
+        })
+        # Mark both footprints as explained.
+        for bb in (pre_bbox, post_bbox):
+            for r in range(bb[0], bb[2]+1):
+                for c in range(bb[1], bb[3]+1):
+                    if 0 <= r < h and 0 <= c < w:
+                        explained[r, c] = True
+
+        # Counter summary: fill = signature-colour pixel count inside pre_bbox.
+        if fn in ("counter", "readout"):
+            r0, c0, r1, c1 = target
+            before_fill = int(np.sum(start_grid[r0:r1+1, c0:c1+1] == sig_col))
+            after_fill  = int(np.sum(end_grid  [r0:r1+1, c0:c1+1] == sig_col))
+            if before_fill != after_fill:
+                counter_changes.append({
+                    "element_id": int(eid),
+                    "name":       rec.get("name"),
+                    "before_fill": before_fill,
+                    "after_fill":  after_fill,
+                    "direction":   "+" if after_fill > before_fill else "-",
+                })
+
+    # Appearances: novel-colour components in end_grid, or components of an
+    # existing colour that land on cells which changed AND are unexplained.
+    appearances = []
+    start_colours = set(int(x) for x in np.unique(start_grid))
+    end_colours   = set(int(x) for x in np.unique(end_grid))
+    novel_colours = end_colours - start_colours
+    for col in novel_colours:
+        comps = _connected_components(end_grid == col)
+        for bbox, count in comps:
+            appearances.append({
+                "bbox":   list(bbox),
+                "colour": int(col),
+                "area":   int(count),
+            })
+            for r in range(bbox[0], bbox[2]+1):
+                for c in range(bbox[1], bbox[3]+1):
+                    explained[r, c] = True
+
+    # Unexplained changed cells: diff_mask AND NOT explained.
+    leftover = diff_mask & ~explained
+    total_changed = int(np.sum(diff_mask))
+    leftover_count = int(np.sum(leftover))
+
+    frame_area = h * w
+    full_frame_fallback = None
+    unexplained_regions: list = []
+    if total_changed > 0.30 * frame_area:
+        full_frame_fallback = [[int(x) for x in row] for row in end_grid.tolist()]
+    else:
+        for bbox, count in _connected_components(leftover):
+            if count < 1:
+                continue
+            unexplained_regions.append({
+                "bbox":          list(bbox),
+                "cells_changed": int(count),
+                "before_patch":  _patch(start_grid, bbox),
+                "after_patch":   _patch(end_grid,   bbox),
+            })
+
+    # Primary motion: the smallest reliably-tracked element that actually
+    # moved.  Gives the model a single clean pointer to the likely agent.
+    reliable_moved = [m for m in element_motions
+                      if m.get("moved") and not m.get("tracker_unreliable")]
+    primary_motion = None
+    if reliable_moved:
+        def _pre_area(m):
+            bb = m["pre_bbox"]
+            return (bb[2] - bb[0] + 1) * (bb[3] - bb[1] + 1)
+        primary_motion = min(reliable_moved, key=_pre_area)
+
+    return {
+        "element_motions":      element_motions,
+        "primary_motion":       primary_motion,
+        "disappearances":       disappearances,
+        "appearances":          appearances,
+        "counter_changes":      counter_changes,
+        "unexplained_regions":  unexplained_regions,
+        "full_frame_fallback":  full_frame_fallback,
+        "totals": {
+            "diff_cells":       total_changed,
+            "unexplained_cells": leftover_count,
+            "frame_area":       frame_area,
+        },
+    }
+
+
 def run_probe(
     probe:             ProbeParseResult,
     game_id:           str,
     element_bboxes:    Dict[int, list],   # from the model's ELEMENTS section
+    element_records:   Dict[int, dict] | None = None,  # {id: {name, bbox, function}}
 ) -> Dict[str, Any]:
     """Execute one probe.  Returns a dict with per-observation results
     and a top-level error field if execution blew up."""
@@ -206,6 +432,13 @@ def run_probe(
                 "bbox": list(o.bbox),
                 "value": delta,
             })
+        elif isinstance(o, ObsChangeReport):
+            records = element_records
+            if records is None:
+                records = {int(eid): {"bbox": bb, "name": None, "function": "unknown"}
+                           for eid, bb in element_bboxes.items()}
+            report = _build_change_report(start_grid, end_grid, records)
+            obs_results.append({"kind": "CHANGE_REPORT", **report})
         elif isinstance(o, ObsElementMoved):
             target = element_bboxes.get(o.element_id)
             if target is None:

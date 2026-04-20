@@ -14,6 +14,7 @@ OBSERVATIONS
   STATE
   AVAILABLE_ACTIONS
   SCORE_DELTA
+  CHANGE_REPORT
 """
 from __future__ import annotations
 
@@ -77,8 +78,14 @@ class ObsScoreDelta:
     pass
 
 
+@dataclass
+class ObsChangeReport:
+    pass
+
+
 Observation = Union[
-    ObsRegionDelta, ObsElementMoved, ObsState, ObsAvailableActions, ObsScoreDelta
+    ObsRegionDelta, ObsElementMoved, ObsState, ObsAvailableActions,
+    ObsScoreDelta, ObsChangeReport,
 ]
 
 
@@ -132,6 +139,8 @@ def parse_observation(
         return ObsAvailableActions()
     if t == "SCORE_DELTA":
         return ObsScoreDelta()
+    if t == "CHANGE_REPORT":
+        return ObsChangeReport()
     if t.startswith("REGION_DELTA"):
         rest = t[len("REGION_DELTA"):].strip()
         m = BBOX_RE.match(rest)

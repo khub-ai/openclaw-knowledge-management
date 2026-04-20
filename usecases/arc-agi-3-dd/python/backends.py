@@ -177,7 +177,7 @@ def _call_anthropic_uncached(
     )
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with urllib.request.urlopen(req, timeout=300) as r:
             resp = json.loads(r.read())
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"anthropic HTTP {e.code}: {e.read().decode('utf-8','replace')}") from e

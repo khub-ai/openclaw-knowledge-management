@@ -107,13 +107,30 @@ Produce the four sections below as a single JSON object.  No prose outside JSON.
      RESET                                          # full reset
 
    OBSERVATIONS (run after the last instruction; result returned):
+     CHANGE_REPORT                  # PREFERRED.  Harness-built semantic
+                                     summary of everything that changed:
+                                     per-element motion (dr, dc, moved),
+                                     appearances (novel colour patches),
+                                     disappearances, counter_changes
+                                     (for counter/readout elements),
+                                     unexplained_regions (before/after
+                                     patches for clustered residual
+                                     changes), and a full-frame fallback
+                                     when the diff exceeds 30% of the
+                                     frame.  Use this when you want a
+                                     broad "what happened?" answer.
      REGION_DELTA [r0,c0,r1,c1]    # pixel-diff count in this bbox since
-                                     probe start
+                                     probe start.  Use for a targeted
+                                     yes/no about one area.
      ELEMENT_MOVED <element_id>    # new bbox of this element, or null
-                                     if vanished
+                                     if vanished.  Use when you want the
+                                     raw tracker result for one element.
      STATE                          # current GameState
      AVAILABLE_ACTIONS              # current action subset
      SCORE_DELTA                    # change in levels_completed
+
+   PREFER CHANGE_REPORT for broad observation; use the others for
+   targeted yes/no checks.
 
    <ACTION_LABEL> must be one of AVAILABLE_ACTIONS shown above.
    <element_id> must be an id from your ELEMENTS list.
@@ -160,7 +177,7 @@ REPLY SCHEMA (valid JSON, nothing else):
       "probe_id": "P1",
       "hypothesis": "string",
       "instructions": ["DO ACTION1"],
-      "observe": ["ELEMENT_MOVED 3", "REGION_DELTA [0,0,63,63]"],
+      "observe": ["CHANGE_REPORT", "STATE"],
       "outcome_map": {{
         "element_3_bbox_changed": "element 3 is agent, ACTION1 moves it",
         "state_became_GAME_OVER": "ACTION1 is fatal from this state"
