@@ -219,14 +219,22 @@ def _build_change_report(
         sig_col = _signature_colour(start_grid, target)
         if sig_col is None:
             continue
+        # Bug fix: use `target` (last-known bbox, updated each frame) as anchor
+        # for BOTH pre and post lookups.  Using the stale Round-1 bbox caused the
+        # tracker to lock onto trail segments near the origin instead of following
+        # the moving element.
         pre  = _bbox_of_value(start_grid, target, sig_col)
-        post = _bbox_of_value(end_grid,   target, sig_col)
         pre_bbox  = pre[0]  if pre  else None
-        post_bbox = post[0] if post else None
         fn = rec.get("function", "unknown")
 
         if pre_bbox is None:
             continue  # already gone before probe started — skip
+
+        # For post, anchor to pre_bbox (where we JUST saw the element) not to
+        # the Round-1 bbox.  This keeps the tracker following the element as it
+        # moves rather than snapping back to the origin on every frame.
+        post = _bbox_of_value(end_grid, pre_bbox, sig_col)
+        post_bbox = post[0] if post else None
 
         if post_bbox is None:
             disappearances.append({
@@ -245,18 +253,21 @@ def _build_change_report(
         dr = round(qr - pr)
         dc = round(qc - pc)
         moved = (pre_bbox != post_bbox)
-        # Flag tracker-unreliable motions: the element's declared bbox covers
-        # a huge chunk of the frame (so the sig-colour heuristic can latch
-        # onto a much smaller moving thing), or the post/pre bboxes differ
-        # in area by >10x.
-        ref_area_r  = max(1, (target[2] - target[0] + 1) * (target[3] - target[1] + 1))
-        pre_area    = max(1, (pre_bbox[2] - pre_bbox[0] + 1) * (pre_bbox[3] - pre_bbox[1] + 1))
+        # Bug fix: check ACTUAL detected pre_bbox area (not the stale Round-1
+        # ref_area) against the 20% frame threshold.  The old code used
+        # ref_area_r (the tiny Round-1 bbox area) so the flag never fired even
+        # when pre_bbox had grown to cover the whole floor.
+        pre_area    = max(1, (pre_bbox[2]  - pre_bbox[0]  + 1) * (pre_bbox[3]  - pre_bbox[1]  + 1))
         post_area   = max(1, (post_bbox[2] - post_bbox[0] + 1) * (post_bbox[3] - post_bbox[1] + 1))
         tracker_unreliable = (
-            ref_area_r > 0.20 * (h * w)
+            pre_area  > 0.20 * (h * w)
+            or post_area > 0.20 * (h * w)
             or post_area > 10 * pre_area
             or pre_area  > 10 * post_area
         )
+        # Advance the stored bbox so the next frame anchors to the current
+        # position, not the original Round-1 position.
+        rec["bbox"] = list(post_bbox)
         element_motions.append({
             "element_id": int(eid),
             "name":       rec.get("name"),
