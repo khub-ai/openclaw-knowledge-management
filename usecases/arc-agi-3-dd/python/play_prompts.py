@@ -69,6 +69,15 @@ Return a single JSON object with keys:
   "done":     true | false -- set true ONLY when STATE is WIN or
                GAME_OVER and no further action makes sense.
 
+EFFICIENCY GOAL: This game has a DEPLETING move budget (progress bar counts
+down with every action — budget is typically ~42 moves per attempt).  Your
+primary obligation is to find the most efficient winning path.  Spend at
+most 2-3 turns orienting yourself, then COMMIT to the most promising
+hypothesis.  Do not cycle through all 4 actions looking for movement — pick
+the hypothesis most consistent with current evidence and act on it.  If you
+have LESSONS_FROM_LAST_RUN in WORKING_KNOWLEDGE, treat those as high-
+confidence priors and skip re-testing anything already established there.
+
 Reply with strict JSON only.  No prose, no code fences."""
 
 

@@ -38,6 +38,9 @@ from play_prompts import (
     SYSTEM_POSTGAME, build_postgame_user_message,
 )
 from dsl_executor import _build_change_report, _normalise_frame
+from preview_html import render_play_session, grid_to_png_b64
+
+TRAINING_DATA_DIR = HERE.parents[2] / ".tmp" / "training_data"
 
 
 ARC_REPO = Path(os.environ.get(
@@ -167,6 +170,94 @@ def _cr_summary(cr: dict) -> dict:
     }
 
 
+def _dump_training_data(
+    *,
+    game_id:       str,
+    trial_id:      str,
+    system_prompt: str,
+    session_dir:   Path,
+) -> None:
+    """Write per-turn training examples to .tmp/training_data/<game>/<trial_id>/.
+
+    Each file is a self-contained (system, user, assistant) triple with the
+    frame image embedded as base64 PNG.  Only called on WIN outcomes.
+    """
+    out_dir = TRAINING_DATA_DIR / game_id / trial_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = session_dir / "play_log.jsonl"
+    if not log_path.exists():
+        return
+
+    entries = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                entries.append(json.loads(line))
+            except Exception:  # noqa: BLE001
+                pass
+
+    wk_text = ""
+    wk_path = session_dir / "working_knowledge.md"
+    if wk_path.exists():
+        wk_text = wk_path.read_text(encoding="utf-8")
+
+    turn_entries = [e for e in entries if "action" in e]
+    total_cost = sum(e.get("cost_usd", 0) for e in turn_entries)
+
+    metadata = {
+        "game_id":    game_id,
+        "trial_id":   trial_id,
+        "outcome":    "WIN",
+        "turns":      len(turn_entries),
+        "total_cost_usd": round(total_cost, 6),
+        "session_dir": str(session_dir),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    (out_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8",
+    )
+
+    for e in turn_entries:
+        turn = e.get("turn", 0)
+        # user_msg is not stored in log; reconstruct a compact version.
+        compact_user = (
+            f"PLAY TURN {turn}\n"
+            f"GAME: {game_id}  STATE: {e.get('state','?')}\n"
+            f"WORKING_KNOWLEDGE:\n{wk_text}\n\n"
+            f"LAST_CHANGE_REPORT:\n"
+            + json.dumps(e.get("change_report") or {}, indent=2)
+        )
+        record = {
+            "turn":           turn,
+            "system":         system_prompt,
+            "user":           compact_user,
+            "assistant":      json.dumps({
+                "action":           e.get("action"),
+                "action_sequence":  e.get("action_sequence"),
+                "rationale":        e.get("rationale"),
+                "predict":          e.get("predict"),
+                "revise_knowledge": e.get("revise_knowledge"),
+                "done":             e.get("done"),
+            }),
+            "frame_b64":      e.get("frame_b64", ""),
+            "metadata": {
+                "state":          e.get("state"),
+                "levels_completed": e.get("levels_completed"),
+                "cost_usd":       e.get("cost_usd"),
+                "latency_ms":     e.get("latency_ms"),
+                "input_tokens":   e.get("input_tokens"),
+                "output_tokens":  e.get("output_tokens"),
+                "turn_start_iso": e.get("turn_start_iso"),
+            },
+        }
+        fname = out_dir / f"turn_{turn:03d}.json"
+        fname.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print(f"Training data ({len(turn_entries)} turns) -> {out_dir}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--round2-session", required=True,
@@ -177,6 +268,7 @@ def main() -> None:
     ap.add_argument("--game", default="ls20-9607627b")
     ap.add_argument("--max-steps", type=int, default=30)
     ap.add_argument("--sessions-dir", default=str(HERE.parent / "benchmarks" / "sessions"))
+    ap.add_argument("--frames-dir",   default=str(HERE.parent / "benchmarks" / "frames"))
     ap.add_argument("--max-tokens", type=int, default=1500)
     a = ap.parse_args()
 
@@ -185,6 +277,7 @@ def main() -> None:
     working_knowledge, element_records = load_working_knowledge(
         round2_dir, lessons_path=lessons_path,
     )
+    frames_dir = Path(a.frames_dir)
 
     trial_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     session_dir = Path(a.sessions_dir) / f"trial_{trial_id}_play"
@@ -232,13 +325,17 @@ def main() -> None:
             frame_text        = _format_frame_text(cur_grid),
         )
 
+        turn_start = datetime.now(timezone.utc)
         try:
             rsp = backends.call_anthropic(
                 model=TUTOR_MODEL, system=SYSTEM_PLAY, user=user_msg,
                 image_b64=None, max_tokens=a.max_tokens,
             )
-            reply_text = rsp["reply"]
-            latency_ms = rsp["latency_ms"]
+            reply_text   = rsp["reply"]
+            latency_ms   = rsp["latency_ms"]
+            input_tokens  = rsp.get("input_tokens", 0)
+            output_tokens = rsp.get("output_tokens", 0)
+            cost_usd      = rsp.get("cost_usd", 0.0)
         except Exception as e:  # noqa: BLE001
             print(f"turn {turn}: TUTOR call failed: {e}")
             break
@@ -265,22 +362,31 @@ def main() -> None:
         done_flag = bool(decision.get("done"))
 
         summary = _cr_summary(change_report or {})
+        frame_b64 = grid_to_png_b64(cur_grid)
         print(f"turn {turn:>2} state={state:<12} action={action:<10} "
               f"motions={summary['motions_count']} "
               f"diff={summary['diff_cells']} counter={summary['counter_summary']} "
-              f"({latency_ms} ms)")
+              f"({latency_ms} ms, ${cost_usd:.4f})")
         if revise:
             print(f"         revise: {revise}")
 
         log_fh.write(json.dumps({
             "turn": turn, "state": state, "levels_completed": lc,
+            "game_id": a.game,
             "action": action, "rationale": rationale, "predict": predict,
             "revise_knowledge": revise, "done": done_flag,
+            "action_sequence": seq,
             "change_report_summary": summary,
             "change_report": change_report,
             "latency_ms": latency_ms,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": cost_usd,
+            "turn_start_iso": turn_start.isoformat(),
+            "frame_b64": frame_b64,
         }) + "\n")
         log_fh.flush()
+        render_play_session(session_dir, frames_dir, live=True)
 
         action_trace.append({"turn": turn, "action": action,
                              "rationale": rationale, "state": state})
@@ -330,6 +436,9 @@ def main() -> None:
 
     log_fh.close()
 
+    # Final (non-live) preview render.
+    render_play_session(session_dir, frames_dir, live=False)
+
     # Post-game knowledge capture.
     outcome = {"WIN": "WIN", "GAME_OVER": "LOSS"}.get(final_state, final_state)
     postgame_user = build_postgame_user_message(
@@ -371,6 +480,19 @@ def main() -> None:
     (session_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8",
     )
+
+    # Re-render preview now that post_game_knowledge.md exists.
+    render_play_session(session_dir, frames_dir, live=False)
+
+    # Training data — only for WIN outcomes; stored in .tmp (gitignored).
+    if outcome == "WIN":
+        _dump_training_data(
+            game_id=a.game,
+            trial_id=trial_id,
+            system_prompt=SYSTEM_PLAY,
+            session_dir=session_dir,
+        )
+
     print(f"\nOutcome: {outcome} ({final_state}), "
           f"{len(action_trace)} turns, wrote {session_dir}")
 

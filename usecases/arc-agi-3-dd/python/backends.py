@@ -175,20 +175,47 @@ def _call_anthropic_uncached(
         },
         method="POST",
     )
-    t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=300) as r:
-            resp = json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"anthropic HTTP {e.code}: {e.read().decode('utf-8','replace')}") from e
+
+    last_err: Exception | None = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(15 * attempt)
+        t0 = time.time()
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                resp = json.loads(r.read())
+            break
+        except urllib.error.HTTPError as e:
+            body_txt = e.read().decode("utf-8", "replace")
+            if e.code in (429, 529) and attempt < 2:
+                last_err = RuntimeError(f"anthropic HTTP {e.code}: {body_txt}")
+                continue
+            raise RuntimeError(f"anthropic HTTP {e.code}: {body_txt}") from e
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            last_err = e
+            if attempt < 2:
+                print(f"  [backends] Anthropic timeout/error (attempt {attempt+1}/3): {e}")
+                continue
+            raise
+    else:
+        raise RuntimeError(f"Anthropic call failed after 3 attempts: {last_err}") from last_err
+
     elapsed = time.time() - t0
 
     text_parts = [c.get("text", "") for c in resp.get("content", []) if c.get("type") == "text"]
+    usage = resp.get("usage") or {}
+    input_tokens  = int(usage.get("input_tokens",  0))
+    output_tokens = int(usage.get("output_tokens", 0))
+    # claude-sonnet-4-6: $3/M input, $15/M output
+    cost_usd = (input_tokens * 3 + output_tokens * 15) / 1_000_000
     return {
-        "model":       model,
-        "reply":       "".join(text_parts),
-        "latency_ms":  int(elapsed * 1000),
-        "raw":         resp,
+        "model":         model,
+        "reply":         "".join(text_parts),
+        "latency_ms":    int(elapsed * 1000),
+        "input_tokens":  input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd":      round(cost_usd, 6),
+        "raw":           resp,
     }
 
 

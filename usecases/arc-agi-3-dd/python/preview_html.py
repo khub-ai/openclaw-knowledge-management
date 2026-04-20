@@ -2,19 +2,43 @@
 
 Shows the current frame image plus the latest TUTOR ↔ harness exchanges
 (Round 1 probes + observations, and Round 2 revision notes if present).
+Also renders live play-session transcripts via render_play_session().
 
-Invoked from run_trial.py and run_round2.py after a session writes its
-artefacts.  Overwrites frames/index.html each time.
+Invoked from run_trial.py, run_round2.py, and run_play.py.
+Overwrites frames/index.html each time.
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
 
 def _json_pretty(obj) -> str:
     return escape(json.dumps(obj, indent=2, ensure_ascii=False))
+
+
+def grid_to_png_b64(grid) -> str:
+    """Render a 2-D numpy grid to a base64-encoded PNG using the ARC palette."""
+    from arc_agi.rendering import COLOR_MAP
+    from PIL import Image
+    import numpy as np
+    arr = np.asarray(grid)
+    h, w = arr.shape[:2]
+    img = Image.new("RGB", (w, h))
+    pixels = img.load()
+    for r in range(h):
+        for c in range(w):
+            v = int(arr[r, c])
+            hx = COLOR_MAP.get(v, "#000000FF")
+            pixels[c, r] = (int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16))
+    img = img.resize((256, 256), Image.NEAREST)
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def _render_initial_prompt(session_dir: Path) -> str:
@@ -284,3 +308,236 @@ def render_index(
 </body></html>
 """
     (frames_dir / "index.html").write_text(html, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Play-session live preview
+# ---------------------------------------------------------------------------
+
+PLAY_STYLE = STYLE + """
+.play-header { display:flex; gap:24px; align-items:baseline; flex-wrap:wrap;
+               background:#1a1a2e; padding:10px 14px; border-radius:6px; margin-bottom:12px; }
+.play-header .game-id { font-size:14px; font-weight:bold; color:#e0e0ff; }
+.play-header .stat    { font-size:12px; color:#aaa; }
+.play-header .stat b  { color:#ccc; }
+.turn-card { border:1px solid #2a2a3a; border-radius:6px; margin:10px 0;
+             background:#161622; overflow:hidden; }
+.turn-card.win      { border-color:#2a9d8f; }
+.turn-card.game_over{ border-color:#e76f51; }
+.turn-head { display:flex; align-items:center; gap:12px; padding:6px 10px;
+             background:#1e1e30; font-size:12px; flex-wrap:wrap; }
+.turn-num  { font-weight:bold; color:#e0e0ff; min-width:52px; }
+.turn-action { background:#264653; color:#fff; border-radius:3px;
+               padding:1px 7px; font-size:11px; font-weight:bold; }
+.turn-state  { color:#888; font-size:11px; }
+.turn-ts     { color:#666; font-size:11px; margin-left:auto; }
+.turn-cost   { color:#a8dadc; font-size:11px; }
+.turn-lat    { color:#888; font-size:11px; }
+.turn-body   { display:flex; gap:0; }
+.turn-frame  { flex:0 0 auto; padding:8px; background:#0e0e18;
+               border-right:1px solid #2a2a3a; }
+.turn-frame img { image-rendering:pixelated; display:block; }
+.turn-info   { flex:1; padding:8px 10px; font-size:11px; }
+.rationale   { color:#ddd; margin-bottom:6px; }
+.revise      { background:#2a1a0a; border-left:3px solid #e9c46a;
+               padding:4px 8px; margin:4px 0; color:#f4d58d; font-size:11px; }
+.cr-compact  { color:#888; font-size:10px; margin-top:4px; }
+.wk-block    { background:#0e0e18; border:1px solid #2a2a3a; border-radius:4px;
+               padding:8px; margin-bottom:12px; font-size:11px; }
+.wk-block summary { cursor:pointer; color:#aaa; font-size:12px; padding:2px 0; }
+.wk-block pre { max-height:300px; overflow:auto; color:#ccc; margin:6px 0 0; }
+.cost-total  { color:#a8dadc; font-weight:bold; }
+.pgk-block   { background:#0e1a0e; border:1px solid #1d3d1d; border-radius:4px;
+               padding:10px; margin-top:12px; font-size:12px; color:#b7e4c7; }
+.pgk-block h3 { margin:0 0 8px; font-size:13px; color:#52b788; }
+"""
+
+
+def _fmt_elapsed(seconds: float) -> str:
+    if seconds < 60:
+        return f"T+{int(seconds)}s"
+    return f"T+{int(seconds//60)}m{int(seconds%60):02d}s"
+
+
+def _fmt_cost(usd: float) -> str:
+    if usd < 0.001:
+        return f"${usd*1000:.3f}m"
+    return f"${usd:.4f}"
+
+
+def render_play_session(
+    session_dir: Path,
+    frames_dir:  Path,
+    *,
+    live:        bool = True,
+) -> None:
+    """Write (or overwrite) frames/index.html with the full play-session transcript.
+
+    Call after every turn while `live=True` (adds auto-refresh meta tag).
+    Call with `live=False` when the session ends.
+    """
+    log_path = session_dir / "play_log.jsonl"
+    if not log_path.exists():
+        return
+
+    entries = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                entries.append(json.loads(line))
+            except Exception:  # noqa: BLE001
+                pass
+
+    wk_text = ""
+    wk_path = session_dir / "working_knowledge.md"
+    if wk_path.exists():
+        wk_text = wk_path.read_text(encoding="utf-8")
+
+    pgk_text = ""
+    pgk_path = session_dir / "post_game_knowledge.md"
+    if pgk_path.exists():
+        pgk_text = pgk_path.read_text(encoding="utf-8")
+
+    # Aggregate stats
+    turn_entries  = [e for e in entries if "action" in e]
+    total_cost    = sum(e.get("cost_usd", 0) for e in turn_entries)
+    total_in_tok  = sum(e.get("input_tokens", 0) for e in turn_entries)
+    total_out_tok = sum(e.get("output_tokens", 0) for e in turn_entries)
+    final_state   = "…"
+    game_id       = ""
+    session_start: datetime | None = None
+    for e in entries:
+        if "final_state" in e:
+            final_state = e["final_state"]
+        if e.get("turn_start_iso") and session_start is None:
+            try:
+                session_start = datetime.fromisoformat(e["turn_start_iso"])
+            except Exception:  # noqa: BLE001
+                pass
+        if e.get("game_id"):
+            game_id = e["game_id"]
+    if not live and turn_entries:
+        last = turn_entries[-1]
+        final_state = last.get("state", final_state)
+
+    try:
+        manifest = json.loads((session_dir / "manifest.json").read_text(encoding="utf-8"))
+        game_id = game_id or manifest.get("game_id", "")
+        if not live:
+            final_state = manifest.get("final_state", final_state)
+    except FileNotFoundError:
+        pass
+
+    refresh_tag = '<meta http-equiv="refresh" content="5">' if live else ""
+
+    # ---- header
+    status_color = {"WIN": "#2a9d8f", "GAME_OVER": "#e76f51"}.get(final_state, "#888")
+    parts = [f"""<!doctype html>
+<html><head><meta charset="utf-8">{refresh_tag}
+<title>{escape(game_id)} play</title>
+<style>{PLAY_STYLE}</style></head><body>
+<div class="play-header">
+  <span class="game-id">{escape(game_id)}</span>
+  <span class="stat">turns <b>{len(turn_entries)}</b></span>
+  <span class="stat">state <b style="color:{status_color}">{escape(final_state)}</b></span>
+  <span class="stat cost-total">cost <b>{_fmt_cost(total_cost)}</b></span>
+  <span class="stat">tokens in <b>{total_in_tok:,}</b> / out <b>{total_out_tok:,}</b></span>
+  <span class="stat">{escape(session_dir.name)}</span>
+</div>"""]
+
+    # ---- working knowledge
+    parts.append('<details class="wk-block"><summary>WORKING_KNOWLEDGE</summary>')
+    parts.append(f'<pre>{escape(wk_text)}</pre></details>')
+
+    # ---- turn cards
+    for e in turn_entries:
+        turn      = e.get("turn", "?")
+        action    = e.get("action", "?")
+        state     = e.get("state", "?")
+        rationale = e.get("rationale", "")
+        revise    = e.get("revise_knowledge", "")
+        lat_ms    = e.get("latency_ms")
+        cost      = e.get("cost_usd", 0)
+        in_tok    = e.get("input_tokens", 0)
+        out_tok   = e.get("output_tokens", 0)
+        frame_b64 = e.get("frame_b64", "")
+        seq       = e.get("action_sequence") or []
+
+        ts_str = ""
+        elapsed_str = ""
+        if e.get("turn_start_iso"):
+            try:
+                ts = datetime.fromisoformat(e["turn_start_iso"])
+                ts_str = ts.strftime("%H:%M:%S")
+                if session_start:
+                    elapsed_str = _fmt_elapsed((ts - session_start).total_seconds())
+            except Exception:  # noqa: BLE001
+                pass
+
+        cr = e.get("change_report") or {}
+        cr_pm = (cr.get("primary_motion") or {})
+        cr_line = ""
+        if cr:
+            totals = cr.get("totals") or {}
+            pm_name = cr_pm.get("name", "") if cr_pm else ""
+            pm_dr   = cr_pm.get("dr") if cr_pm else None
+            pm_dc   = cr_pm.get("dc") if cr_pm else None
+            counters = cr.get("counter_changes") or []
+            ctr_str = "; ".join(
+                f"{c.get('name','?')}:{c.get('before_fill','?')}->{c.get('after_fill','?')}"
+                for c in counters
+            )
+            pm_str = f"primary={escape(pm_name)} dr={pm_dr} dc={pm_dc}" if pm_name else "no primary_motion"
+            cr_line = (f"diff={totals.get('diff_cells','?')} "
+                       f"| {pm_str}"
+                       + (f" | counters: {escape(ctr_str)}" if ctr_str else ""))
+
+        card_cls = "turn-card"
+        if state == "WIN":
+            card_cls += " win"
+        elif state == "GAME_OVER":
+            card_cls += " game_over"
+
+        seq_html = ""
+        if len(seq) > 1:
+            seq_html = (f'<span class="turn-state"> seq=[{escape(", ".join(seq))}]</span>')
+
+        parts.append(f'<div class="{card_cls}">')
+        parts.append(
+            f'<div class="turn-head">'
+            f'<span class="turn-num">turn {turn}</span>'
+            f'<span class="turn-action">{escape(action)}</span>'
+            f'<span class="turn-state">state={escape(state)}</span>'
+            f'{seq_html}'
+            f'<span class="turn-cost">{_fmt_cost(cost)} '
+            f'({in_tok}in/{out_tok}out)</span>'
+            f'<span class="turn-lat">{lat_ms} ms</span>'
+            f'<span class="turn-ts">{escape(ts_str)} {escape(elapsed_str)}</span>'
+            f'</div>'
+        )
+        parts.append('<div class="turn-body">')
+        if frame_b64:
+            parts.append(
+                f'<div class="turn-frame">'
+                f'<img src="data:image/png;base64,{frame_b64}" width="128" height="128">'
+                f'</div>'
+            )
+        parts.append('<div class="turn-info">')
+        if rationale:
+            parts.append(f'<div class="rationale">{escape(rationale)}</div>')
+        if revise:
+            parts.append(f'<div class="revise">REVISE: {escape(revise)}</div>')
+        if cr_line:
+            parts.append(f'<div class="cr-compact">{cr_line}</div>')
+        parts.append('</div></div></div>')  # turn-info / turn-body / turn-card
+
+    # ---- post-game note
+    if pgk_text:
+        parts.append('<div class="pgk-block">')
+        parts.append('<h3>Post-game knowledge note</h3>')
+        parts.append(f'<pre>{escape(pgk_text)}</pre>')
+        parts.append('</div>')
+
+    parts.append('</body></html>')
+    (frames_dir / "index.html").write_text("\n".join(parts), encoding="utf-8")
