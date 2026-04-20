@@ -349,9 +349,30 @@ def _build_change_report(
             return (bb[2] - bb[0] + 1) * (bb[3] - bb[1] + 1)
         primary_motion = min(reliable_moved, key=_pre_area)
 
+    # Harness-side agent position: find every element whose function contains
+    # "agent" or "cursor" and report its centroid in the POST frame.
+    # This gives TUTOR a reliable, frame-derived "where is the avatar NOW"
+    # without depending on the tracker or model self-reporting.
+    agent_pos_after: list[int] | None = None
+    for eid, rec in element_records.items():
+        fn   = (rec.get("function") or "").lower()
+        name = (rec.get("name") or "").lower()
+        if not ("agent" in fn or "cursor" in fn or "agent" in name or "cursor" in name):
+            continue
+        # Use current bbox (already advanced to post_bbox by the fix above).
+        cur_bbox = rec.get("bbox")
+        if cur_bbox and len(cur_bbox) == 4:
+            r0, c0, r1, c1 = cur_bbox
+            area = (r1 - r0 + 1) * (c1 - c0 + 1)
+            # Only trust it if the bbox is small (not the whole floor)
+            if area <= 0.15 * h * w:
+                agent_pos_after = [round((r0 + r1) / 2), round((c0 + c1) / 2)]
+                break
+
     return {
         "element_motions":      element_motions,
         "primary_motion":       primary_motion,
+        "agent_pos_after":      agent_pos_after,
         "disappearances":       disappearances,
         "appearances":          appearances,
         "counter_changes":      counter_changes,

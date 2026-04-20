@@ -315,6 +315,12 @@ def render_index(
 # ---------------------------------------------------------------------------
 
 PLAY_STYLE = STYLE + """
+.live-banner { font-size:13px; font-weight:bold; padding:6px 12px; border-radius:4px;
+               margin-bottom:8px; display:flex; gap:16px; align-items:center; }
+.live-banner.running { background:#0d2b1a; color:#52b788; border:1px solid #2d6a4f; }
+.live-banner.done    { background:#1a1a1a; color:#aaa;    border:1px solid #444; }
+.live-banner .blink  { animation:blink 1s step-end infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .play-header { display:flex; gap:24px; align-items:baseline; flex-wrap:wrap;
                background:#1a1a2e; padding:10px 14px; border-radius:6px; margin-bottom:12px; }
 .play-header .game-id { font-size:14px; font-weight:bold; color:#e0e0ff; }
@@ -430,16 +436,29 @@ def render_play_session(
         pass
 
     refresh_tag = '<meta http-equiv="refresh" content="5">' if live else ""
+    now_str = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
 
     # ---- header
     status_color = {"WIN": "#2a9d8f", "GAME_OVER": "#e76f51"}.get(final_state, "#888")
+    if live:
+        banner = (f'<div class="live-banner running">'
+                  f'<span class="blink">&#9679;</span> LIVE &nbsp;|&nbsp; '
+                  f'last update <b>{now_str}</b> &nbsp;|&nbsp; '
+                  f'auto-refresh every 5 s</div>')
+    else:
+        banner = (f'<div class="live-banner done">'
+                  f'&#9632; DONE &nbsp;|&nbsp; '
+                  f'finished at <b>{now_str}</b> &nbsp;|&nbsp; '
+                  f'state=<b style="color:{status_color}">{escape(final_state)}</b></div>')
+
     parts = [f"""<!doctype html>
 <html><head><meta charset="utf-8">{refresh_tag}
 <title>{escape(game_id)} play</title>
 <style>{PLAY_STYLE}</style></head><body>
+{banner}
 <div class="play-header">
   <span class="game-id">{escape(game_id)}</span>
-  <span class="stat">turns <b>{len(turn_entries)}</b></span>
+  <span class="stat">TUTOR calls <b>{len(turn_entries)}</b></span>
   <span class="stat">state <b style="color:{status_color}">{escape(final_state)}</b></span>
   <span class="stat cost-total">cost <b>{_fmt_cost(total_cost)}</b></span>
   <span class="stat">tokens in <b>{total_in_tok:,}</b> / out <b>{total_out_tok:,}</b></span>
@@ -453,7 +472,9 @@ def render_play_session(
     # ---- turn cards
     for e in turn_entries:
         turn      = e.get("turn", "?")
-        action    = e.get("action", "?")
+        # support both old (action) and new (command) schema
+        action    = e.get("command") or e.get("action", "?")
+        args      = e.get("args") or {}
         state     = e.get("state", "?")
         rationale = e.get("rationale", "")
         revise    = e.get("revise_knowledge", "")
@@ -463,6 +484,8 @@ def render_play_session(
         out_tok   = e.get("output_tokens", 0)
         frame_b64 = e.get("frame_b64", "")
         seq       = e.get("action_sequence") or []
+        steps     = e.get("steps_taken", 0)
+        cursor    = e.get("cursor_pos")
 
         ts_str = ""
         elapsed_str = ""
@@ -499,21 +522,31 @@ def render_play_session(
         elif state == "GAME_OVER":
             card_cls += " game_over"
 
-        seq_html = ""
-        if len(seq) > 1:
-            seq_html = (f'<span class="turn-state"> seq=[{escape(", ".join(seq))}]</span>')
+        args_brief = ""
+        if args:
+            try:
+                args_brief = " " + json.dumps(args, separators=(",", ":"))
+            except Exception:  # noqa: BLE001
+                pass
+
+        cursor_html = ""
+        if cursor:
+            cursor_html = f'<span class="turn-state"> cursor={escape(str(cursor))}</span>'
+        steps_html = ""
+        if steps:
+            steps_html = f'<span class="turn-state"> game-steps={steps}</span>'
 
         parts.append(f'<div class="{card_cls}">')
         parts.append(
             f'<div class="turn-head">'
-            f'<span class="turn-num">turn {turn}</span>'
+            f'<span class="turn-num">#{turn}</span>'
             f'<span class="turn-action">{escape(action)}</span>'
-            f'<span class="turn-state">state={escape(state)}</span>'
-            f'{seq_html}'
-            f'<span class="turn-cost">{_fmt_cost(cost)} '
-            f'({in_tok}in/{out_tok}out)</span>'
-            f'<span class="turn-lat">{lat_ms} ms</span>'
-            f'<span class="turn-ts">{escape(ts_str)} {escape(elapsed_str)}</span>'
+            f'<span class="turn-state">{escape(args_brief)}</span>'
+            f'<span class="turn-state"> state={escape(state)}</span>'
+            f'{cursor_html}{steps_html}'
+            f'<span class="turn-cost">{_fmt_cost(cost)} ({in_tok}in/{out_tok}out)</span>'
+            f'<span class="turn-lat">{lat_ms}ms</span>'
+            f'<span class="turn-ts" title="{escape(ts_str)}">{escape(elapsed_str)}</span>'
             f'</div>'
         )
         parts.append('<div class="turn-body">')

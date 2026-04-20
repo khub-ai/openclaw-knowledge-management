@@ -90,36 +90,41 @@ def _update_action_effects(
 ) -> None:
     """Update action_effects from a reliable CHANGE_REPORT primary_motion."""
     pm = cr.get("primary_motion")
-    if not pm:
-        return
-    if pm.get("tracker_unreliable"):
-        return
-    if not pm.get("moved"):
+    if not pm or pm.get("tracker_unreliable") or not pm.get("moved"):
         return
     dr = pm.get("dr", 0)
     dc = pm.get("dc", 0)
     if dr == 0 and dc == 0:
         return
-    # Only update if we haven't confirmed it yet, or if consistent
     if action not in action_effects or action_effects[action] == (dr, dc):
         action_effects[action] = (dr, dc)
 
 
 def _update_cursor_pos(
     cursor_pos: tuple[int, int] | None,
+    action: str,
+    action_effects: dict[str, tuple[int, int]],
     cr: dict,
 ) -> tuple[int, int] | None:
-    """Advance cursor_pos from a reliable primary_motion."""
+    """Advance cursor_pos.
+
+    Arithmetic update (preferred): if we already know this action's (dr,dc),
+    just apply it.  Never reads from primary_motion — that can latch onto UI
+    elements (progress bar) and drift the cursor to row 62.
+    Fallback: if action_effects not yet known, use primary_motion post_bbox
+    only for the very first reliable reading (to bootstrap initial position).
+    """
+    if action in action_effects and cursor_pos is not None:
+        dr, dc = action_effects[action]
+        r = max(0, min(63, cursor_pos[0] + dr))
+        c = max(0, min(63, cursor_pos[1] + dc))
+        return (r, c)
+    # Bootstrap: use primary_motion only when we don't yet know the effect
     pm = cr.get("primary_motion")
-    if not pm or pm.get("tracker_unreliable"):
-        return cursor_pos
-    post = pm.get("post_bbox")
-    if post:
-        return _bbox_centre_int(post)
-    if cursor_pos and pm.get("moved"):
-        dr = pm.get("dr", 0)
-        dc = pm.get("dc", 0)
-        return (cursor_pos[0] + dr, cursor_pos[1] + dc)
+    if pm and not pm.get("tracker_unreliable") and pm.get("moved"):
+        post = pm.get("post_bbox")
+        if post:
+            return _bbox_centre_int(post)
     return cursor_pos
 
 
@@ -206,7 +211,7 @@ def exec_raw_action(
     cur_grid = _normalise_frame(obs.frame)
     cr = _build_change_report(prev_grid, cur_grid, element_records)
     _update_action_effects(action_effects, action, cr)
-    new_cursor = _update_cursor_pos(cursor_pos, cr)
+    new_cursor = _update_cursor_pos(cursor_pos, action, action_effects, cr)
     entry = {
         "action": action,
         "dr": (cr.get("primary_motion") or {}).get("dr"),
@@ -490,19 +495,26 @@ def main() -> None:
         if budget_update is not None:
             budget_remaining = budget_update
 
+        # agent_pos_after: harness-detected position from bbox (more reliable than
+        # cursor_pos arithmetic for confirming where the avatar actually ended up)
+        agent_pos_after = final_cr.get("agent_pos_after")
+        if agent_pos_after:
+            cursor_pos = tuple(agent_pos_after)
+
         steps_taken  = len(motion_log)
         budget_spent = sum(1 for e in motion_log if e.get("action") != "RESET")
 
         command_result = {
-            "command_executed": command,
-            "args":             args,
-            "steps_taken":      steps_taken,
-            "budget_spent":     budget_spent,
-            "budget_remaining": budget_remaining,
-            "cursor_pos_after": list(cursor_pos) if cursor_pos else None,
-            "motion_log":       motion_log,
-            "final_state":      obs.state.name if obs and hasattr(obs.state, "name") else state,
-            "error":            exec_error,
+            "command_executed":  command,
+            "args":              args,
+            "steps_taken":       steps_taken,
+            "budget_spent":      budget_spent,
+            "budget_remaining":  budget_remaining,
+            "cursor_pos_after":  list(cursor_pos) if cursor_pos else None,
+            "agent_pos_after":   agent_pos_after,
+            "motion_log":        motion_log,
+            "final_state":       obs.state.name if obs and hasattr(obs.state, "name") else state,
+            "error":             exec_error,
         }
         if exec_error:
             print(f"         EXEC ERROR: {exec_error}")
