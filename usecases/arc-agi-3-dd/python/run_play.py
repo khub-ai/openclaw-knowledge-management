@@ -216,6 +216,41 @@ def _detect_element_overlaps(
     return hits
 
 
+def _harness_coordinate_note(
+    command: str,
+    target_pos: tuple[int, int] | None,
+    element_records: dict,
+) -> str:
+    """Return a correction string when target_pos is empty space.
+
+    If the target falls inside a known element's bbox → empty string (no issue).
+    Otherwise the harness names the nearest element and its actual coordinates.
+    """
+    if command not in ("MOVE_TO", "STAMP_AT") or not target_pos:
+        return ""
+    tr, tc = target_pos
+    for rec in element_records.values():
+        bbox = rec.get("bbox")
+        if bbox and len(bbox) == 4:
+            r0, c0, r1, c1 = bbox
+            if r0 <= tr <= r1 and c0 <= tc <= c1:
+                return ""   # target IS inside a known element
+    nearby = _find_nearby_elements(target_pos, element_records, radius=20)
+    if not nearby:
+        return f"HARNESS: target {list(target_pos)} is not inside any known element (no nearby element found within radius 20)."
+    n = nearby[0]
+    cr, cc = n["center"]
+    if abs(cr - tr) <= 1 and abs(cc - tc) <= 1:
+        return ""   # off by 1 — not worth flagging
+    return (
+        f"HARNESS CORRECTION: target {list(target_pos)} is empty space "
+        f"(not inside any known element). "
+        f"Nearest element: '{n['name']}' (fn={n['function']}, id={n['id']}) "
+        f"actual center={n['center']}, bbox={n['bbox']}. "
+        f"Please update WORKING_KNOWLEDGE with the corrected coordinates."
+    )
+
+
 def _find_nearby_elements(
     target_pos: tuple[int, int],
     element_records: dict,
@@ -628,6 +663,10 @@ def main() -> None:
         budget_spent = sum(1 for e in motion_log if e.get("action") != "RESET")
 
         element_overlaps = _detect_element_overlaps(cursor_pos, element_records)
+        harness_note = _harness_coordinate_note(
+            command, args.get("target_pos") and tuple(int(x) for x in args["target_pos"]),
+            element_records,
+        )
 
         command_result = {
             "command_executed":  command,
@@ -639,12 +678,15 @@ def main() -> None:
             "agent_pos_after":   agent_pos_after,
             "element_overlaps":  element_overlaps,
             "target_analysis":   target_analysis,
+            "harness_note":      harness_note or None,
             "motion_log":        motion_log,
             "final_state":       obs.state.name if obs and hasattr(obs.state, "name") else state,
             "error":             exec_error,
         }
         if exec_error:
             print(f"         EXEC ERROR: {exec_error}")
+        if harness_note:
+            print(f"         HARNESS: {harness_note[:120]}")
         if element_overlaps:
             names = [e["name"] for e in element_overlaps]
             print(f"         OVERLAPS: {names}")

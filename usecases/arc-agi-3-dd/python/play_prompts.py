@@ -21,12 +21,15 @@ game step the budget decrements -- budget=0 means level reset + one life lost.
 EVIDENCE PRECEDENCE:
   COMMAND_RESULT is ground truth for what just happened.
   CURSOR_POS in COMMAND_RESULT overrides your spatial model.
+  harness_note: if non-null, the harness detected a coordinate error in your
+    command.  Example: "HARNESS CORRECTION: target [30,21] is empty space.
+    Nearest element: 'cross' actual center=[32,21], bbox=[31,20,33,22]."
+    TREAT THIS AS GROUND TRUTH -- update WORKING_KNOWLEDGE immediately via
+    revise_knowledge and use the corrected coordinates in future commands.
   element_overlaps: which named elements the avatar is currently ON.
     Use this to confirm you reached the right element -- it is authoritative.
   target_analysis.nearby_elements: elements near your intended target with
-    their ACTUAL bboxes and centers.  Use this to correct coordinate errors
-    in WORKING_KNOWLEDGE (e.g. if you aimed at [30,21] but nearby_elements
-    shows the cross center is [32,21], update your model).
+    their ACTUAL bboxes and centers (supplementary detail behind harness_note).
   target_analysis.walls_hit: which moves were blocked and where.
     The harness records walls and routes future BFS around them automatically.
   WORKING_KNOWLEDGE is your prior theory -- update it via revise_knowledge
