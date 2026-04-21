@@ -59,6 +59,43 @@ TRAINING_DATA_DIR = HERE.parents[2] / ".tmp" / "training_data"
 
 
 # ---------------------------------------------------------------------------
+# Strict-mode solutions (for silent replay of already-solved levels)
+# ---------------------------------------------------------------------------
+# A recorded solution is the exact sequence of action integers the agent
+# took from spawn to level completion, plus a frame-hash fingerprint of
+# the level's entry frame so replay can detect when the recorded solve
+# doesn't apply (e.g. layout changed between sessions).
+
+def _strict_solutions_path(game_id: str) -> Path:
+    return HERE.parent / "benchmarks" / "knowledge_base" / f"{game_id}_strict_solutions.json"
+
+
+def _load_strict_solutions(game_id: str) -> dict:
+    p = _strict_solutions_path(game_id)
+    if not p.exists():
+        return {"game_id": game_id, "levels": {}}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {"game_id": game_id, "levels": {}}
+
+
+def _save_strict_solutions(game_id: str, data: dict) -> None:
+    p = _strict_solutions_path(game_id)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    data.setdefault("game_id", game_id)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _frame_hash(grid: np.ndarray) -> str:
+    """16-char SHA-256 fingerprint of a palette frame."""
+    import hashlib
+    return hashlib.sha256(
+        np.asarray(grid, dtype=np.int8).tobytes()
+    ).hexdigest()[:16]
+
+
+# ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
 
@@ -424,6 +461,8 @@ def run_session(
     session_dir:    Path | None = None,
     max_tokens:     int = 1500,
     model:          str = TUTOR_MODEL,
+    record_solution: bool = True,
+    replay_solved:   bool = True,
 ) -> dict:
     arc = Arcade(
         operation_mode   = OperationMode.OFFLINE,
@@ -511,10 +550,14 @@ def run_session(
     print(f"[kb] L{level_key}: {len(walls_cells)} cell-walls, "
           f"{len(blocked_cells)} blocked-cells loaded")
 
+    # ---- LOAD STRICT-MODE SOLUTIONS ----
+    solutions_data = _load_strict_solutions(game_id) if (replay_solved or record_solution) else None
+    if solutions_data:
+        known_levels = sorted(int(k) for k in solutions_data.get("levels", {}))
+        print(f"[sol] {len(known_levels)} recorded strict-mode solutions: {known_levels}")
+
     # ---- TURN LOOP ----
     history: list[dict] = []
-    # Distillation records: one per TUTOR call, captured BEFORE & AFTER
-    # the command executes so we can label quality retrospectively.
     training_records: list[dict] = []
     cost_usd_total = 0.0
     turns_used = 0
@@ -522,17 +565,87 @@ def run_session(
     final_state = "NOT_FINISHED"
     initial_lc = int(obs.levels_completed)
 
+    # For solution recording: accumulate every action executed and the
+    # frame hash seen when the current level started.
+    cur_level_steps: list[str] = []
+    level_entry_hashes: dict[int, str] = {}
+    last_seen_lc = initial_lc   # triggers per-level re-init on change
+
     for turn in range(1, max_turns + 1):
         turns_used = turn
         if obs.state.name != "NOT_FINISHED":
             final_state = obs.state.name
             break
-        if int(obs.levels_completed) > initial_lc:
-            level_advanced = True
-            final_state = obs.state.name
-            break
 
-        # Build turn prompt ingredients (cell-coord primary)
+        frame = _normalise_frame(obs.frame)
+        cur_lc = int(obs.levels_completed)
+        if cur_lc not in level_entry_hashes:
+            level_entry_hashes[cur_lc] = _frame_hash(frame)
+
+        # On level change, re-initialize cell system + walls from KB.
+        if cur_lc != last_seen_lc:
+            # Persist current level's walls back to KB before switching.
+            existing_walls = {
+                (int(cr), int(cc), str(a))
+                for cr, cc, a in kb.setdefault("walls_by_level_cells", {}).get(level_key, [])
+            }
+            kb["walls_by_level_cells"][level_key] = sorted(
+                [list(w) for w in (existing_walls | walls_cells)]
+            )
+            # Re-infer cell system for the new level (new spawn).
+            new_centroid = _agent_centroid_from_frame(frame, agent_fp)
+            if new_centroid is None:
+                print(f"[level-switch] cannot locate agent in L{cur_lc} frame; stopping")
+                break
+            cs = infer_cell_system(action_effects, new_centroid)
+            cell_actions = {
+                a: cs.action_to_cell_delta(dr, dc)
+                for a, (dr, dc) in action_effects.items()
+            }
+            level_key = str(cur_lc)
+            walls_cells = {
+                (int(cr), int(cc), str(a))
+                for cr, cc, a in kb.setdefault("walls_by_level_cells", {}).get(level_key, [])
+            }
+            blocked_cells = {
+                (int(cr), int(cc))
+                for cr, cc in kb.setdefault("blocked_targets_by_level_cells", {}).get(level_key, [])
+            }
+            print(f"[level-switch] L{cur_lc}: cell_size={cs.cell_size} "
+                  f"origin=({cs.origin_r},{cs.origin_c}) "
+                  f"walls={len(walls_cells)} blocked={len(blocked_cells)}")
+            last_seen_lc = cur_lc
+
+        # ---- REPLAY CHECK ----
+        if replay_solved and solutions_data:
+            recorded = (solutions_data.get("levels") or {}).get(str(cur_lc))
+            if recorded:
+                stored_hash = recorded.get("frame_hash_on_entry")
+                current_hash = level_entry_hashes[cur_lc]
+                if stored_hash is None or stored_hash == current_hash:
+                    steps = recorded.get("game_steps") or []
+                    print(f"[replay] L{cur_lc}: replaying {len(steps)} recorded steps "
+                          f"(hash match: {stored_hash == current_hash})...")
+                    replay_lc_before = cur_lc
+                    for step in steps:
+                        obs = env.step(int(step.replace("ACTION", "")))
+                        if obs.state.name != "NOT_FINISHED":
+                            break
+                        if int(obs.levels_completed) > replay_lc_before:
+                            break
+                    new_lc = int(obs.levels_completed)
+                    if new_lc > replay_lc_before:
+                        print(f"[replay] L{cur_lc} -> L{new_lc} in {len(steps)} steps (no TUTOR)")
+                        level_advanced = True  # session counts as success
+                        cur_level_steps = []
+                        turns_used = turn - 1   # replay doesn't count against TUTOR budget
+                        # continue the outer for-loop to attempt the next level
+                        continue
+                    else:
+                        print(f"[replay] L{cur_lc} replay did not advance -- falling through to TUTOR")
+
+        # Build turn prompt ingredients (cell-coord primary).  Re-read frame
+        # in case replay modified it (replay continues; fall-through reads fresh).
         frame = _normalise_frame(obs.frame)
         comps = extract_components(frame, min_size=2)
         agent_cell = _agent_cell_from_frame(frame, agent_fp, cs)
@@ -542,16 +655,35 @@ def run_session(
                           and c["size"] == agent_fp[1]
                           and tuple(c["extent"]) == tuple(agent_fp[2])), None)
 
-        # Combine cross-session blocked cells with this-session failures.
+        # "Tried" = targets we should not naively retry.  We persist
+        # UNREACHABLE targets as blocked_cells (cross-session), because
+        # "BFS couldn't get there" is enduring information.  We do NOT
+        # persist "reached but lc didn't advance" -- that class includes
+        # TRIGGERS whose effect is on the NEXT goal visit, not on lc.
+        # Still, within this session, we show TUTOR recent reached-inert
+        # targets as a hint (not a hard ban).
         tried_cell_set: set[tuple[int, int]] = set(blocked_cells)
+        reached_inert: set[tuple[int, int]] = set()
         for h in history:
-            if not h.get("reached") or h.get("lc_after", 0) <= h.get("lc_before", 0):
-                tc = h.get("target_cell")
-                if tc:
-                    tried_cell_set.add((int(tc[0]), int(tc[1])))
+            tc = h.get("target_cell")
+            if not tc:
+                continue
+            if not h.get("reached"):
+                tried_cell_set.add((int(tc[0]), int(tc[1])))
+            elif h.get("lc_after", 0) <= h.get("lc_before", 0):
+                # Reached but no lc change.  Might be a trigger (effect
+                # deferred) -- keep visible but not hard-blocked.
+                reached_inert.add((int(tc[0]), int(tc[1])))
         tried = sorted(tried_cell_set)
-        tried_text = "  (none yet)" if not tried else \
-            "\n".join(f"  - cell {list(t)}" for t in tried)
+        inert = sorted(reached_inert)
+        tried_text_parts = []
+        if tried:
+            tried_text_parts.append("  UNREACHABLE (don't retry unless walls change):")
+            tried_text_parts.extend(f"    - cell {list(t)}" for t in tried)
+        if inert:
+            tried_text_parts.append("  REACHED-but-no-lc-advance (may be triggers or scenery):")
+            tried_text_parts.extend(f"    - cell {list(t)}" for t in inert)
+        tried_text = "\n".join(tried_text_parts) if tried_text_parts else "  (none yet)"
 
         user_msg = USER_DISCOVERY_TEMPLATE.format(
             turn            = turn,
@@ -689,13 +821,13 @@ def run_session(
             action_name = current_plan.pop(0)
             act_int = int(action_name.replace("ACTION", ""))
             obs = env.step(act_int)
+            cur_level_steps.append(action_name)   # accumulate for solution recording
             total_steps_this_cmd += 1
             cur_frame = _normalise_frame(obs.frame)
             new_cell = _agent_cell_from_frame(cur_frame, agent_fp, cs)
             if new_cell is None:
                 break
             if new_cell == cur_cell:
-                # Blocked.  Learn cell-wall and re-plan from current cell.
                 walls_cells.add((cur_cell[0], cur_cell[1], action_name))
                 if reroutes_done < _MAX_REROUTES:
                     reroutes_done += 1
@@ -770,17 +902,44 @@ def run_session(
                     "cost_usd":     cost,
                 }) + "\n")
 
-        if lc_after > initial_lc:
+        if lc_after > lc_before:
+            # Record this level's solution if not already recorded or if
+            # we found a shorter path than before.
+            if record_solution and solutions_data is not None and cur_level_steps:
+                prev = (solutions_data.get("levels") or {}).get(str(lc_before))
+                prev_len = len(prev.get("game_steps", [])) if prev else None
+                if prev_len is None or len(cur_level_steps) < prev_len:
+                    entry_hash = level_entry_hashes.get(lc_before)
+                    solutions_data.setdefault("levels", {})[str(lc_before)] = {
+                        "game_steps":        list(cur_level_steps),
+                        "step_count":        len(cur_level_steps),
+                        "frame_hash_on_entry": entry_hash,
+                        "solver":            "strict_mode_tutor",
+                        "solved_at":         time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "session":           session_dir.name if session_dir else None,
+                    }
+                    _save_strict_solutions(game_id, solutions_data)
+                    print(f"[sol] recorded L{lc_before} solution "
+                          f"({len(cur_level_steps)} steps, prev={prev_len})")
+                else:
+                    print(f"[sol] L{lc_before} solve ({len(cur_level_steps)} steps) "
+                          f"not shorter than existing ({prev_len}); kept existing")
+            cur_level_steps = []   # start fresh for next level's recording
+
+        if lc_after > lc_before:
             level_advanced = True
-            final_state = obs.state.name
             print(f"[turn {turn}] *** LEVEL {lc_before} -> {lc_after} ADVANCED ***")
-            break
+            # Don't break -- continue to attempt the NEXT level with
+            # remaining turn budget.  Loop terminates on state != NOT_FINISHED
+            # or when max_turns is reached.
 
     # ---- WRAP-UP ----
-    # Update blocked-cells for this level.
+    # Only persist UNREACHABLE targets (BFS + execution could not get the
+    # agent there).  "Reached but lc didn't advance" is NOT persisted --
+    # those are commonly triggers that fire on the next goal visit.
     session_blocked_cells = set(blocked_cells)
     for h in history:
-        if not h.get("reached") or h.get("lc_after", 0) <= h.get("lc_before", 0):
+        if not h.get("reached"):   # only unreachable failures
             tc = h.get("target_cell")
             if tc:
                 session_blocked_cells.add((int(tc[0]), int(tc[1])))
@@ -874,6 +1033,10 @@ def main():
                     default=None,
                     help="Where to write log + manifest; defaults to benchmarks/sessions/trial_<ts>_strict")
     ap.add_argument("--max-tokens",  type=int, default=1500)
+    ap.add_argument("--no-record-solution", action="store_true",
+                    help="Disable writing strict-mode solutions to JSON")
+    ap.add_argument("--no-replay-solved",   action="store_true",
+                    help="Disable silent replay of already-solved levels")
     a = ap.parse_args()
 
     if a.session_dir:
@@ -883,10 +1046,12 @@ def main():
         sd = HERE.parent / "benchmarks" / "sessions" / f"trial_{ts}_strict"
 
     result = run_session(
-        game_id     = a.game,
-        max_turns   = a.max_turns,
-        session_dir = sd,
-        max_tokens  = a.max_tokens,
+        game_id         = a.game,
+        max_turns       = a.max_turns,
+        session_dir     = sd,
+        max_tokens      = a.max_tokens,
+        record_solution = not a.no_record_solution,
+        replay_solved   = not a.no_replay_solved,
     )
     sys.exit(0 if result["outcome"] == "LEVEL_ADVANCED" else 1)
 
