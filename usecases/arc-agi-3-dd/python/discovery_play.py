@@ -54,6 +54,7 @@ from discovery_prompts import SYSTEM_DISCOVERY, USER_DISCOVERY_TEMPLATE  # noqa:
 import backends                                                      # noqa: E402
 
 TUTOR_MODEL = "claude-sonnet-4-6"
+TRAINING_DATA_DIR = HERE.parents[2] / ".tmp" / "training_data"
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,24 @@ TUTOR_MODEL = "claude-sonnet-4-6"
 def _format_frame_text(grid: np.ndarray) -> str:
     rows = [", ".join(f"{int(v):2d}" for v in row) for row in grid]
     return "[\n" + ",\n".join(f"  [{r}]" for r in rows) + "\n]"
+
+
+def _frame_to_b64_png(grid: np.ndarray) -> str:
+    """Encode a 2D palette frame as a tiny grayscale PNG (base64).
+    Included in training records so a multimodal student can learn from
+    pixels in addition to the text description.  We use a fixed palette
+    mapping (palette*16 -> 0-255 grayscale) since actual game colors
+    are not directly meaningful under the prime directive."""
+    try:
+        from PIL import Image
+        arr = np.asarray(grid, dtype=np.uint8) * 16   # spread 0-15 across 0-255
+        img = Image.fromarray(arr, mode="L")
+        import io, base64
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return ""
 
 
 def _extract_json(text: str) -> dict:
@@ -365,6 +384,9 @@ def run_session(
 
     # ---- TURN LOOP ----
     history: list[dict] = []
+    # Distillation records: one per TUTOR call, captured BEFORE & AFTER
+    # the command executes so we can label quality retrospectively.
+    training_records: list[dict] = []
     cost_usd_total = 0.0
     turns_used = 0
     level_advanced = False
@@ -433,6 +455,32 @@ def run_session(
         out_tok = rsp.get("output_tokens", 0)
         cost    = rsp.get("cost_usd", 0.0)
         cost_usd_total += cost
+
+        # Capture pre-execution snapshot for the distillation record.
+        # advanced_level/reached will be filled AFTER execution so the
+        # distillation job can filter by outcome.
+        turn_record = {
+            "turn":       turn,
+            "system":     SYSTEM_DISCOVERY,
+            "user":       user_msg,
+            "assistant":  reply_text,
+            "frame_b64":  _frame_to_b64_png(frame),
+            "metadata": {
+                "state":                obs.state.name,
+                "levels_completed":     int(obs.levels_completed),
+                "win_levels":           int(obs.win_levels),
+                "agent_pos":            list(agent_pos) if agent_pos else None,
+                "action_effects_known": {a: list(e) for a, e in action_effects.items()},
+                "walls_known":          len(walls),
+                "cost_usd":             cost,
+                "latency_ms":           latency_ms,
+                "input_tokens":         in_tok,
+                "output_tokens":        out_tok,
+                "turn_start_iso":       time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0)),
+                "strict_mode":          True,
+            },
+        }
+        training_records.append(turn_record)
 
         try:
             cmd = _extract_json(reply_text)
@@ -528,6 +576,21 @@ def run_session(
             "delta":            delta,
             "cost_usd":         cost,
         })
+
+        # Fill in retrospective outcome on the distillation record for this turn.
+        turn_record["metadata"].update({
+            "advanced_level":     lc_after > lc_before,
+            "target_reached":     reached,
+            "frame_diff_cells":   diff_cells,
+            "delta_summary": {
+                "disappeared_n": len(delta.get("disappeared") or []),
+                "appeared_n":    len(delta.get("appeared")    or []),
+                "moved_n":       len(delta.get("moved")       or []),
+            },
+            "parsed_command":  cmd.get("command"),
+            "parsed_target":   cmd.get("args", {}).get("target_pos"),
+            "parsed_hypotheses": cmd.get("hypotheses"),
+        })
         print(f"[turn {turn}] executed {len(path)}-step path; "
               f"reached={reached} cur_pos={cur_pos} lc={lc_before}->{lc_after} "
               f"diff_cells={diff_cells} walls_learned_so_far={len(walls)}")
@@ -604,6 +667,37 @@ def run_session(
 
     if manifest_path:
         manifest_path.write_text(json.dumps(result, indent=2))
+
+    # ---- DUMP TRAINING DATA (for distillation of smaller model) ----
+    # Matches the legacy run_play.py format so both strict and legacy
+    # sessions feed a unified training corpus.  Each record is one
+    # (system, user, assistant) triple with outcome metadata.
+    if training_records:
+        trial_id = session_dir.name if session_dir else time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        td_dir = TRAINING_DATA_DIR / game_id / trial_id
+        td_dir.mkdir(parents=True, exist_ok=True)
+        (td_dir / "metadata.json").write_text(json.dumps({
+            "game_id":            game_id,
+            "trial_id":           trial_id,
+            "mode":               "strict",
+            "outcome":            result["outcome"],
+            "final_state":        result["final_state"],
+            "levels_completed":   result["final_lc"],
+            "initial_lc":         result["initial_lc"],
+            "turns":              len(training_records),
+            "advancing_turns":    sum(1 for r in training_records
+                                     if r["metadata"].get("advanced_level")),
+            "total_cost_usd":     round(cost_usd_total, 6),
+            "action_effects":     result["action_effects"],
+            "session_dir":        str(session_dir) if session_dir else None,
+            "created_at":         time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }, indent=2), encoding="utf-8")
+        for r in training_records:
+            (td_dir / f"turn_{r['turn']:03d}.json").write_text(
+                json.dumps(r, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        print(f"[distill] wrote {len(training_records)} training records to {td_dir}")
 
     return result
 
