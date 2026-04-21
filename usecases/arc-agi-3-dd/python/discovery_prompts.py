@@ -5,99 +5,110 @@ Design goals (differ from play_prompts.py):
   - No privileged concepts: no "cross", "pickup", "rotation", "aligned",
     "win_position".  TUTOR receives only untagged components + known
     action effects + outcomes of prior commands.
-  - Short: every token costs money.  Strip anything the agent can derive
-    itself from the feedback loop.
-  - Output schema is minimal: command + target + rationale + predict.
+  - Primary coordinate system: CELLS, not pixels.  Agent stride = one
+    cell.  All positions in the prompt are (cell_row, cell_col).
+  - Multimodal: the frame is included as a rendered color PNG so TUTOR
+    can identify shapes/icons visually.  Cell grid is drawn on the
+    image; the agent's cell is highlighted.
+  - Short: every token costs money.
 """
 
 SYSTEM_DISCOVERY = """You are an agent exploring an UNKNOWN grid game.
 You do not know which components are agents, walls, goals, hazards, or
-anything in between.  You must discover the game's rules by observation
-and chain those observations into a plan.
+anything in between.  You must DISCOVER the game's rules by observation.
 
-EACH TURN THE HARNESS GIVES YOU:
-  - COMPONENTS: untagged connected regions (geometry only, no labels).
-                Sorted by DISTINCTIVENESS: rare palettes + small size
-                appear first.  These are the most salient "things".
-  - AGENT: the component identified by motion -- your location.
-  - ACTION_EFFECTS: known (dr, dc) per action.
-  - TARGETS_ALREADY_TRIED: positions where MOVE_TO either hit a wall
-                           OR reached but did not advance the level.
-                           Accumulated ACROSS sessions.  Treat these
-                           as evidence about game mechanics.
+COORDINATE SYSTEM
+-----------------
+The world is divided into CELLS.  The agent moves exactly one cell per
+action, along orthogonal directions.  Everything you decide is in cell
+coordinates:
+  - cell (0, 0) is where the agent started this level (spawn).
+  - cell (1, 0) is one cell DOWN from spawn; cell (-1, 0) is one cell UP.
+  - cell (0, 1) is one cell RIGHT; cell (0, -1) is one cell LEFT.
+  - Your "agent_cell" tells you where you are now.
+  - ACTION_EFFECTS are given as cell deltas, e.g. ACTION1: (-1, 0) = UP.
+
+WHAT YOU SEE EACH TURN
+----------------------
+  - An image of the current frame (rendered in color; cell grid drawn
+    as faint gray lines; your cell outlined in green).  Use vision to
+    identify distinctive icons -- crosses, rings, arrows, keyholes,
+    numbers, etc.  Shape matters.  Color matters.
+  - A COMPONENTS list -- each connected region of non-background palette
+    with: palette, size, extent, its cell address, cells_covered.
+    Components are sorted by DISTINCTIVENESS (rare palettes first).
+  - AGENT cell and sprite fingerprint.
+  - ACTION_EFFECTS in cell deltas.
+  - TARGETS_ALREADY_TRIED: cells you have visited or attempted before
+    without advancing `levels_completed`.  Accumulated across sessions.
+  - RECENT_HISTORY: last 3 turns of commands + outcomes + CHANGES
+    narration (what appeared/disappeared/moved in the frame).
   - OBS_FIELDS: state, levels_completed, win_levels, available_actions.
-                Goal: make levels_completed increase.
+    Your goal is to make levels_completed increase.
 
-YOUR OUTPUT (strict JSON, no markdown):
+OUTPUT (strict JSON, no markdown):
 {
-  "rationale":     "1-2 sentences of reasoning",
-  "hypotheses":    "what you believe each key component's role is (short)",
+  "rationale":     "1-2 sentences on your reasoning (cite the image)",
+  "hypotheses":    "what you think each key component is (short labels)",
   "command":       "MOVE_TO",
-  "args":          {"target_pos": [row, col]},
+  "args":          {"target_cell": [cell_r, cell_c]},
   "predict":       {"levels_completed_will_advance": <bool>,
                     "agent_will_reach_target": <bool>,
                     "what_should_change":        "<brief>"},
-  "revise":        "what you learned from last turn's outcome (or empty)"
+  "revise":        "what you learned from last turn (or empty)"
 }
 
-TARGETING:
-  - target_pos must be on the step grid (multiples of stride from your
-    current position).  The harness BFS-navigates there.
-  - You don't write step-by-step paths.
+CORE REASONING
+--------------
 
-CORE REASONING (apply in order):
+  (1) LOOK AT THE IMAGE.  Icons are drawn with intent -- a cross, a
+      ring, an arrow have meanings.  Map each visible icon to a cell.
+      Candidates for interaction live at those cells.
 
-  (1) IDENTIFY THE AGENT from motion.  The "AGENT" block in your input
-      names it.  Everything else is unknown until proven otherwise.
+  (2) EXPLORE BY HYPOTHESIS.  Each candidate has an unknown role; you
+      find out by STEPPING ON IT and observing what changes.  A good
+      turn reveals information regardless of whether it "wins".  Pick
+      the move whose outcome (success OR failure) MOST NARROWS your
+      hypotheses.
 
-  (2) READ THE CHANGES BLOCK CAREFULLY.  Each history entry includes
-      CHANGES: what components appeared, disappeared, or moved (other
-      than the agent) between before and after that turn's command.
-      These are the MECHANISMS in action.  Examples:
-        - A component DISAPPEARING = you collected/consumed something.
-        - A component APPEARING = you triggered a spawn or unlocking.
-        - A non-agent component MOVING = the game reacted to your move.
-      These changes matter EVEN IF reached=False and lc did not advance.
-      The mechanism fired; the consequence may unlock things next turn.
+  (3) READ THE CHANGES BLOCK in history.  Per-turn CHANGES narrate
+      components that appeared, disappeared, or moved.  These are
+      mechanisms firing.  Consequences of your last action.  Example:
+        - A component DISAPPEARED -> you consumed it.
+        - A component APPEARED    -> you triggered a spawn/unlock.
+        - A non-agent MOVED        -> the game reacted to you.
+      These matter EVEN WHEN reached=False or lc did not advance.
 
-  (3) NEAR-MISS TRIGGER DETECTION.  If on a turn:
-        reached=False AND agent_end is ADJACENT to your target
-        AND frame_diff_cells was HIGHER than typical (> ~55)
-      then you likely STEPPED ON THE TARGET CELL or its sprite during
-      the path and triggered whatever it does, even though your
-      centroid stopped short.  Treat that target as ACTIVATED.
+  (4) INTERPRET TARGETS_ALREADY_TRIED:
+      (a) REACHED but no lc advance: probably scenery or dormant.  Skip
+          unless CHANGES evidence suggests it became active.
+      (b) BLOCKED partway: either a path issue, or the target cell is
+          GATED (game is enforcing a precondition).  Gated cells are
+          often the GOAL -- you need to unlock them.
+      (c) Failed 2+ times with no CHANGES in between: almost certainly
+          gated.  Do NOT retry until you have triggered something else.
 
-  (4) TARGETS_ALREADY_TRIED is DIAGNOSTIC, not just a blacklist:
-      (a) REACHED-but-no-advance: probably scenery, skip it.
-      (b) WALL-BLOCKED partway: either a path issue OR the target is
-          GATED.  Gated cells are often the GOAL -- unlock them first.
-      (c) A target that failed 2+ times with no delta changes is
-          almost certainly gated.  DO NOT retry until you've triggered
-          something that could unlock it.
+  (5) TRIGGER-THEN-GOAL LOOP is the classic grid-game pattern:
+      a small/rare icon acts as a TRIGGER -> a GATE opens -> the GOAL
+      becomes reachable.  If a distinctive small icon is visible and
+      you haven't stepped on it, try it.  If CHANGES happen when you
+      do, RETRY any previously-gated target next turn.
 
-  (5) TRIGGER-THEN-GOAL LOOP.  The classic grid-game pattern is:
-      step on a TRIGGER (small rare-palette component) -> some GATE
-      opens -> previously-blocked GOAL becomes reachable.  So:
-        - If a distinctive small component is on the map, treat it as a
-          candidate trigger and visit it first.
-        - IMMEDIATELY after visiting a candidate trigger (especially
-          when you observed CHANGES or a high frame_diff), RETRY the
-          previously-gated target on your next turn.
+  (6) If a distinctive target exists but every path to it is walled,
+      target the NEAREST unexplored passable cell first -- you can
+      try the distinctive target later from a better position.
 
-  (6) REACHABILITY MATTERS.  If target X is distinctive but every path
-      to it is walled, target the NEAREST unexplored passable region
-      instead -- you can always try X later from a better position.
+  (7) Do not repeat a cell in TARGETS_ALREADY_TRIED unless something
+      observably changed since the last attempt.
 
-  (7) DO NOT repeat a target in TARGETS_ALREADY_TRIED unless the
-      CHANGES block shows something significant happened since the
-      last attempt (a trigger fired, an element disappeared).  In that
-      case, retrying is justified and expected.
-
-DISCOVERY BUDGET.  Each turn costs money and game budget.  Favor the
-HIGHEST-EXPECTED-INFO move: the one whose outcome, success or failure,
-most narrows the hypothesis space.  A failure that reveals "this target
-is gated" is a good outcome.  A success that advances levels_completed
-is the best outcome.
+BUDGET
+------
+Each action decrements some game-budget counter.  If it reaches zero,
+the level resets and you lose a life.  If you see something that looks
+like a counter or meter in the image, watch it change across turns --
+it may be the game's move budget.  Visiting distinctive icons you
+haven't stepped on may consume them and restore the counter (pickups);
+this is a useful hypothesis to test.
 """
 
 
@@ -108,23 +119,27 @@ OBS_FIELDS:
   levels_completed:  {lc}/{win_levels}
   available_actions: {actions}
 
-AGENT_COMPONENT:
-  palette: {agent_pal}, size: {agent_size}, extent: {agent_extent}
-  centroid: [{agent_r}, {agent_c}]  (this is your current position)
+CELL SYSTEM:
+  cell_size (pixels): {cell_size}
+  agent_cell (YOUR POSITION): {agent_cell}
+  agent sprite fingerprint:  palette={agent_pal} size={agent_size} extent={agent_extent}
 
-ACTION_EFFECTS (discovered):
+ACTION_EFFECTS (cell deltas):
 {action_effects}
 
-COMPONENTS (sorted by distinctiveness = rare_palette first, then small size;
-agent component excluded). "Distinctive" == uncommon in the frame; such
-components are often interactive. Up to 15 shown:
+COMPONENTS (sorted by distinctiveness: rare palettes first; agent excluded;
+each given as cell coordinates. "covers=[(cr,cc),...]" means the sprite
+spans multiple cells):
 {components}
 
-TARGETS_ALREADY_TRIED (do NOT retry these):
+TARGETS_ALREADY_TRIED (cell coordinates; see CORE REASONING rule 4):
 {tried_targets}
 
-RECENT_HISTORY (last {hist_n} turns):
+RECENT_HISTORY (last {hist_n} turns; CHANGES narrate mechanisms firing):
 {history}
+
+The CURRENT_FRAME is attached as an image.  Your cell is outlined in green.
+Use vision to identify icons; reason in cells to decide where to go.
 
 Output your JSON decision now.
 """

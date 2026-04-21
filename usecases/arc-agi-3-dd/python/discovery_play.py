@@ -49,6 +49,7 @@ from arc_agi import Arcade, OperationMode                           # noqa: E402
 
 from dsl_executor import _normalise_frame                           # noqa: E402
 from pixel_elements import extract_components, summarize_frame, narrate_frame_delta  # noqa: E402
+from cell_system import CellSystem, infer_cell_system, components_in_cells  # noqa: E402
 from discovery_bootstrap import bootstrap_action_effects             # noqa: E402
 from discovery_prompts import SYSTEM_DISCOVERY, USER_DISCOVERY_TEMPLATE  # noqa: E402
 import backends                                                      # noqa: E402
@@ -66,21 +67,103 @@ def _format_frame_text(grid: np.ndarray) -> str:
     return "[\n" + ",\n".join(f"  [{r}]" for r in rows) + "\n]"
 
 
-def _frame_to_b64_png(grid: np.ndarray) -> str:
-    """Encode a 2D palette frame as a tiny grayscale PNG (base64).
-    Included in training records so a multimodal student can learn from
-    pixels in addition to the text description.  We use a fixed palette
-    mapping (palette*16 -> 0-255 grayscale) since actual game colors
-    are not directly meaningful under the prime directive."""
+# Palette -> RGB mapping.  The PALETTE values 0-15 are abstract indices in
+# the game; the actual screen colors are not part of the public obs (only
+# integer palette numbers).  We pick a DISTINCT, HIGH-CONTRAST palette
+# here so a vision model can tell them apart.  Each palette gets a
+# visually distinct color; this mapping is arbitrary but stable.
+_VIEW_PALETTE_RGB = [
+    (  0,   0,   0),   # 0 black
+    (255, 255, 255),   # 1 white
+    (128, 128, 128),   # 2 mid-gray
+    ( 60,  60,  90),   # 3 dark blue-gray (background)
+    (100,  50,  30),   # 4 dark brown (wall)
+    (180, 180, 180),   # 5 light gray
+    (255,   0,   0),   # 6 red
+    (  0, 200,   0),   # 7 green
+    (  0,   0, 255),   # 8 blue
+    (255, 140,   0),   # 9 orange
+    (255,   0, 255),   # 10 magenta
+    (255, 230,   0),   # 11 yellow
+    (  0, 200, 255),   # 12 cyan
+    (170,   0, 170),   # 13 purple
+    (100, 255, 100),   # 14 light green
+    (200, 150, 100),   # 15 tan
+]
+
+
+def _frame_to_png_b64(
+    grid:       np.ndarray,
+    upscale:    int = 8,
+    cell_size:  int | None = None,
+    origin:     tuple[int, int] | None = None,
+    agent_cell: tuple[int, int] | None = None,
+) -> str:
+    """Render a palette frame as an upscaled color PNG (base64).
+
+    Each pixel becomes an `upscale x upscale` block of the corresponding
+    RGB color.  If cell_size is given, we ALSO draw faint grid lines on
+    the cell boundaries so the vision model can align visual features
+    with cell coordinates.  If agent_cell is given, we draw a highlight
+    ring around the agent's cell.
+    """
     try:
-        from PIL import Image
-        arr = np.asarray(grid, dtype=np.uint8) * 16   # spread 0-15 across 0-255
-        img = Image.fromarray(arr, mode="L")
+        from PIL import Image, ImageDraw
         import io, base64
+
+        H, W = grid.shape
+        # Map palette values to RGB.
+        rgb = np.zeros((H, W, 3), dtype=np.uint8)
+        for p in range(len(_VIEW_PALETTE_RGB)):
+            mask = (grid == p)
+            if mask.any():
+                rgb[mask] = _VIEW_PALETTE_RGB[p]
+        img = Image.fromarray(rgb, mode="RGB").resize(
+            (W * upscale, H * upscale), Image.NEAREST,
+        )
+
+        # Optional overlay: cell grid lines (subtle) + agent highlight.
+        if cell_size and origin is not None:
+            draw = ImageDraw.Draw(img)
+            # Grid lines offset so lines fall on cell boundaries.
+            # Cell center at pixel (origin_r + cr*cell_size, ...) and cell
+            # extends +/- cell_size/2 in each direction.  For cell_size=5,
+            # lines are at pixels origin - 2.5 + k*5.  In PIL coords after
+            # upscale, multiply by upscale.  We draw thin gray lines.
+            grid_color = (80, 80, 80)
+            half = cell_size / 2.0
+            # vertical lines
+            c0 = origin[1] - half
+            c = c0 - int((c0 // cell_size) * cell_size)
+            while c < W:
+                x = int(c * upscale)
+                draw.line([(x, 0), (x, H * upscale - 1)], fill=grid_color, width=1)
+                c += cell_size
+            # horizontal lines
+            r0 = origin[0] - half
+            r = r0 - int((r0 // cell_size) * cell_size)
+            while r < H:
+                y = int(r * upscale)
+                draw.line([(0, y), (W * upscale - 1, y)], fill=grid_color, width=1)
+                r += cell_size
+
+            if agent_cell is not None:
+                ar = origin[0] + agent_cell[0] * cell_size
+                ac = origin[1] + agent_cell[1] * cell_size
+                x0 = int((ac - half) * upscale)
+                y0 = int((ar - half) * upscale)
+                x1 = int((ac + half) * upscale)
+                y1 = int((ar + half) * upscale)
+                # Outline the agent cell in bright green.
+                for off in range(3):
+                    draw.rectangle([x0-off, y0-off, x1+off, y1+off],
+                                   outline=(0, 255, 0), width=1)
+
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="PNG", optimize=True)
         return base64.b64encode(buf.getvalue()).decode("ascii")
-    except Exception:
+    except Exception as e:
+        print(f"[render] frame-to-png failed: {e}")
         return ""
 
 
@@ -106,52 +189,62 @@ def _extract_json(text: str) -> dict:
 def _components_summary(
     comps:      list[dict],
     agent_fp:   tuple[int, int, tuple] | None,
+    cs:         CellSystem,
     max_n:      int = 15,
 ) -> str:
-    """Render components sorted by distinctiveness.
+    """Render components in CELL COORDS, sorted by distinctiveness.
 
-    distinctiveness = smaller total frame-area for that palette + smaller size.
-    The agent component is excluded (agent position is shown separately).
+    All positions are reported as cell addresses, not raw pixels.  Each
+    component also lists cells_covered so TUTOR knows sprites that span
+    multiple cells.
     """
     if not comps:
         return "  (none)"
-    # Compute total pixels per palette (a palette common across many pixels
-    # is "common" / likely structural; rare palettes are more salient).
     palette_total: dict[int, int] = {}
     for c in comps:
         palette_total[c["palette"]] = palette_total.get(c["palette"], 0) + c["size"]
 
+    # Enrich with cell coords first, then filter out the agent.
+    enriched = components_in_cells(comps, cs)
     filtered = []
-    for c in comps:
+    for c in enriched:
         if agent_fp is not None and (
             c["palette"] == agent_fp[0] and c["size"] == agent_fp[1]
             and tuple(c["extent"]) == tuple(agent_fp[2])
         ):
-            continue   # skip agent itself
+            continue
         filtered.append(c)
 
-    # Distinctiveness score: lower = more distinctive.
-    # Primary: palette frequency across the whole frame (rare = distinctive).
-    # Secondary: component size (small = more likely a landmark, big = structural).
     filtered.sort(key=lambda c: (palette_total[c["palette"]], c["size"]))
 
     out = []
     for c in filtered[:max_n]:
-        rare_note = f"(pal_total={palette_total[c['palette']]})"
+        rare_note = f"pal_total={palette_total[c['palette']]}"
+        covered = c["cells_covered"]
+        covered_str = f"covers={covered}" if len(covered) > 1 else ""
         out.append(
-            f"  id={c['id']:2d} pal={c['palette']:2d} size={c['size']:4d} "
-            f"bbox={c['bbox']} centroid={c['centroid']} extent={c['extent']} "
-            f"fill={c['fill_ratio']} {rare_note}"
+            f"  id={c['id']:2d} pal={c['palette']:2d} sz={c['size']:3d} "
+            f"cell={c['cell']} ext={c['extent']} {rare_note} {covered_str}"
         )
     if len(filtered) > max_n:
         out.append(f"  ... ({len(filtered) - max_n} more)")
     return "\n".join(out)
 
 
-def _action_effects_text(effects: dict[str, tuple[int, int]]) -> str:
+def _action_effects_text(
+    effects: dict[str, tuple[int, int]],
+    cs:      CellSystem | None = None,
+) -> str:
     if not effects:
         return "  (none learned yet)"
-    return "\n".join(f"  {a}: dr={dr:+d}, dc={dc:+d}" for a, (dr, dc) in effects.items())
+    lines = []
+    for a, (dr, dc) in effects.items():
+        if cs is not None:
+            cdr, cdc = cs.action_to_cell_delta(dr, dc)
+            lines.append(f"  {a}: cell_delta=({cdr:+d}, {cdc:+d})")
+        else:
+            lines.append(f"  {a}: dr={dr:+d}, dc={dc:+d}")
+    return "\n".join(lines)
 
 
 def _history_text(hist: list[dict], n: int = 3) -> str:
@@ -201,53 +294,60 @@ def _history_text(hist: list[dict], n: int = 3) -> str:
 # than a movement-threshold).  Passable grid is "every cell tentatively
 # passable".  If BFS can't find a path, we return the closest reachable.
 
-def _bfs_plan(
-    start:          tuple[int, int],
-    target:         tuple[int, int],
-    action_effects: dict[str, tuple[int, int]],
-    walls:          set[tuple[int, int, str]],
-    grid_shape:     tuple[int, int] = (64, 64),
-    max_steps:      int = 60,
+def _bfs_plan_cells(
+    start_cell:    tuple[int, int],
+    target_cell:   tuple[int, int],
+    cell_actions:  dict[str, tuple[int, int]],
+    walls_cells:   set[tuple[int, int, str]],
+    cell_bounds:   tuple[int, int, int, int] | None = None,
+    max_steps:     int = 60,
 ) -> Optional[list[str]]:
-    H, W = grid_shape
-    move_actions = {a: (dr, dc) for a, (dr, dc) in action_effects.items()
-                    if dr != 0 or dc != 0}
-    if not move_actions or start == target:
-        return None if start != target else []
+    """BFS over CELL coordinates.  `cell_actions` is the action -> cell_delta
+    map (e.g. ACTION1 -> (-1, 0)).  Walls are (cell_r, cell_c, action)
+    triples meaning: from this cell, this action is known-blocked.
 
-    queue: deque = deque([(start, [])])
-    visited: dict[tuple[int, int], int] = {start: 0}
+    If cell_bounds is given as (cr_min, cc_min, cr_max, cc_max), cells
+    outside the bounds are treated as impassable (prevents BFS from
+    wandering off-grid).  Otherwise BFS trusts only walls + visited.
+    """
+    if start_cell == target_cell:
+        return []
+    if not cell_actions:
+        return None
 
-    best_pos = start
-    best_dist = (start[0] - target[0]) ** 2 + (start[1] - target[1]) ** 2
+    queue: deque = deque([(start_cell, [])])
+    visited: dict[tuple[int, int], int] = {start_cell: 0}
+
+    best_pos = start_cell
+    best_dist = (start_cell[0] - target_cell[0]) ** 2 + (start_cell[1] - target_cell[1]) ** 2
     best_path: list[str] = []
 
     while queue:
-        (r, c), path = queue.popleft()
-        d = (r - target[0]) ** 2 + (c - target[1]) ** 2
+        (cr, cc), path = queue.popleft()
+        d = (cr - target_cell[0]) ** 2 + (cc - target_cell[1]) ** 2
         if d < best_dist:
             best_dist = d
-            best_pos = (r, c)
+            best_pos = (cr, cc)
             best_path = path
         if len(path) >= max_steps:
             continue
-        for action, (dr, dc) in move_actions.items():
-            if (r, c, action) in walls:
+        for action, (dcr, dcc) in cell_actions.items():
+            if (cr, cc, action) in walls_cells:
                 continue
-            nr = max(0, min(H - 1, r + dr))
-            nc = max(0, min(W - 1, c + dc))
-            if (nr, nc) == (r, c):
-                continue   # boundary clamp no-op
+            nr, nc = cr + dcr, cc + dcc
+            if cell_bounds is not None:
+                if not (cell_bounds[0] <= nr <= cell_bounds[2]
+                        and cell_bounds[1] <= nc <= cell_bounds[3]):
+                    continue
             steps = len(path) + 1
             if (nr, nc) in visited and visited[(nr, nc)] <= steps:
                 continue
             visited[(nr, nc)] = steps
             new_path = path + [action]
-            if (nr, nc) == target:
+            if (nr, nc) == target_cell:
                 return new_path
             queue.append(((nr, nc), new_path))
 
-    # Target unreachable; return nearest-reachable path (may be empty).
     return best_path if best_path else None
 
 
@@ -255,13 +355,11 @@ def _bfs_plan(
 # Pixel-derived cursor tracking (strict-mode replacement for _agent_cursor_from_game)
 # ---------------------------------------------------------------------------
 
-def _agent_cursor_from_frame(
+def _agent_centroid_from_frame(
     frame: np.ndarray,
     agent_fingerprint: tuple[int, int, tuple] | None,
 ) -> tuple[int, int] | None:
-    """Find the agent's centroid by matching the known fingerprint
-    (palette, size, extent) against current-frame components.
-    Returns None if no unique match."""
+    """Find the agent's PIXEL centroid by matching the known fingerprint."""
     if agent_fingerprint is None:
         return None
     pal, size, extent = agent_fingerprint
@@ -272,6 +370,18 @@ def _agent_cursor_from_frame(
     if len(matches) != 1:
         return None
     return (matches[0]["centroid"][0], matches[0]["centroid"][1])
+
+
+def _agent_cell_from_frame(
+    frame: np.ndarray,
+    agent_fingerprint: tuple[int, int, tuple] | None,
+    cs: CellSystem,
+) -> tuple[int, int] | None:
+    """Find the agent's CELL address.  Returns None if unresolvable."""
+    pix = _agent_centroid_from_frame(frame, agent_fingerprint)
+    if pix is None:
+        return None
+    return cs.pix_to_cell(pix[0], pix[1])
 
 
 # ---------------------------------------------------------------------------
@@ -372,15 +482,34 @@ def run_session(
     obs = env.reset()
     frame = _normalise_frame(obs.frame)
 
-    # ---- WALLS & BLOCKED-TARGETS FROM KB ----
+    # ---- INFER CELL SYSTEM ----
+    # Requires both action_effects (from bootstrap) and the agent sprite's
+    # centroid at spawn.  Fails gracefully if either is unknown.
+    spawn_centroid = _agent_centroid_from_frame(frame, agent_fp)
+    if not action_effects or spawn_centroid is None:
+        print("[strict] FATAL: cannot infer cell system (missing action_effects or agent sprite)")
+        return {"ok": False, "outcome": "NO_CELL_SYSTEM"}
+    cs = infer_cell_system(action_effects, spawn_centroid)
+    print(f"[cell] cell_size={cs.cell_size} origin=({cs.origin_r},{cs.origin_c}) "
+          f"spawn_cell=(0,0)")
+
+    # Cell-space action deltas.
+    cell_actions: dict[str, tuple[int, int]] = {
+        a: cs.action_to_cell_delta(dr, dc) for a, (dr, dc) in action_effects.items()
+    }
+
+    # ---- WALLS & BLOCKED-TARGETS FROM KB (cell coords) ----
     level_key = str(int(obs.levels_completed))
-    walls: set[tuple[int, int, str]] = {
-        (int(r), int(c), str(a)) for r, c, a in kb.get("walls_by_level", {}).get(level_key, [])
+    walls_cells: set[tuple[int, int, str]] = {
+        (int(cr), int(cc), str(a))
+        for cr, cc, a in kb.get("walls_by_level_cells", {}).get(level_key, [])
     }
-    blocked_targets: set[tuple[int, int]] = {
-        (int(r), int(c)) for r, c in kb.get("blocked_targets_by_level", {}).get(level_key, [])
+    blocked_cells: set[tuple[int, int]] = {
+        (int(cr), int(cc))
+        for cr, cc in kb.get("blocked_targets_by_level_cells", {}).get(level_key, [])
     }
-    print(f"[kb] L{level_key}: {len(walls)} walls, {len(blocked_targets)} blocked targets loaded")
+    print(f"[kb] L{level_key}: {len(walls_cells)} cell-walls, "
+          f"{len(blocked_cells)} blocked-cells loaded")
 
     # ---- TURN LOOP ----
     history: list[dict] = []
@@ -403,25 +532,26 @@ def run_session(
             final_state = obs.state.name
             break
 
-        # Build turn prompt ingredients
+        # Build turn prompt ingredients (cell-coord primary)
         frame = _normalise_frame(obs.frame)
         comps = extract_components(frame, min_size=2)
-        agent_pos = _agent_cursor_from_frame(frame, agent_fp)
+        agent_cell = _agent_cell_from_frame(frame, agent_fp, cs)
+        agent_pos = _agent_centroid_from_frame(frame, agent_fp)
         agent_comp = next((c for c in comps
                           if agent_fp and c["palette"] == agent_fp[0]
                           and c["size"] == agent_fp[1]
                           and tuple(c["extent"]) == tuple(agent_fp[2])), None)
 
-        # Combine this-session failures with cross-session persistent blocked-targets.
-        tried_set: set[tuple[int, int]] = set(blocked_targets)
+        # Combine cross-session blocked cells with this-session failures.
+        tried_cell_set: set[tuple[int, int]] = set(blocked_cells)
         for h in history:
             if not h.get("reached") or h.get("lc_after", 0) <= h.get("lc_before", 0):
-                t = h.get("target")
-                if t:
-                    tried_set.add((int(t[0]), int(t[1])))
-        tried = sorted(tried_set)
+                tc = h.get("target_cell")
+                if tc:
+                    tried_cell_set.add((int(tc[0]), int(tc[1])))
+        tried = sorted(tried_cell_set)
         tried_text = "  (none yet)" if not tried else \
-            "\n".join(f"  - {list(t)}" for t in tried)
+            "\n".join(f"  - cell {list(t)}" for t in tried)
 
         user_msg = USER_DISCOVERY_TEMPLATE.format(
             turn            = turn,
@@ -429,24 +559,35 @@ def run_session(
             lc              = int(obs.levels_completed),
             win_levels      = int(obs.win_levels),
             actions         = [int(a) for a in obs.available_actions],
+            cell_size       = cs.cell_size,
+            agent_cell      = list(agent_cell) if agent_cell else "?",
             agent_pal       = agent_comp["palette"] if agent_comp else "?",
             agent_size      = agent_comp["size"] if agent_comp else "?",
             agent_extent    = agent_comp["extent"] if agent_comp else "?",
-            agent_r         = agent_pos[0] if agent_pos else "?",
-            agent_c         = agent_pos[1] if agent_pos else "?",
-            action_effects  = _action_effects_text(action_effects),
-            components      = _components_summary(comps, agent_fp),
+            action_effects  = _action_effects_text(action_effects, cs),
+            components      = _components_summary(comps, agent_fp, cs),
             hist_n          = min(3, len(history)),
             history         = _history_text(history),
             tried_targets   = tried_text,
         )
 
-        print(f"\n[turn {turn}] calling TUTOR (agent at {agent_pos})...")
+        # Render an upscaled color PNG of the frame with cell grid + agent
+        # highlight so TUTOR's vision can identify icons.
+        img_b64 = _frame_to_png_b64(
+            frame,
+            upscale    = 8,
+            cell_size  = cs.cell_size,
+            origin     = (cs.origin_r, cs.origin_c),
+            agent_cell = agent_cell,
+        )
+
+        print(f"\n[turn {turn}] calling TUTOR (agent cell={agent_cell})...")
         t0 = time.time()
         rsp = backends.call_anthropic(
             model      = model,
             system     = SYSTEM_DISCOVERY,
             user       = user_msg,
+            image_b64  = img_b64 or None,
             max_tokens = max_tokens,
         )
         latency_ms = int((time.time() - t0) * 1000)
@@ -464,14 +605,16 @@ def run_session(
             "system":     SYSTEM_DISCOVERY,
             "user":       user_msg,
             "assistant":  reply_text,
-            "frame_b64":  _frame_to_b64_png(frame),
+            "frame_b64":  _frame_to_png_b64(frame, upscale=2),   # small for storage
             "metadata": {
                 "state":                obs.state.name,
                 "levels_completed":     int(obs.levels_completed),
                 "win_levels":           int(obs.win_levels),
                 "agent_pos":            list(agent_pos) if agent_pos else None,
                 "action_effects_known": {a: list(e) for a, e in action_effects.items()},
-                "walls_known":          len(walls),
+                "walls_known":          len(walls_cells),
+                "cell_size":            cs.cell_size,
+                "cell_origin":          [cs.origin_r, cs.origin_c],
                 "cost_usd":             cost,
                 "latency_ms":           latency_ms,
                 "input_tokens":         in_tok,
@@ -488,29 +631,41 @@ def run_session(
             print(f"[turn {turn}] bad JSON from TUTOR: {e}")
             break
 
-        target = cmd.get("args", {}).get("target_pos")
-        rationale = cmd.get("rationale", "")
-        revise = cmd.get("revise", "")
+        # TUTOR is expected to output target_cell (primary).  Keep
+        # target_pos accepted as a fallback for robustness.
+        args = cmd.get("args", {}) or {}
+        target_cell_raw = args.get("target_cell") or args.get("target_pos")
+        rationale = cmd.get("rationale", "") or ""
+        revise = cmd.get("revise", "") or ""
         print(f"[turn {turn}] rationale: {rationale[:100]}")
-        print(f"[turn {turn}] target:    {target}  (${cost:.3f}, {in_tok}+{out_tok} tok, {latency_ms}ms)")
+        print(f"[turn {turn}] target_cell: {target_cell_raw}  "
+              f"(${cost:.3f}, {in_tok}+{out_tok} tok, {latency_ms}ms)")
 
-        if not target or len(target) != 2:
-            print(f"[turn {turn}] missing target_pos; stopping")
+        if not target_cell_raw or len(target_cell_raw) != 2:
+            print(f"[turn {turn}] missing target_cell; stopping")
             break
 
-        target_t = (int(target[0]), int(target[1]))
-        if agent_pos is None:
-            print(f"[turn {turn}] agent_pos unknown; stopping")
+        target_cell = (int(target_cell_raw[0]), int(target_cell_raw[1]))
+        if agent_cell is None:
+            print(f"[turn {turn}] agent_cell unknown; stopping")
             break
 
-        # Plan via BFS
-        path = _bfs_plan(agent_pos, target_t, action_effects, walls)
+        # Plan via cell-space BFS.  Bound BFS roughly to the pixel frame.
+        cell_bounds = (
+            cs.pix_to_cell(0, 0)[0],
+            cs.pix_to_cell(0, 0)[1],
+            cs.pix_to_cell(frame.shape[0] - 1, frame.shape[1] - 1)[0],
+            cs.pix_to_cell(frame.shape[0] - 1, frame.shape[1] - 1)[1],
+        )
+        path = _bfs_plan_cells(agent_cell, target_cell, cell_actions,
+                                walls_cells, cell_bounds=cell_bounds)
         if not path:
-            print(f"[turn {turn}] BFS found no path from {agent_pos} to {target_t}")
+            print(f"[turn {turn}] BFS found no path from cell {agent_cell} to {target_cell}")
             history.append({
                 "turn":             turn,
-                "target":           list(target_t),
+                "target_cell":      list(target_cell),
                 "reached":          False,
+                "cur_cell":         list(agent_cell) if agent_cell else None,
                 "rationale":        rationale,
                 "revise":           revise,
                 "lc_before":        int(obs.levels_completed),
@@ -523,7 +678,7 @@ def run_session(
 
         # Execute path; re-plan on wall hits up to _MAX_REROUTES times.
         lc_before = int(obs.levels_completed)
-        cur_pos = agent_pos
+        cur_cell = agent_cell
         exec_frame_before = frame.copy()
         _MAX_REROUTES = 4
         _MAX_TOTAL_STEPS = 35
@@ -536,38 +691,41 @@ def run_session(
             obs = env.step(act_int)
             total_steps_this_cmd += 1
             cur_frame = _normalise_frame(obs.frame)
-            new_pos = _agent_cursor_from_frame(cur_frame, agent_fp)
-            if new_pos is None:
+            new_cell = _agent_cell_from_frame(cur_frame, agent_fp, cs)
+            if new_cell is None:
                 break
-            if new_pos == cur_pos:
-                # Blocked. Learn wall and re-plan from here.
-                walls.add((cur_pos[0], cur_pos[1], action_name))
+            if new_cell == cur_cell:
+                # Blocked.  Learn cell-wall and re-plan from current cell.
+                walls_cells.add((cur_cell[0], cur_cell[1], action_name))
                 if reroutes_done < _MAX_REROUTES:
                     reroutes_done += 1
-                    current_plan = _bfs_plan(cur_pos, target_t, action_effects, walls) or []
+                    current_plan = _bfs_plan_cells(
+                        cur_cell, target_cell, cell_actions, walls_cells,
+                        cell_bounds=cell_bounds,
+                    ) or []
                     continue
                 break
-            cur_pos = new_pos
+            cur_cell = new_cell
             if obs.state.name != "NOT_FINISHED" or int(obs.levels_completed) > lc_before:
                 break
             if not current_plan:
-                # Reached end of plan without hitting target -- re-plan
-                # in case BFS's nearest-reachable left us short.
-                if cur_pos != target_t and reroutes_done < _MAX_REROUTES:
+                if cur_cell != target_cell and reroutes_done < _MAX_REROUTES:
                     reroutes_done += 1
-                    current_plan = _bfs_plan(cur_pos, target_t, action_effects, walls) or []
+                    current_plan = _bfs_plan_cells(
+                        cur_cell, target_cell, cell_actions, walls_cells,
+                        cell_bounds=cell_bounds,
+                    ) or []
 
         lc_after = int(obs.levels_completed)
-        reached = (cur_pos == target_t)
+        reached = (cur_cell == target_cell)
         frame_after = _normalise_frame(obs.frame)
         diff_cells = int(np.sum(exec_frame_before != frame_after))
-        # Narrate component-level changes for the next turn's history view.
         delta = narrate_frame_delta(exec_frame_before, frame_after, agent_fp)
         history.append({
             "turn":             turn,
-            "target":           list(target_t),
+            "target_cell":      list(target_cell),
             "reached":          reached,
-            "cur_pos":          list(cur_pos) if cur_pos else None,
+            "cur_cell":         list(cur_cell) if cur_cell else None,
             "rationale":        rationale,
             "revise":           revise,
             "lc_before":        lc_before,
@@ -577,37 +735,39 @@ def run_session(
             "cost_usd":         cost,
         })
 
-        # Fill in retrospective outcome on the distillation record for this turn.
         turn_record["metadata"].update({
             "advanced_level":     lc_after > lc_before,
             "target_reached":     reached,
             "frame_diff_cells":   diff_cells,
+            "target_cell":        list(target_cell),
+            "agent_cell_end":     list(cur_cell) if cur_cell else None,
             "delta_summary": {
                 "disappeared_n": len(delta.get("disappeared") or []),
                 "appeared_n":    len(delta.get("appeared")    or []),
                 "moved_n":       len(delta.get("moved")       or []),
             },
             "parsed_command":  cmd.get("command"),
-            "parsed_target":   cmd.get("args", {}).get("target_pos"),
+            "parsed_target_cell": (cmd.get("args") or {}).get("target_cell"),
             "parsed_hypotheses": cmd.get("hypotheses"),
         })
         print(f"[turn {turn}] executed {len(path)}-step path; "
-              f"reached={reached} cur_pos={cur_pos} lc={lc_before}->{lc_after} "
-              f"diff_cells={diff_cells} walls_learned_so_far={len(walls)}")
+              f"reached={reached} cur_cell={cur_cell} lc={lc_before}->{lc_after} "
+              f"diff_cells={diff_cells} walls_cells={len(walls_cells)}")
 
         if log_path:
             with open(log_path, "a") as f:
                 f.write(json.dumps({
-                    "turn":      turn,
-                    "target":    list(target_t),
-                    "rationale": rationale,
-                    "revise":    revise,
-                    "path":      path,
-                    "reached":   reached,
-                    "lc_before": lc_before,
-                    "lc_after":  lc_after,
-                    "diff_cells": diff_cells,
-                    "cost_usd":  cost,
+                    "turn":         turn,
+                    "target_cell":  list(target_cell),
+                    "rationale":    rationale,
+                    "revise":       revise,
+                    "path":         path,
+                    "reached":      reached,
+                    "cur_cell":     list(cur_cell) if cur_cell else None,
+                    "lc_before":    lc_before,
+                    "lc_after":     lc_after,
+                    "diff_cells":   diff_cells,
+                    "cost_usd":     cost,
                 }) + "\n")
 
         if lc_after > initial_lc:
@@ -617,31 +777,34 @@ def run_session(
             break
 
     # ---- WRAP-UP ----
-    # Update blocked_targets for this level (failed MOVE_TOs this session).
-    session_blocked = set(blocked_targets)
+    # Update blocked-cells for this level.
+    session_blocked_cells = set(blocked_cells)
     for h in history:
         if not h.get("reached") or h.get("lc_after", 0) <= h.get("lc_before", 0):
-            t = h.get("target")
-            if t:
-                session_blocked.add((int(t[0]), int(t[1])))
-    # But DO NOT persist any target reached on a turn where lc advanced --
-    # clearly not "blocked" in the gating sense.  The loop above already
-    # filtered those out.
+            tc = h.get("target_cell")
+            if tc:
+                session_blocked_cells.add((int(tc[0]), int(tc[1])))
 
-    # ---- PERSIST KB (cross-session accumulation) ----
+    # ---- PERSIST KB ----
     kb["action_effects_learned"] = {a: list(e) for a, e in action_effects.items()}
     if agent_fp is not None:
         kb["agent_fingerprint"] = [agent_fp[0], agent_fp[1], list(agent_fp[2])]
-    # Merge walls (this session's walls + prior KB walls for this level).
-    kb_walls = kb["walls_by_level"].get(level_key, [])
-    existing_walls = {(int(r), int(c), str(a)) for r, c, a in kb_walls}
-    merged_walls = existing_walls | walls
-    kb["walls_by_level"][level_key] = sorted([list(w) for w in merged_walls])
-    # Merge blocked targets.
-    kb["blocked_targets_by_level"][level_key] = sorted([list(t) for t in session_blocked])
+    kb["cell_system"] = {
+        "cell_size": cs.cell_size,
+        "origin":    [cs.origin_r, cs.origin_c],
+        "level_key": level_key,   # origin is level-specific; re-infer per new level
+    }
+    kb.setdefault("walls_by_level_cells", {})
+    kb.setdefault("blocked_targets_by_level_cells", {})
+    merged_walls = {(int(cr), int(cc), str(a)) for cr, cc, a in
+                    kb["walls_by_level_cells"].get(level_key, [])} | walls_cells
+    kb["walls_by_level_cells"][level_key] = sorted([list(w) for w in merged_walls])
+    kb["blocked_targets_by_level_cells"][level_key] = sorted(
+        [list(t) for t in session_blocked_cells]
+    )
     _save_kb(game_id, kb)
-    print(f"[kb] saved: {len(merged_walls)} walls, {len(session_blocked)} "
-          f"blocked targets for L{level_key}")
+    print(f"[kb] saved: {len(merged_walls)} cell-walls, "
+          f"{len(session_blocked_cells)} blocked-cells for L{level_key}")
 
     result = {
         "game_id":             game_id,
@@ -652,9 +815,10 @@ def run_session(
         "final_state":         final_state,
         "cost_usd_total":      round(cost_usd_total, 4),
         "action_effects":      {a: list(e) for a, e in action_effects.items()},
-        "walls_learned":       [list(w) for w in walls],
+        "cell_size":           cs.cell_size,
+        "walls_learned_cells": [list(w) for w in walls_cells],
         "walls_total_in_kb":   len(merged_walls),
-        "blocked_targets":     sorted([list(t) for t in session_blocked]),
+        "blocked_cells":       sorted([list(t) for t in session_blocked_cells]),
         "bootstrap_skipped":   not need_bootstrap,
         "history":             history,
     }
@@ -662,7 +826,7 @@ def run_session(
     print(f"RESULT: {result['outcome']}  turns={result['turns_used']} "
           f"lc={result['initial_lc']}->{result['final_lc']} "
           f"cost=${result['cost_usd_total']:.4f}")
-    print(f"KB: walls={result['walls_total_in_kb']} blocked_targets={len(result['blocked_targets'])}")
+    print(f"KB: cell_walls={result['walls_total_in_kb']} blocked_cells={len(result['blocked_cells'])}")
     print("=" * 60)
 
     if manifest_path:
