@@ -42,6 +42,34 @@ TUTOR_MODEL = "claude-sonnet-4-6"
 
 
 # ---------------------------------------------------------------------------
+# Prime directive: strict mode
+# ---------------------------------------------------------------------------
+# STRICT_MODE (default True) enforces that neither TUTOR nor the harness
+# reads privileged game state.  Only public obs fields (obs.frame,
+# obs.state, obs.levels_completed, obs.win_levels, obs.available_actions)
+# are available.  All env._game.* access paths are gated off.
+#
+# This is the production mode for any claim of "legitimate discovery."
+# --legacy flag flips STRICT_MODE to False for comparison/benchmark runs
+# against the old authored scaffolding (e.g. the recorded 1/7 and 2/7
+# solutions in ls20-9607627b_solutions.legacy.json).
+#
+# Rule of thumb for Claude Code: every new code path must pass the
+# litmus test "would this work on a fresh ARC-AGI-3 game I've never
+# read the source of?"  If it requires knowing the names of env._game
+# attributes or the meaning of palette values specific to one game,
+# it is injection and belongs behind this flag.
+
+STRICT_MODE: bool = True
+
+
+def _set_strict_mode(strict: bool) -> None:
+    """Set global STRICT_MODE.  Called from main() after CLI parsing."""
+    global STRICT_MODE
+    STRICT_MODE = strict
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -210,16 +238,14 @@ def _query_state_vector(env) -> dict[str, int] | None:
     """Raw numeric state variables on env._game, one layer of abstraction
     below the interpreted rotation_tracker signals.
 
-    These are given as opaque {name: value} pairs.  The names are the
-    game's own obfuscated identifiers (cklxociuu etc.) — we expose them
-    without labeling what they mean, so TUTOR has to correlate changes
-    with observed events to figure out what each one represents.  This
-    is the minimum primitive for mechanic-discovery: TUTOR sees a number
-    change and has to reason about what caused the change.
-
-    HUD readouts (step counter, lives) appear here too so TUTOR can
-    spot depletion patterns without being told "this is a budget".
+    PRIVILEGED (gated by STRICT_MODE): reads env._game.cklxociuu and other
+    obfuscated attributes.  Forbidden under strict mode because it gives
+    TUTOR direct access to internal game counters that a real competitor
+    can't see.  In strict mode TUTOR must infer state changes from frame
+    diffs alone.
     """
+    if STRICT_MODE:
+        return None
     if not hasattr(env, "_game"):
         return None
     g = env._game
@@ -250,12 +276,14 @@ def _query_state_vector(env) -> dict[str, int] | None:
 def _query_level_state(env) -> dict | None:
     """Query per-level authoritative state from game internals.
 
-    The harness is the observability layer, not the player.  Reading the
-    live game object here lets us publish correct signals (current agent
-    cell, win-marker positions, cross positions, advances-remaining to
-    goal rotation) on EVERY level, not just level 0.  Returns None if
-    the expected attributes aren't exposed.
+    PRIVILEGED (gated by STRICT_MODE): reads env._game attributes to
+    publish cross/pickup/win positions and alignment state.  Forbidden
+    under strict mode because a real competitor cannot read the game's
+    internal sprite lists.  Under strict mode TUTOR must infer these
+    roles from pixel observations and experimentation.
     """
+    if STRICT_MODE:
+        return None
     if not hasattr(env, "_game"):
         return None
     g = env._game
@@ -344,15 +372,18 @@ _TAG_ROLE_MAP: dict[str, tuple[str, str]] = {
 
 
 def _auto_scan_level(env) -> dict[int, dict]:
-    """Re-scan the current level's sprites into an element_records dict.
+    """PRIVILEGED (gated by STRICT_MODE): reads typed sprite lists from
+    env._game to build element_records with function tags.  Forbidden
+    under strict mode -- TUTOR and the harness must discover element
+    semantics from pixel observations.  See pixel_elements.py (Pass 2)
+    for the legitimate pixel-based replacement.
 
-    Called on every level auto-advance so element_overlaps / nearby_elements
-    reflect the CURRENT level, not whatever the round-2 assessment captured
-    for level 0.  Temporary hack: reads env._game directly.  The long-term
-    plan is frame-driven scanning that generalizes to games without source
-    access, selecting the most relevant prior-scan from a registry based on
-    a frame signature.  This function exists to unblock multi-level play now.
+    Legacy docstring: "Re-scan the current level's sprites into an
+    element_records dict.  Called on every level auto-advance so
+    element_overlaps / nearby_elements reflect the CURRENT level..."
     """
+    if STRICT_MODE:
+        return {}
     if not hasattr(env, "_game"):
         return {}
     g = env._game
@@ -634,7 +665,11 @@ def _step_env(env, action_label: str):
 
 
 def _agent_cursor_from_game(env) -> tuple[int, int] | None:
-    """Read the game's own agent position — immune to pixel-tracker drift."""
+    """PRIVILEGED (gated by STRICT_MODE): reads env._game.gudziatsk directly
+    for the agent's live position.  Forbidden under strict mode -- the
+    harness must track cursor position from pixel diffs on obs.frame."""
+    if STRICT_MODE:
+        return None
     if not hasattr(env, "_game"):
         return None
     try:
@@ -1048,7 +1083,19 @@ def main() -> None:
                     help="Replay compiled solutions for already-solved levels without "
                          "calling TUTOR (training mode only — disable in competition)")
     ap.add_argument("--max-tokens",   type=int, default=1500)
+    ap.add_argument("--legacy", action="store_true",
+                    help="DISABLE prime directive (allow env._game privileged reads "
+                         "and authored KB). Default is strict mode: TUTOR and harness "
+                         "may only access public obs fields.  Only use --legacy for "
+                         "benchmark comparisons against pre-strict behaviour.")
     a = ap.parse_args()
+
+    # Enforce prime directive unless --legacy is explicitly set.
+    _set_strict_mode(not a.legacy)
+    if STRICT_MODE:
+        print("STRICT MODE: env._game access disabled; only obs.* fields readable.")
+    else:
+        print("LEGACY MODE: env._game access ENABLED (authored scaffolding active).")
 
     ARC_REPO = Path(os.environ.get("ARC_AGI_3_REPO", r"C:\_backup\github\arc-agi-3"))
     sys.path.insert(0, str(ARC_REPO))
@@ -1324,7 +1371,15 @@ def main() -> None:
                 b_before = _read_budget(cr_before)
                 if b_before is not None:
                     budget_remaining = b_before
-                passable_grid = build_passable_grid(cur_grid)
+                # Strict mode: no hardcoded wall palette; every cell is
+                # tentatively passable and the agent must learn walls from
+                # failed moves.  Legacy mode: use the source-derived {4}.
+                if STRICT_MODE:
+                    passable_grid = build_passable_grid(cur_grid, wall_palettes=None)
+                else:
+                    from navigator import _LEGACY_WALL_PALETTES
+                    passable_grid = build_passable_grid(
+                        cur_grid, wall_palettes=_LEGACY_WALL_PALETTES)
                 # Cross-avoidance: when the rotation is already aligned
                 # (advances_remaining=0), mark cross cells impassable so BFS
                 # does NOT accidentally route through them on the way to the

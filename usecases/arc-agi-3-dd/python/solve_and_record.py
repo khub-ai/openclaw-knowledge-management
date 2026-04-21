@@ -42,15 +42,19 @@ from arc_agi import Arcade, OperationMode                        # noqa: E402
 from arcengine import GameAction                                  # noqa: E402
 
 from dsl_executor import _normalise_frame                         # noqa: E402
-from navigator import build_passable_grid                         # noqa: E402
+from navigator import build_passable_grid, _LEGACY_WALL_PALETTES  # noqa: E402
 from planner import (                                                  # noqa: E402
     solve_level, solve_align_phase, solve_align_phase_all,
     solve_win_phase, problem_from_env_query,
 )
 
-# _query_level_state lives in run_play.py; we import it rather than
-# duplicating the attribute-probing logic.
-from run_play import _query_level_state                            # noqa: E402
+# _query_level_state and _set_strict_mode live in run_play.py; we import
+# them rather than duplicating logic.  Under strict mode (default),
+# _query_level_state returns None and the whole offline-solver pipeline
+# degrades gracefully to an "I cannot solve this without privileged input"
+# exit.  The BFS+ planner itself is legitimate; only its inputs would be
+# injected from privileged sources, so the pipeline simply refuses to run.
+from run_play import _query_level_state, _set_strict_mode          # noqa: E402
 
 
 KB_DIR   = HERE.parent / "benchmarks" / "knowledge_base"
@@ -170,6 +174,13 @@ def solve_one_level(game_id: str, target_lc: int, dry_run: bool = False) -> dict
 
     # Stage 2: gather level parameters.
     ls = _query_level_state(env)
+    if ls is None:
+        print("FATAL: _query_level_state returned None. "
+              "This is expected under strict mode (prime directive forbids "
+              "env._game reads). The BFS+ solver cannot run without "
+              "cross/pickup/win positions. Pass --legacy to disable strict "
+              "mode, or wait for Pass 2 (pixel-based discovery).")
+        return {"ok": False, "reason": "strict-mode-no-privileged-query"}
     print(f"  [query] L{target_lc} state: {ls}")
 
     # Frame: we captured obs from the last step of the replay.  For
@@ -179,7 +190,10 @@ def solve_one_level(game_id: str, target_lc: int, dry_run: bool = False) -> dict
         obs = env.reset()
 
     grid = _normalise_frame(obs.frame)
-    passable = build_passable_grid(grid)
+    # Since this solver only runs in --legacy mode anyway (strict mode
+    # exits before here when _query_level_state returns None), using the
+    # legacy palette is consistent.
+    passable = build_passable_grid(grid, wall_palettes=_LEGACY_WALL_PALETTES)
     walls    = _load_runtime_walls(kb_runtime_path, str(target_lc))
     print(f"  [env] passable cells on-grid: {int(passable.sum())}/{passable.size}")
     print(f"  [env] walls for L{target_lc}: {walls}")
@@ -260,7 +274,7 @@ def solve_one_level(game_id: str, target_lc: int, dry_run: bool = False) -> dict
             continue
 
         gridA = _normalise_frame(obs_snap.frame)
-        passableA = build_passable_grid(gridA)
+        passableA = build_passable_grid(gridA, wall_palettes=_LEGACY_WALL_PALETTES)
 
         print(f"    [plan:B] winning... start={candA_pos} win={win_cell} "
               f"budget={live_budget_A}/{budget_max_v} pickups={list(candA_pickups)}")
@@ -338,7 +352,14 @@ def main():
                     help="Sub-level index to solve (0-indexed; target_lc=1 means solve 2/7)")
     ap.add_argument("--dry-run",       action="store_true",
                     help="Don't write solutions.json; just plan and verify")
+    ap.add_argument("--legacy",        action="store_true",
+                    help="DISABLE prime directive (allow env._game privileged reads). "
+                         "Default is strict mode; under strict mode this tool will "
+                         "exit because _query_level_state returns no data without "
+                         "privileged access.")
     a = ap.parse_args()
+
+    _set_strict_mode(not a.legacy)
 
     result = solve_one_level(a.game, a.target_level, dry_run=a.dry_run)
     if not result.get("ok"):

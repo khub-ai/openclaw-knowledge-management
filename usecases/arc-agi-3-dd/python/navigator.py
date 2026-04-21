@@ -14,9 +14,15 @@ import numpy as np
 GRID_H = 64
 GRID_W = 64
 
-# Palette values the agent CANNOT enter (read from the game frame).
-# Palette 4 = wall/gap tiles confirmed by pixel analysis.
-WALL_PALETTES: frozenset[int] = frozenset({4})
+# The navigator intentionally DOES NOT hardcode which palette values are
+# walls.  Under the prime directive, which palette is impassable must be
+# discovered at runtime (by attempting moves and observing failures), not
+# read from source.  Callers of build_passable_grid must supply
+# wall_palettes explicitly.  The legacy default of {4} (derived by
+# Claude Code from reading ls20.py) is preserved as a _LEGACY_WALL_PALETTES
+# constant strictly for legacy-mode benchmarking; it MUST NOT be used as
+# a default in strict code paths.
+_LEGACY_WALL_PALETTES: frozenset[int] = frozenset({4})   # legacy only
 
 
 def _passable(nr: int, nc: int, passable_grid) -> bool:
@@ -28,13 +34,26 @@ def _passable(nr: int, nc: int, passable_grid) -> bool:
 
 def build_passable_grid(
     frame_grid,
-    wall_palettes: frozenset[int] = WALL_PALETTES,
+    wall_palettes: frozenset[int] | None = None,
 ) -> np.ndarray:
-    """Return a 64×64 bool array: True = agent can enter this cell.
+    """Return a 64x64 bool array: True = agent can enter this cell.
 
-    Reads palette values directly from the game frame so BFS never needs to
-    discover walls by bumping into them.
+    wall_palettes must be supplied by the caller and reflects palettes
+    EMPIRICALLY discovered to be impassable (by trying to move onto them
+    and observing that the agent did not move).  No default is provided
+    because hardcoding which palette is a wall would constitute source-
+    derived injection (the prime directive forbids this).
+
+    For legacy-mode runs, callers may explicitly pass
+    navigator._LEGACY_WALL_PALETTES.  New/strict code paths must accumulate
+    wall_palettes from runtime observation.
     """
+    if wall_palettes is None:
+        # No palettes known yet -- every cell is tentatively passable.
+        # The agent will discover wall palettes by attempting moves and
+        # observing blockage.
+        arr = np.asarray(frame_grid, dtype=np.int32)
+        return np.ones(arr.shape[:2], dtype=bool)
     arr = np.asarray(frame_grid, dtype=np.int32)
     passable = np.ones(arr.shape[:2], dtype=bool)
     for p in wall_palettes:
