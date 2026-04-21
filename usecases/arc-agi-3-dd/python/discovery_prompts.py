@@ -138,8 +138,13 @@ TARGETS_ALREADY_TRIED (cell coordinates; see CORE REASONING rule 4):
 RECENT_HISTORY (last {hist_n} turns; CHANGES narrate mechanisms firing):
 {history}
 
-The CURRENT_FRAME is attached as an image.  Your cell is outlined in green.
-Use vision to identify icons; reason in cells to decide where to go.
+The CURRENT_FRAME is attached as an image.
+  - Your agent cell is outlined in bright green and labeled "YOU".
+  - Faint gray lines mark cell boundaries.
+  - The TOP-8 most distinctive non-agent components are marked with a
+    yellow/cyan ring at their cell center and labeled "#<id>".  Use these
+    labels to match the image to the textual COMPONENTS list exactly --
+    "#17" on the image is component id=17 in the list, at the cell noted.
 
 Output your JSON decision now.
 """

@@ -131,25 +131,24 @@ _VIEW_PALETTE_RGB = [
 
 def _frame_to_png_b64(
     grid:       np.ndarray,
-    upscale:    int = 8,
+    upscale:    int = 10,
     cell_size:  int | None = None,
     origin:     tuple[int, int] | None = None,
     agent_cell: tuple[int, int] | None = None,
+    annotations: list[dict] | None = None,
 ) -> str:
     """Render a palette frame as an upscaled color PNG (base64).
 
-    Each pixel becomes an `upscale x upscale` block of the corresponding
-    RGB color.  If cell_size is given, we ALSO draw faint grid lines on
-    the cell boundaries so the vision model can align visual features
-    with cell coordinates.  If agent_cell is given, we draw a highlight
-    ring around the agent's cell.
+    Optional annotations: list of {cell: (cr, cc), label: str, color: (R,G,B)}.
+    Each annotation draws a small marker at the cell center with a text
+    label ("#id") so TUTOR's vision can match the image to the text
+    COMPONENTS list unambiguously.
     """
     try:
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFont
         import io, base64
 
         H, W = grid.shape
-        # Map palette values to RGB.
         rgb = np.zeros((H, W, 3), dtype=np.uint8)
         for p in range(len(_VIEW_PALETTE_RGB)):
             mask = (grid == p)
@@ -159,24 +158,18 @@ def _frame_to_png_b64(
             (W * upscale, H * upscale), Image.NEAREST,
         )
 
-        # Optional overlay: cell grid lines (subtle) + agent highlight.
         if cell_size and origin is not None:
             draw = ImageDraw.Draw(img)
-            # Grid lines offset so lines fall on cell boundaries.
-            # Cell center at pixel (origin_r + cr*cell_size, ...) and cell
-            # extends +/- cell_size/2 in each direction.  For cell_size=5,
-            # lines are at pixels origin - 2.5 + k*5.  In PIL coords after
-            # upscale, multiply by upscale.  We draw thin gray lines.
             grid_color = (80, 80, 80)
             half = cell_size / 2.0
-            # vertical lines
+
+            # Cell grid lines.
             c0 = origin[1] - half
             c = c0 - int((c0 // cell_size) * cell_size)
             while c < W:
                 x = int(c * upscale)
                 draw.line([(x, 0), (x, H * upscale - 1)], fill=grid_color, width=1)
                 c += cell_size
-            # horizontal lines
             r0 = origin[0] - half
             r = r0 - int((r0 // cell_size) * cell_size)
             while r < H:
@@ -184,6 +177,39 @@ def _frame_to_png_b64(
                 draw.line([(0, y), (W * upscale - 1, y)], fill=grid_color, width=1)
                 r += cell_size
 
+            # Try to load a font for labels; fall back to default if missing.
+            try:
+                font = ImageFont.truetype("arial.ttf", size=max(10, upscale + 2))
+            except Exception:
+                font = ImageFont.load_default()
+
+            # Annotate distinctive components with their ids + cell addresses.
+            for ann in (annotations or []):
+                ac_r, ac_c = ann["cell"]
+                pix_r = origin[0] + ac_r * cell_size
+                pix_c = origin[1] + ac_c * cell_size
+                x_center = int(pix_c * upscale + upscale / 2)
+                y_center = int(pix_r * upscale + upscale / 2)
+                color = ann.get("color", (255, 255, 0))
+                # Small circle at cell center.
+                ring_r = max(4, upscale // 2)
+                draw.ellipse([x_center - ring_r, y_center - ring_r,
+                              x_center + ring_r, y_center + ring_r],
+                             outline=color, width=2)
+                # Label: #id above the circle.
+                label = ann.get("label", "")
+                if label:
+                    # White text with black stroke for legibility.
+                    tx, ty = x_center + ring_r + 2, y_center - ring_r - 2
+                    # Background pad to make label visible on any background.
+                    try:
+                        bbox = draw.textbbox((tx, ty), label, font=font)
+                        draw.rectangle(bbox, fill=(0, 0, 0))
+                    except Exception:
+                        pass
+                    draw.text((tx, ty), label, fill=color, font=font)
+
+            # Agent cell outline in bright green, drawn LAST so it's on top.
             if agent_cell is not None:
                 ar = origin[0] + agent_cell[0] * cell_size
                 ac = origin[1] + agent_cell[1] * cell_size
@@ -191,10 +217,16 @@ def _frame_to_png_b64(
                 y0 = int((ar - half) * upscale)
                 x1 = int((ac + half) * upscale)
                 y1 = int((ar + half) * upscale)
-                # Outline the agent cell in bright green.
                 for off in range(3):
                     draw.rectangle([x0-off, y0-off, x1+off, y1+off],
                                    outline=(0, 255, 0), width=1)
+                # Label the agent cell with "YOU".
+                try:
+                    bbox = draw.textbbox((x0 + 2, y0 + 2), "YOU", font=font)
+                    draw.rectangle(bbox, fill=(0, 0, 0))
+                except Exception:
+                    pass
+                draw.text((x0 + 2, y0 + 2), "YOU", fill=(0, 255, 0), font=font)
 
         buf = io.BytesIO()
         img.save(buf, format="PNG", optimize=True)
@@ -703,14 +735,35 @@ def run_session(
             tried_targets   = tried_text,
         )
 
-        # Render an upscaled color PNG of the frame with cell grid + agent
-        # highlight so TUTOR's vision can identify icons.
+        # Build annotation list for the rendered image: the TOP-N distinctive
+        # non-agent components, labeled with their id so TUTOR can match the
+        # picture to the textual COMPONENTS list unambiguously.
+        palette_total: dict[int, int] = {}
+        for c in comps:
+            palette_total[c["palette"]] = palette_total.get(c["palette"], 0) + c["size"]
+        ann_enriched = components_in_cells(comps, cs)
+        ann_enriched = [
+            c for c in ann_enriched
+            if not (agent_fp is not None and c["palette"] == agent_fp[0]
+                    and c["size"] == agent_fp[1]
+                    and tuple(c["extent"]) == tuple(agent_fp[2]))
+        ]
+        ann_enriched.sort(key=lambda c: (palette_total[c["palette"]], c["size"]))
+        # Annotate the top 8 most distinctive components.
+        annotations = [
+            {"cell": tuple(c["cell"]),
+             "label": f"#{c['id']}",
+             "color": (255, 255, 0) if palette_total[c["palette"]] <= 12 else (0, 220, 220)}
+            for c in ann_enriched[:8]
+        ]
+
         img_b64 = _frame_to_png_b64(
             frame,
-            upscale    = 8,
+            upscale    = 10,
             cell_size  = cs.cell_size,
             origin     = (cs.origin_r, cs.origin_c),
             agent_cell = agent_cell,
+            annotations = annotations,
         )
 
         print(f"\n[turn {turn}] calling TUTOR (agent cell={agent_cell})...")
