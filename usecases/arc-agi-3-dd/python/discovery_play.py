@@ -58,6 +58,21 @@ TUTOR_MODEL = "claude-sonnet-4-6"
 TRAINING_DATA_DIR = HERE.parents[2] / ".tmp" / "training_data"
 
 
+def _mirror_to_latest(src_dir: Path, latest_dir: Path) -> None:
+    """Copy the contents of src_dir to latest_dir, replacing it if present.
+
+    Gives reviewers a stable, timestamp-free path they can always hit to
+    see the most recent session without tracking trial IDs.
+    """
+    import shutil
+    try:
+        if latest_dir.exists():
+            shutil.rmtree(latest_dir)
+        shutil.copytree(src_dir, latest_dir)
+    except Exception as e:
+        print(f"[latest-mirror] copy to {latest_dir} failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Strict-mode solutions (for silent replay of already-solved levels)
 # ---------------------------------------------------------------------------
@@ -609,12 +624,13 @@ def _save_kb(game_id: str, kb: dict) -> None:
 
 def run_session(
     game_id:        str,
-    max_turns:      int = 8,
+    max_turns:      int = 6,
     session_dir:    Path | None = None,
-    max_tokens:     int = 1500,
+    max_tokens:     int = 1200,
     model:          str = TUTOR_MODEL,
     record_solution: bool = True,
     replay_solved:   bool = True,
+    cost_cap_usd:   float = 0.10,
 ) -> dict:
     arc = Arcade(
         operation_mode   = OperationMode.OFFLINE,
@@ -753,6 +769,10 @@ def run_session(
         turns_used = turn
         if obs.state.name != "NOT_FINISHED":
             final_state = obs.state.name
+            break
+        # Hard cost cap -- stop BEFORE next TUTOR call if we've spent the budget.
+        if cost_usd_total >= cost_cap_usd:
+            print(f"[cost] cap ${cost_cap_usd:.3f} reached (spent ${cost_usd_total:.4f}); stopping")
             break
 
         frame = _normalise_frame(obs.frame)
@@ -1049,7 +1069,8 @@ def run_session(
         revise = cmd.get("revise", "") or ""
         print(f"[turn {turn}] rationale: {rationale[:100]}")
         print(f"[turn {turn}] target_cell: {target_cell_raw}  "
-              f"(${cost:.3f}, {in_tok}+{out_tok} tok, {latency_ms}ms)")
+              f"(turn ${cost:.3f}, total ${cost_usd_total:.3f} / cap ${cost_cap_usd:.3f}, "
+              f"{in_tok}+{out_tok} tok, {latency_ms}ms)")
 
         if not target_cell_raw or len(target_cell_raw) != 2:
             print(f"[turn {turn}] missing target_cell; stopping")
@@ -1323,6 +1344,12 @@ def run_session(
     if manifest_path:
         manifest_path.write_text(json.dumps(result, indent=2))
 
+    # Mirror session dir to a stable latest path for reviewer convenience.
+    if session_dir:
+        latest_session_dir = session_dir.parent / "latest_strict"
+        _mirror_to_latest(session_dir, latest_session_dir)
+        print(f"[latest-mirror] session -> {latest_session_dir}")
+
     # ---- DUMP TRAINING DATA (for distillation of smaller model) ----
     # Matches the legacy run_play.py format so both strict and legacy
     # sessions feed a unified training corpus.  Each record is one
@@ -1353,6 +1380,10 @@ def run_session(
                 encoding="utf-8",
             )
         print(f"[distill] wrote {len(training_records)} training records to {td_dir}")
+        # Mirror training data to a stable latest path.
+        latest_td_dir = td_dir.parent / "latest_strict"
+        _mirror_to_latest(td_dir, latest_td_dir)
+        print(f"[latest-mirror] training_data -> {latest_td_dir}")
 
     return result
 
@@ -1360,7 +1391,7 @@ def run_session(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--game",        default="ls20-9607627b")
-    ap.add_argument("--max-turns",   type=int, default=8)
+    ap.add_argument("--max-turns",   type=int, default=6)
     ap.add_argument("--session-dir",
                     default=None,
                     help="Where to write log + manifest; defaults to benchmarks/sessions/trial_<ts>_strict")
@@ -1369,6 +1400,9 @@ def main():
                     help="Disable writing strict-mode solutions to JSON")
     ap.add_argument("--no-replay-solved",   action="store_true",
                     help="Disable silent replay of already-solved levels")
+    ap.add_argument("--cost-cap",   type=float, default=0.10,
+                    help="Hard session cost cap in USD. Stops before next "
+                         "TUTOR call once exceeded. Default $0.10.")
     a = ap.parse_args()
 
     if a.session_dir:
@@ -1384,6 +1418,7 @@ def main():
         max_tokens      = a.max_tokens,
         record_solution = not a.no_record_solution,
         replay_solved   = not a.no_replay_solved,
+        cost_cap_usd    = a.cost_cap,
     )
     sys.exit(0 if result["outcome"] == "LEVEL_ADVANCED" else 1)
 
